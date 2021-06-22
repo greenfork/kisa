@@ -1,10 +1,16 @@
 const std = @import("std");
+usingnamespace @import("ncurses");
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     var ally = &arena.allocator;
 
+    const content = try readInput(ally);
+    std.debug.print("{s}", .{content});
+}
+
+fn readInput(ally: *std.mem.Allocator) ![]u8 {
     var arg_it = std.process.args();
     _ = try arg_it.next(ally) orelse unreachable; // program name
     const file_name = arg_it.next(ally);
@@ -18,7 +24,5 @@ pub fn main() anyerror!void {
         }
     };
     defer file_handle.close();
-    const content = try file_handle.readToEndAlloc(ally, std.math.maxInt(usize));
-
-    std.debug.print("{s}", .{content});
+    return try file_handle.readToEndAlloc(ally, std.math.maxInt(usize));
 }
