@@ -1,5 +1,5 @@
 const std = @import("std");
-usingnamespace @import("ncurses");
+usingnamespace @import("ncurses").ncurses;
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -7,7 +7,12 @@ pub fn main() anyerror!void {
     var ally = &arena.allocator;
 
     const content = try readInput(ally);
-    std.debug.print("{s}", .{content});
+
+    _ = try initscr();
+    defer endwin() catch {};
+    try printwzig("{s}", .{content});
+    try refresh();
+    _ = try getch();
 }
 
 fn readInput(ally: *std.mem.Allocator) ![]u8 {
@@ -20,6 +25,7 @@ fn readInput(ally: *std.mem.Allocator) ![]u8 {
             const fname: []const u8 = try file_name_delimited;
             break :blk try std.fs.cwd().openFile(fname, .{});
         } else {
+            // FIXME: stdin blocks ncurses
             break :blk std.io.getStdIn();
         }
     };
