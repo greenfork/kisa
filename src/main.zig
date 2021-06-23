@@ -32,7 +32,13 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    const content = try readInput(ally);
+    const content = readInput(ally) catch |err| switch (err) {
+        error.FileNotSupplied => {
+            std.debug.print("No file supplied\n{s}", .{help_string});
+            std.os.exit(1);
+        },
+        else => return err,
+    };
     var buffer = try Buffer.init(ally, content);
 
     _ = try initscr();
@@ -47,7 +53,7 @@ pub fn main() anyerror!void {
 
     line_count = 1;
     while (buffer.next_line()) |line| : (line_count += 1) {
-        if (line_count == 24) break;
+        if (line_count == max_height) break;
         {
             var i = max_line_count_width - numberWidth(line_count);
             while (i != 0) : (i -= 1) {
@@ -60,6 +66,11 @@ pub fn main() anyerror!void {
     _ = try getch();
 }
 
+const help_string =
+    \\Usage: kisa file
+    \\
+;
+
 fn numberWidth(number: u32) u32 {
     var result: u32 = 0;
     var n = number;
@@ -69,20 +80,18 @@ fn numberWidth(number: u32) u32 {
     return result;
 }
 
+// TODO: support input from stdin
 fn readInput(ally: *std.mem.Allocator) ![]u8 {
     var arg_it = std.process.args();
     _ = try arg_it.next(ally) orelse unreachable; // program name
-    const file_name = arg_it.next(ally);
-    // We accept both files and standard input.
-    var file_handle = blk: {
-        if (file_name) |file_name_delimited| {
-            const fname: []const u8 = try file_name_delimited;
-            break :blk try std.fs.cwd().openFile(fname, .{});
+    var file = blk: {
+        if (arg_it.next(ally)) |file_name_delimited| {
+            const file_name: []const u8 = try file_name_delimited;
+            break :blk try std.fs.cwd().openFile(file_name, .{});
         } else {
-            // FIXME: stdin blocks ncurses
-            break :blk std.io.getStdIn();
+            return error.FileNotSupplied;
         }
     };
-    defer file_handle.close();
-    return try file_handle.readToEndAlloc(ally, std.math.maxInt(usize));
+    defer file.close();
+    return try file.readToEndAlloc(ally, std.math.maxInt(usize));
 }
