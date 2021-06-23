@@ -1,7 +1,69 @@
 const std = @import("std");
-usingnamespace @import("ncurses").ncurses;
+const ncurses = @import("ncurses").ncurses;
+usingnamespace ncurses;
 
 const max_height = 24;
+
+pub const Key = struct {
+    value: u32,
+};
+
+pub const UIError = ncurses.NcursesError;
+
+pub const UI = struct {
+    window: Window,
+
+    pub fn init(window: Window) UI {
+        return UI{ .window = window };
+    }
+
+    pub fn insertCharacter(self: UI, ch: u32) !void {
+        try self.window.waddch(ch);
+        try refresh();
+    }
+};
+
+pub const EventDispatcherError = UIError;
+
+pub const EventDispatcher = struct {
+    ui: UI,
+
+    pub const EventKind = enum {
+        none,
+        key_press,
+        insert_character,
+    };
+
+    pub const EventValue = union(EventKind) {
+        none: void,
+        key_press: Key,
+        insert_character: Key,
+    };
+
+    pub const Event = struct {
+        value: EventValue,
+    };
+
+    pub fn init(ui: UI) EventDispatcher {
+        return EventDispatcher{ .ui = ui };
+    }
+
+    pub fn dispatch(self: EventDispatcher, event: Event) EventDispatcherError!void {
+        switch (event.value) {
+            .key_press => |val| {
+                try self.dispatch(Event{
+                    .value = .{ .insert_character = val },
+                });
+            },
+            .insert_character => |val| {
+                try self.ui.insertCharacter(val.value);
+            },
+            else => {
+                std.debug.print("Not supported event: {}\n", .{event});
+            },
+        }
+    }
+};
 
 pub const BufferError = error{OutOfMemory};
 
@@ -32,6 +94,7 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
+    // Initialize buffer
     const content = readInput(ally) catch |err| switch (err) {
         error.FileNotSupplied => {
             std.debug.print("No file supplied\n{s}", .{help_string});
@@ -40,10 +103,6 @@ pub fn main() anyerror!void {
         else => return err,
     };
     var buffer = try Buffer.init(ally, content);
-
-    _ = try initscr();
-    defer endwin() catch {};
-
     var line_count: u32 = 1;
     while (buffer.next_line()) |line| : (line_count += 1) {
         if (line_count == max_height) break;
@@ -51,6 +110,17 @@ pub fn main() anyerror!void {
     const max_line_count_width = numberWidth(line_count);
     buffer.line_reset();
 
+    // ncurses init
+    _ = try initscr();
+    try noecho();
+    try cbreak();
+    try stdscr.keypad(true);
+    defer endwin() catch {};
+
+    const ui = UI.init(stdscr);
+    const event_dispatcher = EventDispatcher.init(ui);
+
+    // ncurses display
     line_count = 1;
     while (buffer.next_line()) |line| : (line_count += 1) {
         if (line_count == max_height) break;
@@ -63,7 +133,18 @@ pub fn main() anyerror!void {
         try printwzig("{d} {s}\n", .{ line_count, line });
     }
     try refresh();
-    _ = try getch();
+
+    // ncurses edit
+    const ch_c = try getch();
+    const ch = @intCast(u32, ch_c);
+    try event_dispatcher.dispatch(
+        EventDispatcher.Event{
+            .value = EventDispatcher.EventValue{ .key_press = Key{ .value = ch } },
+        },
+    );
+
+    // _ = try getch();
+    std.time.sleep(1 * std.time.ns_per_s);
 }
 
 const help_string =
