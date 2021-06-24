@@ -1,6 +1,8 @@
 const std = @import("std");
+const os = std.os;
+const io = std.io;
 const ncurses = @import("ncurses").ncurses;
-usingnamespace ncurses;
+// usingnamespace ncurses;
 
 const max_height = 24;
 
@@ -110,42 +112,85 @@ pub fn main() anyerror!void {
     const max_line_count_width = numberWidth(line_count);
     buffer.line_reset();
 
-    // ncurses init
-    _ = try initscr();
-    try noecho();
-    try cbreak();
-    try stdscr.keypad(true);
-    defer endwin() catch {};
+    var ui = try UIVT100.init();
+    defer ui.deinit() catch {
+        std.debug.print("UIVT100 deinit ERRROR", .{});
+    };
+    try ui.addString("hello world!\r\n");
 
-    const ui = UI.init(stdscr);
-    const event_dispatcher = EventDispatcher.init(ui);
-
-    // ncurses display
-    line_count = 1;
-    while (buffer.next_line()) |line| : (line_count += 1) {
-        if (line_count == max_height) break;
-        {
-            var i = max_line_count_width - numberWidth(line_count);
-            while (i != 0) : (i -= 1) {
-                try addch(' ');
-            }
-        }
-        try printwzig("{d} {s}\n", .{ line_count, line });
-    }
-    try refresh();
-
-    // ncurses edit
-    const ch_c = try getch();
-    const ch = @intCast(u32, ch_c);
-    try event_dispatcher.dispatch(
-        EventDispatcher.Event{
-            .value = EventDispatcher.EventValue{ .key_press = Key{ .value = ch } },
-        },
-    );
-
-    // _ = try getch();
     std.time.sleep(1 * std.time.ns_per_s);
+
+    // // ncurses display
+    // line_count = 1;
+    // while (buffer.next_line()) |line| : (line_count += 1) {
+    //     if (line_count == max_height) break;
+    //     {
+    //         var i = max_line_count_width - numberWidth(line_count);
+    //         while (i != 0) : (i -= 1) {
+    //             try addch(' ');
+    //         }
+    //     }
+    //     try printwzig("{d} {s}\n", .{ line_count, line });
+    // }
+    // try refresh();
+
+    // // ncurses edit
+    // const ch_c = try getch();
+    // const ch = @intCast(u32, ch_c);
+    // try event_dispatcher.dispatch(
+    //     EventDispatcher.Event{
+    //         .value = EventDispatcher.EventValue{ .key_press = Key{ .value = ch } },
+    //     },
+    // );
+
+    // // _ = try getch();
+    // std.time.sleep(1 * std.time.ns_per_s);
 }
+
+pub const UIVT100Error = error{NotTTY} || os.TermiosSetError;
+
+pub const UIVT100 = struct {
+    in_stream: std.fs.File,
+    out_stream: std.fs.File,
+    original_termois: ?os.termios,
+
+    pub fn init() UIVT100Error!UIVT100 {
+        const in_stream = io.getStdIn();
+        const out_stream = io.getStdOut();
+        if (!os.isatty(in_stream.handle)) return UIVT100Error.NotTTY;
+
+        var result = UIVT100{
+            .in_stream = in_stream,
+            .out_stream = out_stream,
+            .original_termois = try os.tcgetattr(in_stream.handle),
+        };
+        errdefer result.deinit() catch {
+            std.debug.print("UIVT100 deinit ERRROR", .{});
+        };
+
+        var raw_termios = result.original_termois.?;
+        raw_termios.iflag &=
+            ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
+        raw_termios.oflag &= ~(@as(os.tcflag_t, os.OPOST));
+        raw_termios.cflag |= os.CS8;
+        raw_termios.lflag &= ~(@as(os.tcflag_t, os.ECHO) | os.ICANON | os.IEXTEN | os.ISIG);
+        raw_termios.cc[os.VMIN] = 0;
+        raw_termios.cc[os.VTIME] = 1;
+        try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
+        return result;
+    }
+
+    pub fn deinit(self: *UIVT100) UIVT100Error!void {
+        if (self.original_termois) |termios| {
+            try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios);
+            self.original_termois = null;
+        }
+    }
+
+    pub fn addString(self: *UIVT100, str: []const u8) !void {
+        try self.out_stream.writer().writeAll(str);
+    }
+};
 
 const help_string =
     \\Usage: kisa file
