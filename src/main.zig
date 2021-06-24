@@ -116,22 +116,16 @@ pub fn main() anyerror!void {
     defer ui.deinit() catch {
         std.debug.print("UIVT100 deinit ERRROR", .{});
     };
-    try ui.addString("hello world!\r\n");
 
-    std.time.sleep(1 * std.time.ns_per_s);
-
-    // // ncurses display
-    // line_count = 1;
-    // while (buffer.next_line()) |line| : (line_count += 1) {
-    //     if (line_count == max_height) break;
-    //     {
-    //         var i = max_line_count_width - numberWidth(line_count);
-    //         while (i != 0) : (i -= 1) {
-    //             try addch(' ');
-    //         }
-    //     }
-    //     try printwzig("{d} {s}\n", .{ line_count, line });
-    // }
+    line_count = 1;
+    while (buffer.next_line()) |line| : (line_count += 1) {
+        if (line_count == max_height) break;
+        {
+            var i = max_line_count_width - numberWidth(line_count);
+            try ui.writer().writeByteNTimes(' ', i);
+        }
+        try ui.writer().print("{d} {s}\n", .{ line_count, line });
+    }
     // try refresh();
 
     // // ncurses edit
@@ -144,10 +138,11 @@ pub fn main() anyerror!void {
     // );
 
     // // _ = try getch();
-    // std.time.sleep(1 * std.time.ns_per_s);
+
+    std.time.sleep(1 * std.time.ns_per_s);
 }
 
-pub const UIVT100Error = error{NotTTY} || os.TermiosSetError;
+pub const UIVT100Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
 
 pub const UIVT100 = struct {
     in_stream: std.fs.File,
@@ -177,6 +172,7 @@ pub const UIVT100 = struct {
         raw_termios.cc[os.VMIN] = 0;
         raw_termios.cc[os.VTIME] = 1;
         try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
+        try result.clear();
         return result;
     }
 
@@ -187,8 +183,27 @@ pub const UIVT100 = struct {
         }
     }
 
-    pub fn addString(self: *UIVT100, str: []const u8) !void {
-        try self.out_stream.writer().writeAll(str);
+    pub fn raw_writer(self: UIVT100) std.fs.File.Writer {
+        return self.out_stream.writer();
+    }
+
+    pub const Writer = std.io.Writer(*UIVT100, std.fs.File.WriteError, writerfn);
+
+    pub fn writer(self: *UIVT100) Writer {
+        return .{ .context = self };
+    }
+
+    fn writerfn(self: *UIVT100, string: []const u8) !usize {
+        for (string) |ch| {
+            try self.raw_writer().writeByte(ch);
+            if (ch == '\n') try self.raw_writer().writeByte('\r');
+        }
+        return string.len;
+    }
+
+    fn clear(self: *UIVT100) !void {
+        try self.raw_writer().print("{c}[H", .{std.ascii.control_code.ESC});
+        try self.raw_writer().print("{c}[2J", .{std.ascii.control_code.ESC});
     }
 };
 
