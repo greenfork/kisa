@@ -2,9 +2,6 @@ const std = @import("std");
 const os = std.os;
 const io = std.io;
 const ncurses = @import("ncurses").ncurses;
-// usingnamespace ncurses;
-
-const max_height = 24;
 
 pub const Key = struct {
     value: u32,
@@ -105,10 +102,7 @@ pub fn main() anyerror!void {
         else => return err,
     };
     var buffer = try Buffer.init(ally, content);
-    var line_count: u32 = 1;
-    while (buffer.next_line()) |line| : (line_count += 1) {
-        if (line_count == max_height) break;
-    }
+    var line_count: u32 = @intCast(u32, std.mem.count(u8, content, "\n"));
     const max_line_count_width = numberWidth(line_count);
     buffer.line_reset();
 
@@ -119,14 +113,14 @@ pub fn main() anyerror!void {
 
     line_count = 1;
     while (buffer.next_line()) |line| : (line_count += 1) {
-        if (line_count == max_height) break;
+        if (line_count == 24) break;
         {
             var i = max_line_count_width - numberWidth(line_count);
             try ui.writer().writeByteNTimes(' ', i);
         }
         try ui.writer().print("{d} {s}\n", .{ line_count, line });
     }
-    // try refresh();
+    try ui.refresh();
 
     // // ncurses edit
     // const ch_c = try getch();
@@ -139,7 +133,7 @@ pub fn main() anyerror!void {
 
     // // _ = try getch();
 
-    std.time.sleep(1 * std.time.ns_per_s);
+    // std.time.sleep(1 * std.time.ns_per_s);
 }
 
 pub const UIVT100Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
@@ -148,22 +142,25 @@ pub const UIVT100 = struct {
     in_stream: std.fs.File,
     out_stream: std.fs.File,
     original_termois: ?os.termios,
+    buffered_writer: RawBufferedWriterCtx,
+
+    const write_buffer_size = 4096;
 
     pub fn init() UIVT100Error!UIVT100 {
+        // Black magic
         const in_stream = io.getStdIn();
         const out_stream = io.getStdOut();
         if (!os.isatty(in_stream.handle)) return UIVT100Error.NotTTY;
-
-        var result = UIVT100{
+        var uivt100 = UIVT100{
             .in_stream = in_stream,
             .out_stream = out_stream,
             .original_termois = try os.tcgetattr(in_stream.handle),
+            .buffered_writer = RawBufferedWriterCtx{ .unbuffered_writer = out_stream.writer() },
         };
-        errdefer result.deinit() catch {
+        errdefer uivt100.deinit() catch {
             std.debug.print("UIVT100 deinit ERRROR", .{});
         };
-
-        var raw_termios = result.original_termois.?;
+        var raw_termios = uivt100.original_termois.?;
         raw_termios.iflag &=
             ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
         raw_termios.oflag &= ~(@as(os.tcflag_t, os.OPOST));
@@ -172,8 +169,11 @@ pub const UIVT100 = struct {
         raw_termios.cc[os.VMIN] = 0;
         raw_termios.cc[os.VTIME] = 1;
         try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
-        try result.clear();
-        return result;
+
+        // Prepare terminal
+        try uivt100.clear();
+
+        return uivt100;
     }
 
     pub fn deinit(self: *UIVT100) UIVT100Error!void {
@@ -183,13 +183,20 @@ pub const UIVT100 = struct {
         }
     }
 
-    pub fn raw_writer(self: UIVT100) std.fs.File.Writer {
-        return self.out_stream.writer();
+    // Do type magic to expose buffered writer in 2 modes:
+    // * raw_writer - we don't try to do anything smart, mostly for control codes
+    // * writer - we try to do what is expected when writing to a screen
+
+    const RawUnbufferedWriter = io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write);
+    const RawBufferedWriterCtx = io.BufferedWriter(write_buffer_size, RawUnbufferedWriter);
+    pub const RawBufferedWriter = RawBufferedWriterCtx.Writer;
+    pub const BufferedWriter = io.Writer(*UIVT100, RawBufferedWriterCtx.Error, writerfn);
+
+    fn raw_writer(self: *UIVT100) RawBufferedWriter {
+        return self.buffered_writer.writer();
     }
 
-    pub const Writer = std.io.Writer(*UIVT100, std.fs.File.WriteError, writerfn);
-
-    pub fn writer(self: *UIVT100) Writer {
+    pub fn writer(self: *UIVT100) BufferedWriter {
         return .{ .context = self };
     }
 
@@ -201,9 +208,25 @@ pub const UIVT100 = struct {
         return string.len;
     }
 
-    fn clear(self: *UIVT100) !void {
-        try self.raw_writer().print("{c}[H", .{std.ascii.control_code.ESC});
-        try self.raw_writer().print("{c}[2J", .{std.ascii.control_code.ESC});
+    pub fn clear(self: *UIVT100) !void {
+        try self.eraseDisplay();
+        try self.moveCursor(1, 1);
+        try self.refresh();
+    }
+
+    pub fn refresh(self: *UIVT100) !void {
+        try self.buffered_writer.flush();
+    }
+
+    const csi = "\x1b[";
+
+    // ECMA-48 CSI sequences
+
+    fn eraseDisplay(self: *UIVT100) !void {
+        try self.raw_writer().writeAll(csi ++ "2J");
+    }
+    fn moveCursor(self: *UIVT100, row: u32, col: u32) !void {
+        try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
     }
 };
 
