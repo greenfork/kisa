@@ -132,17 +132,20 @@ pub const Window = struct {
 /// modifying.
 pub const Buffer = struct {
     ally: *std.mem.Allocator,
-    content: []u8,
+    content: ContentType,
     // metrics
     max_line_number: u32,
 
     pub const Error = error{ OutOfMemory, LineOutOfRange };
     const Self = @This();
+    const ContentType = std.ArrayList(u8);
 
     pub fn init(ally: *std.mem.Allocator, content: []const u8) Error!Self {
+        const duplicated_content = try ally.dupe(u8, content);
+        const our_content = ContentType.fromOwnedSlice(ally, duplicated_content);
         var result = Self{
             .ally = ally,
-            .content = try ally.dupe(u8, content),
+            .content = our_content,
             .max_line_number = undefined,
         };
         result.countMetrics();
@@ -151,7 +154,7 @@ pub const Buffer = struct {
 
     fn countMetrics(self: *Self) void {
         self.max_line_number = 1;
-        for (self.content) |ch| {
+        for (self.content.items) |ch| {
             if (ch == '\n') self.max_line_number += 1;
         }
     }
@@ -160,7 +163,7 @@ pub const Buffer = struct {
         var line_number: u32 = 1;
         var start_offset: usize = std.math.maxInt(usize);
         var end_offset: usize = std.math.maxInt(usize);
-        for (self.content) |ch, idx| {
+        for (self.content.items) |ch, idx| {
             if (start_offset == std.math.maxInt(usize) and first_line_number == line_number) {
                 start_offset = idx;
             }
@@ -177,7 +180,7 @@ pub const Buffer = struct {
             );
             return Error.LineOutOfRange;
         }
-        return self.content[start_offset..end_offset];
+        return self.content.items[start_offset..end_offset];
     }
 };
 
