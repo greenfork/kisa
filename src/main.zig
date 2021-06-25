@@ -34,6 +34,14 @@ pub const UI = struct {
         }
         try self.backend.refresh();
     }
+
+    pub inline fn textAreaRows(self: Self) u32 {
+        return self.backend.textAreaRows();
+    }
+
+    pub inline fn textAreaCols(self: Self) u32 {
+        return self.backend.textAreaCols();
+    }
 };
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
@@ -104,8 +112,8 @@ pub const Window = struct {
 
     pub fn init(buffer: *Buffer, ui: UI) Self {
         return Self{
-            .rows = ui.backend.rows,
-            .cols = ui.backend.cols,
+            .rows = ui.textAreaRows(),
+            .cols = ui.textAreaCols(),
             .cursor = Cursor{ .line = 1, .col = 1, .x = 0, .y = 0 },
             .buffer = buffer,
             .ui = ui,
@@ -114,7 +122,7 @@ pub const Window = struct {
     }
 
     pub fn render(self: *Self) Error!void {
-        const last_line_number = self.first_line_number + self.rows - 1;
+        const last_line_number = self.first_line_number + self.rows;
         const slice = try self.buffer.toLineSlice(self.first_line_number, last_line_number);
         try self.ui.render(slice, self.first_line_number, last_line_number);
     }
@@ -234,6 +242,7 @@ pub const UIVT100 = struct {
     const write_buffer_size = 4096;
     /// Control Sequence Introducer, see console_codes(4)
     const csi = "\x1b[";
+    const status_line_width = 1;
 
     pub fn init() Error!Self {
         const in_stream = io.getStdIn();
@@ -308,6 +317,14 @@ pub const UIVT100 = struct {
 
     pub fn refresh(self: *Self) !void {
         try self.buffered_writer_ctx.flush();
+    }
+
+    pub fn textAreaRows(self: Self) u32 {
+        return self.rows - status_line_width;
+    }
+
+    pub fn textAreaCols(self: Self) u32 {
+        return self.cols;
     }
 
     fn getWindowSize(self: Self, rows: *u32, cols: *u32) !void {
