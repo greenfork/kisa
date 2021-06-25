@@ -26,6 +26,9 @@ pub const UI = struct {
         const max_line_number_width = numberWidth(max_line_number);
         var line_it = std.mem.split(string, "\n");
         while (line_it.next()) |line| : (line_count += 1) {
+            // When there's a trailing newline, we don't display the very last row.
+            if (line_count == max_line_number and line.len == 0) break;
+
             try w.writeByteNTimes(' ', max_line_number_width - numberWidth(line_count));
             try w.print("{d} {s}\n", .{ line_count, line });
         }
@@ -82,13 +85,15 @@ pub const EventDispatcher = struct {
 pub const Cursor = struct {
     line: u32,
     col: u32,
+    x: u32,
+    y: u32,
 };
 
 /// Manages the representation of what the user sees on the screen. Also contains parts of UI
 /// state such as cursor position.
 pub const Window = struct {
-    width: u32,
-    height: u32,
+    rows: u32,
+    cols: u32,
     cursor: Cursor,
     buffer: *Buffer,
     ui: UI,
@@ -98,15 +103,10 @@ pub const Window = struct {
     const Error = UI.Error || Buffer.Error;
 
     pub fn init(buffer: *Buffer, ui: UI) Self {
-        // var width: u32 = undefined;
-        // var height: u32 = undefined;
-        // try ui.getDimensions(&width, &height);
-        var width: u32 = 100;
-        var height: u32 = 24;
         return Self{
-            .height = height,
-            .width = width,
-            .cursor = Cursor{ .line = 1, .col = 1 },
+            .rows = ui.backend.rows,
+            .cols = ui.backend.cols,
+            .cursor = Cursor{ .line = 1, .col = 1, .x = 0, .y = 0 },
             .buffer = buffer,
             .ui = ui,
             .first_line_number = 1,
@@ -114,7 +114,7 @@ pub const Window = struct {
     }
 
     pub fn render(self: *Self) Error!void {
-        const last_line_number = self.first_line_number + self.height - 1;
+        const last_line_number = self.first_line_number + self.rows - 1;
         const slice = try self.buffer.toLineSlice(self.first_line_number, last_line_number);
         try self.ui.render(slice, self.first_line_number, last_line_number);
     }
@@ -221,8 +221,14 @@ pub const UIVT100 = struct {
     out_stream: std.fs.File,
     original_termois: ?os.termios,
     buffered_writer_ctx: RawBufferedWriterCtx,
+    rows: u32,
+    cols: u32,
 
-    pub const Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
+    pub const Error = error{
+        NotTTY,
+        NoWindowSize,
+    } || os.TermiosSetError || std.fs.File.WriteError;
+
     const Self = @This();
 
     const write_buffer_size = 4096;
@@ -238,10 +244,13 @@ pub const UIVT100 = struct {
             .out_stream = out_stream,
             .original_termois = try os.tcgetattr(in_stream.handle),
             .buffered_writer_ctx = RawBufferedWriterCtx{ .unbuffered_writer = out_stream.writer() },
+            .rows = undefined,
+            .cols = undefined,
         };
         errdefer uivt100.deinit() catch {
             std.debug.print("UIVT100 deinit ERRROR", .{});
         };
+        try uivt100.updateWindowSize();
 
         // Black magic
         var raw_termios = uivt100.original_termois.?;
@@ -299,6 +308,30 @@ pub const UIVT100 = struct {
 
     pub fn refresh(self: *Self) !void {
         try self.buffered_writer_ctx.flush();
+    }
+
+    fn getWindowSize(self: Self, rows: *u32, cols: *u32) !void {
+        while (true) {
+            var window_size: os.linux.winsize = undefined;
+            const fd = @bitCast(usize, @as(isize, self.in_stream.handle));
+            switch (os.linux.syscall3(.ioctl, fd, os.linux.TIOCGWINSZ, @ptrToInt(&window_size))) {
+                0 => {
+                    rows.* = window_size.ws_row;
+                    cols.* = window_size.ws_col;
+                    return;
+                },
+                os.EINTR => continue,
+                else => return Error.NoWindowSize,
+            }
+        }
+    }
+
+    fn updateWindowSize(self: *Self) !void {
+        var rows: u32 = undefined;
+        var cols: u32 = undefined;
+        try self.getWindowSize(&rows, &cols);
+        self.rows = rows;
+        self.cols = cols;
     }
 
     fn eraseDisplay(self: *Self) !void {
