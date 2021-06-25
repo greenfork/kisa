@@ -20,8 +20,15 @@ pub const UI = struct {
         return .{ .backend = backend };
     }
 
-    pub fn render(self: *Self, string: []const u8) !void {
-        try self.backend.writer().writeAll(string);
+    pub fn render(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
+        var w = self.backend.writer();
+        var line_count = first_line_number;
+        const max_line_number_width = numberWidth(max_line_number);
+        var line_it = std.mem.split(string, "\n");
+        while (line_it.next()) |line| : (line_count += 1) {
+            try w.writeByteNTimes(' ', max_line_number_width - numberWidth(line_count));
+            try w.print("{d} {s}\n", .{ line_count, line });
+        }
         try self.backend.refresh();
     }
 };
@@ -96,7 +103,7 @@ pub const Window = struct {
         // try ui.getDimensions(&width, &height);
         var width: u32 = 100;
         var height: u32 = 24;
-        return .{
+        return Self{
             .height = height,
             .width = width,
             .cursor = Cursor{ .line = 1, .col = 1 },
@@ -107,7 +114,9 @@ pub const Window = struct {
     }
 
     pub fn render(self: *Self) Error!void {
-        try self.ui.render(try self.buffer.toLineSlice(self.first_line_number, self.height));
+        const last_line_number = self.first_line_number + self.height - 1;
+        const slice = try self.buffer.toLineSlice(self.first_line_number, last_line_number);
+        try self.ui.render(slice, self.first_line_number, last_line_number);
     }
 };
 
@@ -116,28 +125,30 @@ pub const Window = struct {
 pub const Buffer = struct {
     ally: *std.mem.Allocator,
     content: []u8,
-    line_it: std.mem.SplitIterator,
+    // metrics
+    max_line_number: u32,
 
     pub const Error = error{ OutOfMemory, LineOutOfRange };
     const Self = @This();
 
     pub fn init(ally: *std.mem.Allocator, content: []const u8) Error!Self {
-        return Self{
+        var result = Self{
             .ally = ally,
             .content = try ally.dupe(u8, content),
-            .line_it = std.mem.split(content, "\n"),
+            .max_line_number = undefined,
         };
+        result.countMetrics();
+        return result;
     }
 
-    pub fn next_line(self: *Self) ?[]const u8 {
-        return self.line_it.next();
+    fn countMetrics(self: *Self) void {
+        self.max_line_number = 1;
+        for (self.content) |ch| {
+            if (ch == '\n') self.max_line_number += 1;
+        }
     }
 
-    pub fn line_reset(self: *Self) void {
-        self.line_it.index = 0;
-    }
-
-    pub fn toLineSlice(self: Self, first_line_number: u32, max_line_count: u32) ![]const u8 {
+    pub fn toLineSlice(self: Self, first_line_number: u32, last_line_number: u32) ![]const u8 {
         var line_number: u32 = 1;
         var start_offset: usize = std.math.maxInt(usize);
         var end_offset: usize = std.math.maxInt(usize);
@@ -145,9 +156,7 @@ pub const Buffer = struct {
             if (start_offset == std.math.maxInt(usize) and first_line_number == line_number) {
                 start_offset = idx;
             }
-            if (end_offset == std.math.maxInt(usize) and
-                first_line_number + max_line_count == line_number)
-            {
+            if (end_offset == std.math.maxInt(usize) and last_line_number == line_number) {
                 end_offset = idx;
                 break;
             }
@@ -155,8 +164,8 @@ pub const Buffer = struct {
         }
         if (start_offset == std.math.maxInt(usize) or end_offset == std.math.maxInt(usize)) {
             std.debug.print(
-                "first_line: {d}, max_line: {d}, line_num: {d}, start: {d}, end: {d}\n",
-                .{ first_line_number, max_line_count, line_number, start_offset, end_offset },
+                "first_line: {d}, last_line: {d}, line_num: {d}, start: {d}, end: {d}\n",
+                .{ first_line_number, last_line_number, line_number, start_offset, end_offset },
             );
             return Error.LineOutOfRange;
         }
@@ -177,30 +186,16 @@ pub fn main() anyerror!void {
         },
         else => return err,
     };
+
     var buffer = try Buffer.init(ally, content);
-
-    // var line_count: u32 = @intCast(u32, std.mem.count(u8, content, "\n"));
-    // const max_line_count_width = numberWidth(line_count);
-    // buffer.line_reset();
-
     var uivt100 = try UIVT100.init();
     defer uivt100.deinit() catch {
         std.debug.print("UIVT100 deinit ERRROR", .{});
     };
     var ui = UI.init(uivt100);
     var window = Window.init(&buffer, ui);
-    try window.render();
 
-    // line_count = 1;
-    // while (buffer.next_line()) |line| : (line_count += 1) {
-    //     if (line_count == 24) break;
-    //     {
-    //         var i = max_line_count_width - numberWidth(line_count);
-    //         try ui.writer().writeByteNTimes(' ', i);
-    //     }
-    //     try ui.writer().print("{d} {s}\n", .{ line_count, line });
-    // }
-    // try ui.refresh();
+    try window.render();
 
     // // ncurses edit
     // const ch_c = try getch();
