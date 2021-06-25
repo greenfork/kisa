@@ -4,7 +4,7 @@ const io = std.io;
 const ncurses = @import("ncurses").ncurses;
 
 pub const Key = struct {
-    value: u32,
+    value: u8,
 };
 
 /// A high-level abstraction which accepts a backend and provides a set of functions to operate on
@@ -50,9 +50,9 @@ pub const UI = struct {
 /// actions that will be executed only when a specific event is fired, they will be useful as
 /// an extension point for user-defined hooks.
 pub const EventDispatcher = struct {
-    ui: UI,
+    buffer: *Buffer,
 
-    pub const Error = UI.Error;
+    pub const Error = Buffer.Error || Window.Error;
     const Self = @This();
 
     pub const EventKind = enum {
@@ -71,8 +71,8 @@ pub const EventDispatcher = struct {
         value: EventValue,
     };
 
-    pub fn init(ui: UI) Self {
-        return .{ .ui = ui };
+    pub fn init(buffer: *Buffer) Self {
+        return .{ .buffer = buffer };
     }
 
     pub fn dispatch(self: Self, event: Event) Error!void {
@@ -81,7 +81,8 @@ pub const EventDispatcher = struct {
                 try self.dispatch(.{ .value = .{ .insert_character = val } });
             },
             .insert_character => |val| {
-                try self.ui.insertCharacter(val.value);
+                try self.buffer.insert(100, val.value);
+                try self.buffer.windows[0].render();
             },
             else => {
                 std.debug.print("Not supported event: {}\n", .{event});
@@ -133,6 +134,8 @@ pub const Window = struct {
 pub const Buffer = struct {
     ally: *std.mem.Allocator,
     content: ContentType,
+    // TODO: make it usable, for now we just use a single element
+    windows: [1]*Window = undefined,
     // metrics
     max_line_number: u32,
 
@@ -182,6 +185,14 @@ pub const Buffer = struct {
         }
         return self.content.items[start_offset..end_offset];
     }
+
+    pub fn append(self: *Self, character: u8) !void {
+        try self.content.append(character);
+    }
+
+    pub fn insert(self: *Self, index: usize, character: u8) !void {
+        try self.content.insert(index, character);
+    }
 };
 
 pub fn main() anyerror!void {
@@ -205,6 +216,9 @@ pub fn main() anyerror!void {
     };
     var ui = UI.init(uivt100);
     var window = Window.init(&buffer, ui);
+    // FIXME: not keep window on the stack
+    buffer.windows[0] = &window;
+    var event_dispatcher = EventDispatcher.init(&buffer);
 
     try window.render();
 
@@ -215,10 +229,12 @@ pub fn main() anyerror!void {
             switch (buf[0]) {
                 3 => break,
                 else => {
-                    std.debug.print("buf[0]: {d}\n", .{buf[0]});
-                    std.debug.print("buf[1]: {d}\n", .{buf[1]});
-                    std.debug.print("buf[2]: {d}\n", .{buf[2]});
-                    std.debug.print("buf[3]: {d}\n", .{buf[3]});
+                    try event_dispatcher.dispatch(.{ .value = .{ .insert_character = Key{ .value = buf[0] } } });
+                    std.debug.print("buffer_len: {d}\r\n", .{buffer.content.items.len});
+                    // std.debug.print("buf[0]: {d}\r\n", .{buf[0]});
+                    // std.debug.print("buf[1]: {d}\r\n", .{buf[1]});
+                    // std.debug.print("buf[2]: {d}\r\n", .{buf[2]});
+                    // std.debug.print("buf[3]: {d}\r\n", .{buf[3]});
                 },
             }
         }
