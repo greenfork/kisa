@@ -1,2 +1,4 @@
 /zig-cache
 /zig-out
+
+/tests/manylines.txt
