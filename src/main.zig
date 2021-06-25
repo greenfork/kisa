@@ -14,9 +14,10 @@ pub const UI = struct {
     backend: UIVT100,
 
     pub const Error = UIVT100.Error;
+    const Self = @This();
 
-    pub fn init(backend: UIVT100) UI {
-        return UI{ .backend = backend };
+    pub fn init(backend: UIVT100) Self {
+        return .{ .backend = backend };
     }
 };
 
@@ -29,6 +30,7 @@ pub const EventDispatcher = struct {
     ui: UI,
 
     pub const Error = @TypeOf(ui).Error;
+    const Self = @This();
 
     pub const EventKind = enum {
         none,
@@ -46,11 +48,11 @@ pub const EventDispatcher = struct {
         value: EventValue,
     };
 
-    pub fn init(ui: UI) EventDispatcher {
-        return EventDispatcher{ .ui = ui };
+    pub fn init(ui: UI) Self {
+        return .{ .ui = ui };
     }
 
-    pub fn dispatch(self: EventDispatcher, event: Event) EventDispatcherError!void {
+    pub fn dispatch(self: Self, event: Event) EventDispatcherError!void {
         switch (event.value) {
             .key_press => |val| {
                 try self.dispatch(.{ .value = .{ .insert_character = val } });
@@ -65,8 +67,6 @@ pub const EventDispatcher = struct {
     }
 };
 
-pub const BufferError = error{OutOfMemory};
-
 /// Manages the actual text of an opened file and provides an interface for querying it and
 /// modifying.
 pub const Buffer = struct {
@@ -74,19 +74,22 @@ pub const Buffer = struct {
     content: []u8,
     line_it: std.mem.SplitIterator,
 
-    pub fn init(ally: *std.mem.Allocator, content: []const u8) BufferError!Buffer {
-        return Buffer{
+    pub const Error = error{OutOfMemory};
+    const Self = @This();
+
+    pub fn init(ally: *std.mem.Allocator, content: []const u8) Error!Self {
+        return .{
             .ally = ally,
             .content = try ally.dupe(u8, content),
             .line_it = std.mem.split(content, "\n"),
         };
     }
 
-    pub fn next_line(self: *Buffer) ?[]const u8 {
+    pub fn next_line(self: *Self) ?[]const u8 {
         return self.line_it.next();
     }
 
-    pub fn line_reset(self: *Buffer) void {
+    pub fn line_reset(self: *Self) void {
         self.line_it.index = 0;
     }
 };
@@ -151,12 +154,13 @@ pub const UIVT100 = struct {
     buffered_writer_ctx: RawBufferedWriterCtx,
 
     pub const Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
+    const Self = @This();
 
     const write_buffer_size = 4096;
     /// Control Sequence Introducer, see console_codes(4)
     const csi = "\x1b[";
 
-    pub fn init() Error!UIVT100 {
+    pub fn init() Error!Self {
         const in_stream = io.getStdIn();
         const out_stream = io.getStdOut();
         if (!os.isatty(in_stream.handle)) return Error.NotTTY;
@@ -187,7 +191,7 @@ pub const UIVT100 = struct {
         return uivt100;
     }
 
-    pub fn deinit(self: *UIVT100) Error!void {
+    pub fn deinit(self: *Self) Error!void {
         if (self.original_termois) |termios| {
             try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios);
             self.original_termois = null;
@@ -202,15 +206,15 @@ pub const UIVT100 = struct {
     pub const RawBufferedWriter = RawBufferedWriterCtx.Writer;
     pub const BufferedWriter = io.Writer(*UIVT100, RawBufferedWriterCtx.Error, writerfn);
 
-    fn raw_writer(self: *UIVT100) RawBufferedWriter {
+    fn raw_writer(self: *Self) RawBufferedWriter {
         return self.buffered_writer_ctx.writer();
     }
 
-    pub fn writer(self: *UIVT100) BufferedWriter {
+    pub fn writer(self: *Self) BufferedWriter {
         return .{ .context = self };
     }
 
-    fn writerfn(self: *UIVT100, string: []const u8) !usize {
+    fn writerfn(self: *Self, string: []const u8) !usize {
         for (string) |ch| {
             if (ch == '\n') try self.raw_writer().writeByte('\r');
             try self.raw_writer().writeByte(ch);
@@ -218,20 +222,20 @@ pub const UIVT100 = struct {
         return string.len;
     }
 
-    pub fn clear(self: *UIVT100) !void {
+    pub fn clear(self: *Self) !void {
         try self.eraseDisplay();
         try self.moveCursor(1, 1);
         try self.refresh();
     }
 
-    pub fn refresh(self: *UIVT100) !void {
+    pub fn refresh(self: *Self) !void {
         try self.buffered_writer_ctx.flush();
     }
 
-    fn eraseDisplay(self: *UIVT100) !void {
+    fn eraseDisplay(self: *Self) !void {
         try self.raw_writer().writeAll(csi ++ "2J");
     }
-    fn moveCursor(self: *UIVT100, row: u32, col: u32) !void {
+    fn moveCursor(self: *Self, row: u32, col: u32) !void {
         try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
     }
 };
