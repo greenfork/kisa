@@ -259,6 +259,7 @@ pub const UIVT100 = struct {
 
     pub const Error = error{
         NotTTY,
+        NoAnsiEscapeSequences,
         NoWindowSize,
     } || os.TermiosSetError || std.fs.File.WriteError;
 
@@ -272,7 +273,8 @@ pub const UIVT100 = struct {
     pub fn init() Error!Self {
         const in_stream = io.getStdIn();
         const out_stream = io.getStdOut();
-        if (!os.isatty(in_stream.handle)) return Error.NotTTY;
+        if (!in_stream.isTty()) return Error.NotTTY;
+        if (!out_stream.supportsAnsiEscapeCodes()) return Error.NoAnsiEscapeSequences;
         var uivt100 = UIVT100{
             .in_stream = in_stream,
             .out_stream = out_stream,
