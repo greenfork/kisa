@@ -75,7 +75,7 @@ pub const EventDispatcher = struct {
         return .{ .ui = ui };
     }
 
-    pub fn dispatch(self: Self, event: Event) EventDispatcherError!void {
+    pub fn dispatch(self: Self, event: Event) Error!void {
         switch (event.value) {
             .key_press => |val| {
                 try self.dispatch(.{ .value = .{ .insert_character = val } });
