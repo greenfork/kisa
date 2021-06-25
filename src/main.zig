@@ -7,25 +7,28 @@ pub const Key = struct {
     value: u32,
 };
 
-pub const UIError = ncurses.NcursesError;
-
+/// A high-level abstraction which accepts a backend and provides a set of functions to operate on
+/// the backend. Backend itself contains all low-level functions which might not be all useful
+/// in a high-level interaction context.
 pub const UI = struct {
-    window: Window,
+    backend: UIVT100,
 
-    pub fn init(window: Window) UI {
-        return UI{ .window = window };
-    }
+    pub const Error = UIVT100.Error;
 
-    pub fn insertCharacter(self: UI, ch: u32) !void {
-        try self.window.waddch(ch);
-        try refresh();
+    pub fn init(backend: UIVT100) UI {
+        return UI{ .backend = backend };
     }
 };
 
-pub const EventDispatcherError = UIError;
-
+/// An interface for processing all the events. Events can be of any kind, such as modifying the
+/// `Buffer` or just changing the cursor position on the screen. Events can spawn more events
+/// and are processed sequentially. This should also allow us to add so called "hooks" which are
+/// actions that will be executed only when a specific event is fired, they will be useful as
+/// an extension point for user-defined hooks.
 pub const EventDispatcher = struct {
     ui: UI,
+
+    pub const Error = @TypeOf(ui).Error;
 
     pub const EventKind = enum {
         none,
@@ -50,9 +53,7 @@ pub const EventDispatcher = struct {
     pub fn dispatch(self: EventDispatcher, event: Event) EventDispatcherError!void {
         switch (event.value) {
             .key_press => |val| {
-                try self.dispatch(Event{
-                    .value = .{ .insert_character = val },
-                });
+                try self.dispatch(.{ .value = .{ .insert_character = val } });
             },
             .insert_character => |val| {
                 try self.ui.insertCharacter(val.value);
@@ -66,6 +67,8 @@ pub const EventDispatcher = struct {
 
 pub const BufferError = error{OutOfMemory};
 
+/// Manages the actual text of an opened file and provides an interface for querying it and
+/// modifying.
 pub const Buffer = struct {
     ally: *std.mem.Allocator,
     content: []u8,
@@ -136,22 +139,27 @@ pub fn main() anyerror!void {
     // std.time.sleep(1 * std.time.ns_per_s);
 }
 
-pub const UIVT100Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
-
+/// UI backend. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
+/// which are exposed in this implementation, such as colored output, it established a standard
+/// of ASCII escape sequences which is implemented in most terminal emulators as of today.
+/// Later this standard was extended and this implementation is a common denominator that is
+/// likely to be supported in most terminal emulators.
 pub const UIVT100 = struct {
     in_stream: std.fs.File,
     out_stream: std.fs.File,
     original_termois: ?os.termios,
     buffered_writer_ctx: RawBufferedWriterCtx,
 
+    pub const Error = error{NotTTY} || os.TermiosSetError || std.fs.File.WriteError;
+
     const write_buffer_size = 4096;
     /// Control Sequence Introducer, see console_codes(4)
     const csi = "\x1b[";
 
-    pub fn init() UIVT100Error!UIVT100 {
+    pub fn init() Error!UIVT100 {
         const in_stream = io.getStdIn();
         const out_stream = io.getStdOut();
-        if (!os.isatty(in_stream.handle)) return UIVT100Error.NotTTY;
+        if (!os.isatty(in_stream.handle)) return Error.NotTTY;
         var uivt100 = UIVT100{
             .in_stream = in_stream,
             .out_stream = out_stream,
@@ -179,7 +187,7 @@ pub const UIVT100 = struct {
         return uivt100;
     }
 
-    pub fn deinit(self: *UIVT100) UIVT100Error!void {
+    pub fn deinit(self: *UIVT100) Error!void {
         if (self.original_termois) |termios| {
             try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios);
             self.original_termois = null;
@@ -204,8 +212,8 @@ pub const UIVT100 = struct {
 
     fn writerfn(self: *UIVT100, string: []const u8) !usize {
         for (string) |ch| {
-            try self.raw_writer().writeByte(ch);
             if (ch == '\n') try self.raw_writer().writeByte('\r');
+            try self.raw_writer().writeByte(ch);
         }
         return string.len;
     }
