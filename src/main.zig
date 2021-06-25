@@ -142,12 +142,13 @@ pub const UIVT100 = struct {
     in_stream: std.fs.File,
     out_stream: std.fs.File,
     original_termois: ?os.termios,
-    buffered_writer: RawBufferedWriterCtx,
+    buffered_writer_ctx: RawBufferedWriterCtx,
 
     const write_buffer_size = 4096;
+    /// Control Sequence Introducer, see console_codes(4)
+    const csi = "\x1b[";
 
     pub fn init() UIVT100Error!UIVT100 {
-        // Black magic
         const in_stream = io.getStdIn();
         const out_stream = io.getStdOut();
         if (!os.isatty(in_stream.handle)) return UIVT100Error.NotTTY;
@@ -155,11 +156,13 @@ pub const UIVT100 = struct {
             .in_stream = in_stream,
             .out_stream = out_stream,
             .original_termois = try os.tcgetattr(in_stream.handle),
-            .buffered_writer = RawBufferedWriterCtx{ .unbuffered_writer = out_stream.writer() },
+            .buffered_writer_ctx = RawBufferedWriterCtx{ .unbuffered_writer = out_stream.writer() },
         };
         errdefer uivt100.deinit() catch {
             std.debug.print("UIVT100 deinit ERRROR", .{});
         };
+
+        // Black magic
         var raw_termios = uivt100.original_termois.?;
         raw_termios.iflag &=
             ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
@@ -186,14 +189,13 @@ pub const UIVT100 = struct {
     // Do type magic to expose buffered writer in 2 modes:
     // * raw_writer - we don't try to do anything smart, mostly for control codes
     // * writer - we try to do what is expected when writing to a screen
-
     const RawUnbufferedWriter = io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write);
     const RawBufferedWriterCtx = io.BufferedWriter(write_buffer_size, RawUnbufferedWriter);
     pub const RawBufferedWriter = RawBufferedWriterCtx.Writer;
     pub const BufferedWriter = io.Writer(*UIVT100, RawBufferedWriterCtx.Error, writerfn);
 
     fn raw_writer(self: *UIVT100) RawBufferedWriter {
-        return self.buffered_writer.writer();
+        return self.buffered_writer_ctx.writer();
     }
 
     pub fn writer(self: *UIVT100) BufferedWriter {
@@ -215,12 +217,8 @@ pub const UIVT100 = struct {
     }
 
     pub fn refresh(self: *UIVT100) !void {
-        try self.buffered_writer.flush();
+        try self.buffered_writer_ctx.flush();
     }
-
-    const csi = "\x1b[";
-
-    // ECMA-48 CSI sequences
 
     fn eraseDisplay(self: *UIVT100) !void {
         try self.raw_writer().writeAll(csi ++ "2J");
