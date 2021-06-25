@@ -205,16 +205,22 @@ pub fn main() anyerror!void {
 
     try window.render();
 
-    // // ncurses edit
-    // const ch_c = try getch();
-    // const ch = @intCast(u32, ch_c);
-    // try event_dispatcher.dispatch(
-    //     EventDispatcher.Event{
-    //         .value = EventDispatcher.EventValue{ .key_press = Key{ .value = ch } },
-    //     },
-    // );
-
-    // // _ = try getch();
+    var buf = [_]u8{0} ** 4;
+    var number_read = try uivt100.in_stream.reader().read(buf[0..]);
+    while (true) : (number_read = try uivt100.in_stream.reader().read(buf[0..])) {
+        if (number_read > 0) {
+            switch (buf[0]) {
+                3 => break,
+                else => {
+                    std.debug.print("buf[0]: {d}\n", .{buf[0]});
+                    std.debug.print("buf[1]: {d}\n", .{buf[1]});
+                    std.debug.print("buf[2]: {d}\n", .{buf[2]});
+                    std.debug.print("buf[3]: {d}\n", .{buf[3]});
+                },
+            }
+        }
+        std.time.sleep(100 * std.time.ns_per_ms);
+    }
 
     // std.time.sleep(1 * std.time.ns_per_s);
 }
