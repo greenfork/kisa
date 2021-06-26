@@ -5,7 +5,7 @@ const os = std.os;
 pub fn main() !void {
     // Get stdin and stdout
     const in_stream = io.getStdIn();
-    const out_stream = io.getStdOut();
+    // const out_stream = io.getStdOut();
 
     // Save current termios
     const original_termios = try os.tcgetattr(in_stream.handle);
@@ -22,7 +22,7 @@ pub fn main() !void {
     try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
 
     // Enter extended mode TMUX style
-    try out_stream.writer().writeAll("\x1b[>4;1m");
+    // try out_stream.writer().writeAll("\x1b[>4;1m");
     // Enter extended mode KITTY style
     // try out_stream.writer().writeAll("\x1b[>1u");
 
@@ -58,7 +58,7 @@ pub fn main() !void {
     }
 
     // Exit extended mode TMUX style
-    try out_stream.writer().writeAll("\x1b[>4;0m");
+    // try out_stream.writer().writeAll("\x1b[>4;0m");
     // Enter extended mode KITTY style
     // try out_stream.writer().writeAll("\x1b[<u");
 

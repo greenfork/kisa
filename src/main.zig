@@ -3,10 +3,6 @@ const os = std.os;
 const io = std.io;
 const ncurses = @import("ncurses").ncurses;
 
-pub const Key = struct {
-    value: u8,
-};
-
 /// A high-level abstraction which accepts a backend and provides a set of functions to operate on
 /// the backend. Backend itself contains all low-level functions which might not be all useful
 /// in a high-level interaction context.
@@ -44,6 +40,22 @@ pub const UI = struct {
     }
 };
 
+pub const EventKind = enum {
+    none,
+    key_press,
+    insert_character,
+};
+
+pub const EventValue = union(EventKind) {
+    none: void,
+    key_press: Keys.Key,
+    insert_character: Keys.Key,
+};
+
+pub const Event = struct {
+    value: EventValue,
+};
+
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
 /// `Buffer` or just changing the cursor position on the screen. Events can spawn more events
 /// and are processed sequentially. This should also allow us to add so called "hooks" which are
@@ -54,22 +66,6 @@ pub const EventDispatcher = struct {
 
     pub const Error = Buffer.Error || Window.Error;
     const Self = @This();
-
-    pub const EventKind = enum {
-        none,
-        key_press,
-        insert_character,
-    };
-
-    pub const EventValue = union(EventKind) {
-        none: void,
-        key_press: Key,
-        insert_character: Key,
-    };
-
-    pub const Event = struct {
-        value: EventValue,
-    };
 
     pub fn init(buffer: *Buffer) Self {
         return .{ .buffer = buffer };
@@ -222,27 +218,36 @@ pub fn main() anyerror!void {
 
     try window.render();
 
-    var buf = [_]u8{0} ** 4;
-    var number_read = try uivt100.in_stream.reader().read(buf[0..]);
-    while (true) : (number_read = try uivt100.in_stream.reader().read(buf[0..])) {
-        if (number_read > 0) {
-            switch (buf[0]) {
-                3 => break,
-                else => {
-                    try event_dispatcher.dispatch(.{ .value = .{ .insert_character = Key{ .value = buf[0] } } });
-                    std.debug.print("buffer_len: {d}\r\n", .{buffer.content.items.len});
-                    // std.debug.print("buf[0]: {d}\r\n", .{buf[0]});
-                    // std.debug.print("buf[1]: {d}\r\n", .{buf[1]});
-                    // std.debug.print("buf[2]: {d}\r\n", .{buf[2]});
-                    // std.debug.print("buf[3]: {d}\r\n", .{buf[3]});
-                },
+    while (true) {
+        if (Keys.next(uivt100.in_stream)) |key| {
+            switch (key.value) {
+                Keys.ctrl('c') => break,
+                else => try event_dispatcher.dispatch(Event{ .value = .{ .key_press = key } }),
             }
         }
-        std.time.sleep(100 * std.time.ns_per_ms);
+
+        std.time.sleep(50 * std.time.ns_per_ms);
+    }
+}
+
+pub const Keys = struct {
+    pub const Key = struct {
+        value: u8,
+    };
+
+    pub fn next(stream: std.fs.File) ?Key {
+        const character: u8 = stream.reader().readByte() catch |err| switch (err) {
+            error.EndOfStream => return null,
+            else => unreachable,
+        };
+        return Key{ .value = character };
     }
 
-    // std.time.sleep(1 * std.time.ns_per_s);
-}
+    pub fn ctrl(character: u8) u8 {
+        std.debug.assert('a' <= character and character <= 'z');
+        return character - 0x60;
+    }
+};
 
 /// UI backend. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
 /// which are exposed in this implementation, such as colored output, it established a standard
