@@ -94,8 +94,8 @@ pub const Cursor = struct {
     y: u32,
 };
 
-/// Manages the representation of what the user sees on the screen. Also contains parts of UI
-/// state such as cursor position.
+/// Manages the data of what the user sees on the screen. Sends all the necessary data
+/// to UI to display it on the screen.
 pub const Window = struct {
     rows: u32,
     cols: u32,
