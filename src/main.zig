@@ -1,7 +1,6 @@
 const std = @import("std");
 const os = std.os;
 const io = std.io;
-const ncurses = @import("ncurses").ncurses;
 
 /// A high-level abstraction which accepts a backend and provides a set of functions to operate on
 /// the backend. Backend itself contains all low-level functions which might not be all useful
@@ -17,6 +16,7 @@ pub const UI = struct {
     }
 
     pub fn render(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
+        try self.backend.clear();
         var w = self.backend.writer();
         var line_count = first_line_number;
         const max_line_number_width = numberWidth(max_line_number);
@@ -121,7 +121,7 @@ pub const Window = struct {
     pub fn render(self: *Self) Error!void {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.buffer.toLineSlice(self.first_line_number, last_line_number);
-        try self.ui.render(slice, self.first_line_number, last_line_number);
+        try self.ui.render(slice, self.first_line_number, self.buffer.max_line_number);
     }
 };
 
@@ -162,7 +162,8 @@ pub const Buffer = struct {
         var line_number: u32 = 1;
         var start_offset: usize = std.math.maxInt(usize);
         var end_offset: usize = std.math.maxInt(usize);
-        for (self.content.items) |ch, idx| {
+        const slice = self.content.items;
+        for (slice) |ch, idx| {
             if (start_offset == std.math.maxInt(usize) and first_line_number == line_number) {
                 start_offset = idx;
             }
@@ -171,6 +172,9 @@ pub const Buffer = struct {
                 break;
             }
             if (ch == '\n') line_number += 1;
+        } else {
+            // Screen height is more than we have text available
+            end_offset = slice.len;
         }
         if (start_offset == std.math.maxInt(usize) or end_offset == std.math.maxInt(usize)) {
             std.debug.print(
@@ -179,15 +183,17 @@ pub const Buffer = struct {
             );
             return Error.LineOutOfRange;
         }
-        return self.content.items[start_offset..end_offset];
+        return slice[start_offset..end_offset];
     }
 
     pub fn append(self: *Self, character: u8) !void {
         try self.content.append(character);
+        self.countMetrics();
     }
 
     pub fn insert(self: *Self, index: usize, character: u8) !void {
         try self.content.insert(index, character);
+        self.countMetrics();
     }
 };
 
@@ -226,7 +232,7 @@ pub fn main() anyerror!void {
             }
         }
 
-        std.time.sleep(50 * std.time.ns_per_ms);
+        std.time.sleep(5 * std.time.ns_per_ms);
     }
 }
 
