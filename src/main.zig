@@ -38,6 +38,10 @@ pub const UI = struct {
     pub inline fn textAreaCols(self: Self) u32 {
         return self.backend.textAreaCols();
     }
+
+    pub inline fn next_key(self: *Self) ?Keys.Key {
+        return self.backend.next_key();
+    }
 };
 
 pub const EventKind = enum {
@@ -49,7 +53,7 @@ pub const EventKind = enum {
 pub const EventValue = union(EventKind) {
     none: void,
     key_press: Keys.Key,
-    insert_character: Keys.Key,
+    insert_character: u8,
 };
 
 pub const Event = struct {
@@ -74,14 +78,19 @@ pub const EventDispatcher = struct {
     pub fn dispatch(self: Self, event: Event) Error!void {
         switch (event.value) {
             .key_press => |val| {
-                try self.dispatch(.{ .value = .{ .insert_character = val } });
+                if (val.utf8len() > 1) {
+                    std.debug.print("Character sequence longer than 1 byte: {s}\n", .{val.utf8});
+                    std.os.exit(1);
+                }
+                try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
             },
             .insert_character => |val| {
-                try self.text_buffer.insert(100, val.value);
+                try self.text_buffer.insert(100, val);
                 try self.text_buffer.windows[0].render();
             },
             else => {
                 std.debug.print("Not supported event: {}\n", .{event});
+                std.os.exit(1);
             },
         }
     }
@@ -214,6 +223,7 @@ pub fn main() anyerror!void {
     var uivt100 = try UIVT100.init();
     defer uivt100.deinit() catch {
         std.debug.print("UIVT100 deinit ERRROR", .{});
+        std.os.exit(1);
     };
     var ui = UI.init(uivt100);
     var display_window = DisplayWindow.init(&text_buffer, ui);
@@ -224,10 +234,19 @@ pub fn main() anyerror!void {
     try display_window.render();
 
     while (true) {
-        if (Keys.next(uivt100.in_stream)) |key| {
-            switch (key.value) {
-                Keys.ctrl('c') => break,
-                else => try event_dispatcher.dispatch(Event{ .value = .{ .key_press = key } }),
+        if (ui.next_key()) |key| {
+            switch (key.code) {
+                .unicode_codepoint => {
+                    if (key.is_ctrl('c')) {
+                        break;
+                    } else {
+                        try event_dispatcher.dispatch(.{ .value = .{ .key_press = key } });
+                    }
+                },
+                else => {
+                    std.debug.print("Unrecognized key event: {}\r\n", .{key});
+                    std.os.exit(1);
+                },
             }
         }
 
@@ -236,23 +255,120 @@ pub fn main() anyerror!void {
 }
 
 pub const Keys = struct {
-    pub const Key = struct {
-        value: u8,
+    pub const KeySym = enum {
+        arrow_up,
+        arrow_down,
+        arrow_left,
+        arrow_right,
     };
 
-    pub fn next(stream: std.fs.File) ?Key {
-        const character: u8 = stream.reader().readByte() catch |err| switch (err) {
-            error.EndOfStream => return null,
-            else => unreachable,
-        };
-        return Key{ .value = character };
-    }
+    pub const MouseButton = enum {
+        left,
+        middle,
+        right,
+        scroll_up,
+        scroll_down,
+    };
 
-    pub fn ctrl(character: u8) u8 {
-        std.debug.assert('a' <= character and character <= 'z');
-        return character - 0x60;
-    }
+    pub const KeyKind = enum {
+        unrecognized,
+        unicode_codepoint,
+        function,
+        keysym,
+        mouse_button,
+        mouse_position,
+    };
+
+    pub const KeyCode = union(KeyKind) {
+        unrecognized: void,
+        unicode_codepoint: u32,
+        function: u8,
+        keysym: KeySym,
+        mouse_button: MouseButton,
+        mouse_position: struct { x: u32, y: u32 },
+    };
+
+    pub const Key = struct {
+        code: KeyCode,
+        modifiers: u8 = 0,
+        // Any Unicode character can be UTF-8 encoded in no more than 6 bytes, plus terminating null
+        utf8: [7]u8 = undefined,
+
+        // zig fmt: off
+        const shift_bit     = @as(u8, 1 << 0);
+        const alt_bit       = @as(u8, 1 << 1);
+        const ctrl_bit      = @as(u8, 1 << 2);
+        const super_bit     = @as(u8, 1 << 3);
+        const hyper_bit     = @as(u8, 1 << 4);
+        const meta_bit      = @as(u8, 1 << 5);
+        const caps_lock_bit = @as(u8, 1 << 6);
+        const num_lock_bit  = @as(u8, 1 << 7);
+        // zig fmt: on
+
+        pub fn has_shift(self: Key) bool {
+            return (self.modifiers & shift_bit) != 0;
+        }
+        pub fn has_alt(self: Key) bool {
+            return (self.modifiers & alt_bit) != 0;
+        }
+        pub fn has_ctrl(self: Key) bool {
+            return (self.modifiers & ctrl_bit) != 0;
+        }
+        pub fn has_super(self: Key) bool {
+            return (self.modifiers & super_bit) != 0;
+        }
+        pub fn has_hyper(self: Key) bool {
+            return (self.modifiers & hyper_bit) != 0;
+        }
+        pub fn has_meta(self: Key) bool {
+            return (self.modifiers & meta_bit) != 0;
+        }
+        pub fn has_caps_lock(self: Key) bool {
+            return (self.modifiers & caps_lock_bit) != 0;
+        }
+        pub fn has_num_lock(self: Key) bool {
+            return (self.modifiers & num_lock_bit) != 0;
+        }
+
+        // TODO: change scope to private
+        pub fn utf8len(self: Key) usize {
+            var length: usize = 0;
+            for (self.utf8) |byte| {
+                if (byte == 0) break;
+                length += 1;
+            } else {
+                unreachable; // we are responsible for making sure this never happens
+            }
+            return length;
+        }
+        pub fn is_ascii(self: Key) bool {
+            return self.code == .unicode_codepoint and self.utf8len() == 1;
+        }
+        pub fn is_ctrl(self: Key, character: u8) bool {
+            return self.is_ascii() and self.utf8[0] == character and self.modifiers == ctrl_bit;
+        }
+
+        pub fn ascii(character: u8) Key {
+            var key = Key{ .code = .{ .unicode_codepoint = character } };
+            key.utf8[0] = character;
+            key.utf8[1] = 0;
+            return key;
+        }
+        pub fn ctrl(character: u8) Key {
+            var key = ascii(character);
+            key.modifiers = ctrl_bit;
+            return key;
+        }
+    };
 };
+
+test "keys" {
+    try std.testing.expect(!Keys.Key.ascii('c').has_ctrl());
+    try std.testing.expect(Keys.Key.ctrl('c').has_ctrl());
+    try std.testing.expect(Keys.Key.ascii('c').is_ascii());
+    try std.testing.expect(Keys.Key.ctrl('c').is_ascii());
+    try std.testing.expect(Keys.Key.ctrl('c').is_ctrl('c'));
+}
 
 /// UI backend. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
 /// which are exposed in this implementation, such as colored output, it established a standard
@@ -319,6 +435,28 @@ pub const UIVT100 = struct {
         if (self.original_termois) |termios| {
             try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios);
             self.original_termois = null;
+        }
+    }
+
+    fn next_byte(self: *Self) ?u8 {
+        return self.in_stream.reader().readByte() catch |err| switch (err) {
+            error.EndOfStream => return null,
+            error.NotOpenForReading => return null,
+            else => {
+                std.debug.print("Unexpected error: {}\r\n", .{err});
+                return 0;
+            },
+        };
+    }
+
+    pub fn next_key(self: *Self) ?Keys.Key {
+        if (self.next_byte()) |byte| {
+            if (byte == 3) {
+                return Keys.Key.ctrl('c');
+            }
+            return Keys.Key.ascii(byte);
+        } else {
+            return null;
         }
     }
 
