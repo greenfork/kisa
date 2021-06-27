@@ -57,18 +57,18 @@ pub const Event = struct {
 };
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
-/// `Buffer` or just changing the cursor position on the screen. Events can spawn more events
+/// `TextBuffer` or just changing the cursor position on the screen. Events can spawn more events
 /// and are processed sequentially. This should also allow us to add so called "hooks" which are
 /// actions that will be executed only when a specific event is fired, they will be useful as
 /// an extension point for user-defined hooks.
 pub const EventDispatcher = struct {
-    buffer: *Buffer,
+    text_buffer: *TextBuffer,
 
-    pub const Error = Buffer.Error || Window.Error;
+    pub const Error = TextBuffer.Error || DisplayWindow.Error;
     const Self = @This();
 
-    pub fn init(buffer: *Buffer) Self {
-        return .{ .buffer = buffer };
+    pub fn init(text_buffer: *TextBuffer) Self {
+        return .{ .text_buffer = text_buffer };
     }
 
     pub fn dispatch(self: Self, event: Event) Error!void {
@@ -77,8 +77,8 @@ pub const EventDispatcher = struct {
                 try self.dispatch(.{ .value = .{ .insert_character = val } });
             },
             .insert_character => |val| {
-                try self.buffer.insert(100, val.value);
-                try self.buffer.windows[0].render();
+                try self.text_buffer.insert(100, val.value);
+                try self.text_buffer.windows[0].render();
             },
             else => {
                 std.debug.print("Not supported event: {}\n", .{event});
@@ -96,23 +96,23 @@ pub const Cursor = struct {
 
 /// Manages the data of what the user sees on the screen. Sends all the necessary data
 /// to UI to display it on the screen.
-pub const Window = struct {
+pub const DisplayWindow = struct {
     rows: u32,
     cols: u32,
     cursor: Cursor,
-    buffer: *Buffer,
+    text_buffer: *TextBuffer,
     ui: UI,
     first_line_number: u32,
 
     const Self = @This();
-    const Error = UI.Error || Buffer.Error;
+    const Error = UI.Error || TextBuffer.Error;
 
-    pub fn init(buffer: *Buffer, ui: UI) Self {
+    pub fn init(text_buffer: *TextBuffer, ui: UI) Self {
         return Self{
             .rows = ui.textAreaRows(),
             .cols = ui.textAreaCols(),
             .cursor = Cursor{ .line = 1, .col = 1, .x = 0, .y = 0 },
-            .buffer = buffer,
+            .text_buffer = text_buffer,
             .ui = ui,
             .first_line_number = 1,
         };
@@ -120,28 +120,28 @@ pub const Window = struct {
 
     pub fn render(self: *Self) Error!void {
         const last_line_number = self.first_line_number + self.rows;
-        const slice = try self.buffer.toLineSlice(self.first_line_number, last_line_number);
-        try self.ui.render(slice, self.first_line_number, self.buffer.max_line_number);
+        const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
+        try self.ui.render(slice, self.first_line_number, self.text_buffer.max_line_number);
     }
 };
 
 /// Manages the actual text of an opened file and provides an interface for querying it and
 /// modifying.
-pub const Buffer = struct {
+pub const TextBuffer = struct {
     ally: *std.mem.Allocator,
-    content: ContentType,
+    content: Content,
     // TODO: make it usable, for now we just use a single element
-    windows: [1]*Window = undefined,
+    windows: [1]*DisplayWindow = undefined,
     // metrics
     max_line_number: u32,
 
     pub const Error = error{ OutOfMemory, LineOutOfRange };
     const Self = @This();
-    const ContentType = std.ArrayList(u8);
+    const Content = std.ArrayList(u8);
 
     pub fn init(ally: *std.mem.Allocator, content: []const u8) Error!Self {
         const duplicated_content = try ally.dupe(u8, content);
-        const our_content = ContentType.fromOwnedSlice(ally, duplicated_content);
+        const our_content = Content.fromOwnedSlice(ally, duplicated_content);
         var result = Self{
             .ally = ally,
             .content = our_content,
@@ -202,7 +202,6 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    // Initialize buffer
     const content = readInput(ally) catch |err| switch (err) {
         error.FileNotSupplied => {
             std.debug.print("No file supplied\n{s}", .{help_string});
@@ -211,18 +210,18 @@ pub fn main() anyerror!void {
         else => return err,
     };
 
-    var buffer = try Buffer.init(ally, content);
+    var text_buffer = try TextBuffer.init(ally, content);
     var uivt100 = try UIVT100.init();
     defer uivt100.deinit() catch {
         std.debug.print("UIVT100 deinit ERRROR", .{});
     };
     var ui = UI.init(uivt100);
-    var window = Window.init(&buffer, ui);
+    var display_window = DisplayWindow.init(&text_buffer, ui);
     // FIXME: not keep window on the stack
-    buffer.windows[0] = &window;
-    var event_dispatcher = EventDispatcher.init(&buffer);
+    text_buffer.windows[0] = &display_window;
+    var event_dispatcher = EventDispatcher.init(&text_buffer);
 
-    try window.render();
+    try display_window.render();
 
     while (true) {
         if (Keys.next(uivt100.in_stream)) |key| {
