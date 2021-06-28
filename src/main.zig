@@ -100,7 +100,11 @@ pub const EventDispatcher = struct {
                     std.os.exit(1);
                 }
                 if (current_mode_is_insert) {
-                    try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
+                    if (val.utf8[0] == 'q') {
+                        current_mode_is_insert = false;
+                    } else {
+                        try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
+                    }
                 } else {
                     switch (val.utf8[0]) {
                         'k' => {
@@ -114,6 +118,9 @@ pub const EventDispatcher = struct {
                         },
                         'h' => {
                             try self.text_buffer.display_windows[0].ui.moveCursor(.left, 1);
+                        },
+                        'i' => {
+                            current_mode_is_insert = true;
                         },
                         else => {
                             std.debug.print("Unknown command: {c}\n", .{val.utf8[0]});
