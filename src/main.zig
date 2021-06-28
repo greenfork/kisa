@@ -36,8 +36,9 @@ pub const UI = struct {
             try w.writeByteNTimes(' ', max_line_number_width - numberWidth(line_count));
             try w.print("{d} {s}\n", .{ line_count, line });
         }
-        try self.backend.refresh();
+        try self.backend.moveCursor(1, 1);
         try self.backend.showCursor();
+        try self.backend.refresh();
     }
 
     pub inline fn textAreaRows(self: Self) u32 {
@@ -573,10 +574,10 @@ pub const UIVT100 = struct {
         try self.raw_writer().print("{s}[{d}A", .{ csi, number });
     }
     fn hideCursor(self: *Self) !void {
-        try self.raw_writer().print("{s}[?25l", .{csi});
+        try self.raw_writer().print("{s}?25l", .{csi});
     }
     fn showCursor(self: *Self) !void {
-        try self.raw_writer().print("{s}[?25h", .{csi});
+        try self.raw_writer().print("{s}?25h", .{csi});
     }
 };
 
