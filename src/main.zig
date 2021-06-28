@@ -86,7 +86,7 @@ pub const EventDispatcher = struct {
             },
             .insert_character => |val| {
                 try self.text_buffer.insert(100, val);
-                try self.text_buffer.windows[0].render();
+                try self.text_buffer.display_windows[0].render();
             },
             else => {
                 std.debug.print("Not supported event: {}\n", .{event});
@@ -140,7 +140,7 @@ pub const TextBuffer = struct {
     ally: *std.mem.Allocator,
     content: Content,
     // TODO: make it usable, for now we just use a single element
-    windows: [1]*DisplayWindow = undefined,
+    display_windows: [1]*DisplayWindow = undefined,
     // metrics
     max_line_number: u32,
 
@@ -228,7 +228,7 @@ pub fn main() anyerror!void {
     var ui = UI.init(uivt100);
     var display_window = DisplayWindow.init(&text_buffer, ui);
     // FIXME: not keep window on the stack
-    text_buffer.windows[0] = &display_window;
+    text_buffer.display_windows[0] = &display_window;
     var event_dispatcher = EventDispatcher.init(&text_buffer);
 
     try display_window.render();
@@ -250,7 +250,7 @@ pub fn main() anyerror!void {
             }
         }
 
-        std.time.sleep(5 * std.time.ns_per_ms);
+        std.time.sleep(10 * std.time.ns_per_ms);
     }
 }
 
