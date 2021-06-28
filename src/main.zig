@@ -53,8 +53,9 @@ pub const UI = struct {
         return self.backend.next_key();
     }
 
-    pub inline fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
+    pub fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
         try self.backend.moveCursor2(direction, number);
+        try self.backend.refresh();
     }
 };
 
@@ -74,7 +75,7 @@ pub const Event = struct {
     value: EventValue,
 };
 
-var current_mode_is_insert = true;
+var current_mode_is_insert = false;
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
 /// `TextBuffer` or just changing the cursor position on the screen. Events can spawn more events
@@ -104,6 +105,15 @@ pub const EventDispatcher = struct {
                     switch (val.utf8[0]) {
                         'k' => {
                             try self.text_buffer.display_windows[0].ui.moveCursor(.up, 1);
+                        },
+                        'j' => {
+                            try self.text_buffer.display_windows[0].ui.moveCursor(.down, 1);
+                        },
+                        'l' => {
+                            try self.text_buffer.display_windows[0].ui.moveCursor(.right, 1);
+                        },
+                        'h' => {
+                            try self.text_buffer.display_windows[0].ui.moveCursor(.left, 1);
                         },
                         else => {
                             std.debug.print("Unknown command: {c}\n", .{val.utf8[0]});
@@ -536,7 +546,15 @@ pub const UIVT100 = struct {
             .up => {
                 try self.moveCursorUp(number);
             },
-            else => {},
+            .down => {
+                try self.moveCursorDown(number);
+            },
+            .right => {
+                try self.moveCursorRight(number);
+            },
+            .left => {
+                try self.moveCursorLeft(number);
+            },
         }
     }
 
@@ -571,7 +589,16 @@ pub const UIVT100 = struct {
         try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
     }
     fn moveCursorUp(self: *Self, number: u32) !void {
-        try self.raw_writer().print("{s}[{d}A", .{ csi, number });
+        try self.raw_writer().print("{s}{d}A", .{ csi, number });
+    }
+    fn moveCursorDown(self: *Self, number: u32) !void {
+        try self.raw_writer().print("{s}{d}B", .{ csi, number });
+    }
+    fn moveCursorRight(self: *Self, number: u32) !void {
+        try self.raw_writer().print("{s}{d}C", .{ csi, number });
+    }
+    fn moveCursorLeft(self: *Self, number: u32) !void {
+        try self.raw_writer().print("{s}{d}D", .{ csi, number });
     }
     fn hideCursor(self: *Self) !void {
         try self.raw_writer().print("{s}?25l", .{csi});
