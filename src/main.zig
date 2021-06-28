@@ -421,8 +421,9 @@ pub const UIVT100 = struct {
         raw_termios.oflag &= ~(@as(os.tcflag_t, os.OPOST));
         raw_termios.cflag |= os.CS8;
         raw_termios.lflag &= ~(@as(os.tcflag_t, os.ECHO) | os.ICANON | os.IEXTEN | os.ISIG);
+        // Polling read, doesn't block
         raw_termios.cc[os.VMIN] = 0;
-        raw_termios.cc[os.VTIME] = 1;
+        raw_termios.cc[os.VTIME] = 0;
         try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
 
         // Prepare terminal
