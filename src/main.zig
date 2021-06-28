@@ -2,6 +2,13 @@ const std = @import("std");
 const os = std.os;
 const io = std.io;
 
+pub const MoveDirection = enum {
+    up,
+    down,
+    left,
+    right,
+};
+
 /// A high-level abstraction which accepts a backend and provides a set of functions to operate on
 /// the backend. Backend itself contains all low-level functions which might not be all useful
 /// in a high-level interaction context.
@@ -42,6 +49,10 @@ pub const UI = struct {
     pub inline fn next_key(self: *Self) ?Keys.Key {
         return self.backend.next_key();
     }
+
+    pub inline fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
+        try self.backend.moveCursor2(direction, number);
+    }
 };
 
 pub const EventKind = enum {
@@ -59,6 +70,8 @@ pub const EventValue = union(EventKind) {
 pub const Event = struct {
     value: EventValue,
 };
+
+var current_mode_is_insert = true;
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
 /// `TextBuffer` or just changing the cursor position on the screen. Events can spawn more events
@@ -82,7 +95,19 @@ pub const EventDispatcher = struct {
                     std.debug.print("Character sequence longer than 1 byte: {s}\n", .{val.utf8});
                     std.os.exit(1);
                 }
-                try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
+                if (current_mode_is_insert) {
+                    try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
+                } else {
+                    switch (val.utf8[0]) {
+                        'k' => {
+                            try self.text_buffer.display_windows[0].ui.moveCursor(.up, 1);
+                        },
+                        else => {
+                            std.debug.print("Unknown command: {c}\n", .{val.utf8[0]});
+                            std.os.exit(1);
+                        },
+                    }
+                }
             },
             .insert_character => |val| {
                 try self.text_buffer.insert(100, val);
@@ -503,6 +528,15 @@ pub const UIVT100 = struct {
         return self.cols;
     }
 
+    pub fn moveCursor2(self: *Self, direction: MoveDirection, number: u32) !void {
+        switch (direction) {
+            .up => {
+                try self.moveCursorUp(number);
+            },
+            else => {},
+        }
+    }
+
     fn getWindowSize(self: Self, rows: *u32, cols: *u32) !void {
         while (true) {
             var window_size: os.linux.winsize = undefined;
@@ -532,6 +566,9 @@ pub const UIVT100 = struct {
     }
     fn moveCursor(self: *Self, row: u32, col: u32) !void {
         try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
+    }
+    fn moveCursorUp(self: *Self, number: u32) !void {
+        try self.raw_writer().print("{s}[{d}A", .{ csi, number });
     }
 };
 
