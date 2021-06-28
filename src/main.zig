@@ -23,6 +23,7 @@ pub const UI = struct {
     }
 
     pub fn render(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
+        try self.backend.hideCursor();
         try self.backend.clear();
         var w = self.backend.writer();
         var line_count = first_line_number;
@@ -36,6 +37,7 @@ pub const UI = struct {
             try w.print("{d} {s}\n", .{ line_count, line });
         }
         try self.backend.refresh();
+        try self.backend.showCursor();
     }
 
     pub inline fn textAreaRows(self: Self) u32 {
@@ -569,6 +571,12 @@ pub const UIVT100 = struct {
     }
     fn moveCursorUp(self: *Self, number: u32) !void {
         try self.raw_writer().print("{s}[{d}A", .{ csi, number });
+    }
+    fn hideCursor(self: *Self) !void {
+        try self.raw_writer().print("{s}[?25l", .{csi});
+    }
+    fn showCursor(self: *Self) !void {
+        try self.raw_writer().print("{s}[?25h", .{csi});
     }
 };
 
