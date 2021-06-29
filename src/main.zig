@@ -9,23 +9,24 @@ pub const MoveDirection = enum {
     right,
 };
 
-/// A high-level abstraction which accepts a backend and provides a set of functions to operate on
-/// the backend. Backend itself contains all low-level functions which might not be all useful
+/// A high-level abstraction which accepts a frontend and provides a set of functions to operate on
+/// the frontent. Frontend itself contains all low-level functions which might not be all useful
 /// in a high-level interaction context.
 pub const UI = struct {
-    backend: UIVT100,
+    frontend: UIVT100,
 
     pub const Error = UIVT100.Error;
     const Self = @This();
 
-    pub fn init(backend: UIVT100) Self {
-        return .{ .backend = backend };
+    pub fn init(frontend: UIVT100) Self {
+        return .{ .frontend = frontend };
     }
 
+    // TODO: rewrite this to not use "cc" functions
     pub fn render(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
-        try self.backend.hideCursor();
-        try self.backend.clear();
-        var w = self.backend.writer();
+        try self.frontend.ccHideCursor();
+        try self.frontend.clear();
+        var w = self.frontend.writer();
         var line_count = first_line_number;
         const max_line_number_width = numberWidth(max_line_number);
         var line_it = std.mem.split(string, "\n");
@@ -36,26 +37,26 @@ pub const UI = struct {
             try w.writeByteNTimes(' ', max_line_number_width - numberWidth(line_count));
             try w.print("{d} {s}\n", .{ line_count, line });
         }
-        try self.backend.moveCursor(1, 1);
-        try self.backend.showCursor();
-        try self.backend.refresh();
+        try self.frontend.ccMoveCursor(1, 1);
+        try self.frontend.ccShowCursor();
+        try self.frontend.refresh();
     }
 
     pub inline fn textAreaRows(self: Self) u32 {
-        return self.backend.textAreaRows();
+        return self.frontend.textAreaRows();
     }
 
     pub inline fn textAreaCols(self: Self) u32 {
-        return self.backend.textAreaCols();
+        return self.frontend.textAreaCols();
     }
 
     pub inline fn next_key(self: *Self) ?Keys.Key {
-        return self.backend.next_key();
+        return self.frontend.next_key();
     }
 
     pub fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
-        try self.backend.moveCursor2(direction, number);
-        try self.backend.refresh();
+        try self.frontend.moveCursor(direction, number);
+        try self.frontend.refresh();
     }
 };
 
@@ -75,6 +76,7 @@ pub const Event = struct {
     value: EventValue,
 };
 
+// TODO: use `Mode`
 var current_mode_is_insert = false;
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
@@ -141,22 +143,49 @@ pub const EventDispatcher = struct {
     }
 };
 
+/// `Cursor` represents the current position of a cursor in a display window. `line` and `column`
+/// are absolute values inside a file whereas `x` and `y` are relative coordinates to the
+/// upper-left corner of the window.
 pub const Cursor = struct {
     line: u32,
-    col: u32,
+    column: u32,
     x: u32,
     y: u32,
 };
 
+// More possible modes:
+// * searching inside a file
+// * typing in a command to execute
+// * moving inside a file
+// * ...
+//
+// More generally we can have these patterns for modes:
+// * Type a full string and press Enter, e.g. type a named command to be executed
+// * Type a string and we get an incremental changing of the result, e.g. search window
+//   continuously displays different result based on the search term
+// * Type a second key to complete the command, e.g. gj moves to the bottom and gk moves to the top
+//   of a file, as a mnemocis "goto" and a direction with hjkl keys
+// * Variation of the previous mode but it is "sticky", meaning it allows for several presses of
+//   a key with a changed meaning, examples are "insert" mode and a "scrolling" mode
+
+/// Modes are different states of a display window which allow to interpret same keys as having
+/// a different meaning.
+pub const Mode = enum {
+    normal,
+    insert,
+};
+
 /// Manages the data of what the user sees on the screen. Sends all the necessary data
-/// to UI to display it on the screen.
+/// to UI to display it on the screen. Also keeps the state of the opened window such
+/// as cursor, mode etc.
 pub const DisplayWindow = struct {
     rows: u32,
     cols: u32,
-    cursor: Cursor,
     text_buffer: *TextBuffer,
     ui: UI,
+    cursor: Cursor,
     first_line_number: u32,
+    mode: Mode,
 
     const Self = @This();
     const Error = UI.Error || TextBuffer.Error;
@@ -165,10 +194,11 @@ pub const DisplayWindow = struct {
         return Self{
             .rows = ui.textAreaRows(),
             .cols = ui.textAreaCols(),
-            .cursor = Cursor{ .line = 1, .col = 1, .x = 0, .y = 0 },
             .text_buffer = text_buffer,
             .ui = ui,
+            .cursor = Cursor{ .line = 1, .column = 1, .x = 0, .y = 0 },
             .first_line_number = 1,
+            .mode = Mode.normal,
         };
     }
 
@@ -299,6 +329,9 @@ pub fn main() anyerror!void {
     }
 }
 
+/// Representation of a frontend-agnostic "key" which is supposed to encode any possible key
+/// unambiguously. All UI frontends are supposed to provide a `Key` struct out of their `next_key`
+/// function for consumption by the backend.
 pub const Keys = struct {
     pub const KeySym = enum {
         arrow_up,
@@ -415,7 +448,7 @@ test "keys" {
     try std.testing.expect(Keys.Key.ctrl('c').is_ctrl('c'));
 }
 
-/// UI backend. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
+/// UI frontent. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
 /// which are exposed in this implementation, such as colored output, it established a standard
 /// of ASCII escape sequences which is implemented in most terminal emulators as of today.
 /// Later this standard was extended and this implementation is a common denominator that is
@@ -459,7 +492,7 @@ pub const UIVT100 = struct {
         };
         try uivt100.updateWindowSize();
 
-        // Black magic
+        // Black magic, see https://github.com/antirez/kilo
         var raw_termios = uivt100.original_termois.?;
         raw_termios.iflag &=
             ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
@@ -473,6 +506,7 @@ pub const UIVT100 = struct {
 
         // Prepare terminal
         try uivt100.clear();
+        try uivt100.refresh();
 
         return uivt100;
     }
@@ -507,7 +541,7 @@ pub const UIVT100 = struct {
     }
 
     // Do type magic to expose buffered writer in 2 modes:
-    // * raw_writer - we don't try to do anything smart, mostly for control codes
+    // * raw_writer - we don't try to do anything smart, mostly for console codes
     // * writer - we try to do what is expected when writing to a screen
     const RawUnbufferedWriter = io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write);
     const RawBufferedWriterCtx = io.BufferedWriter(write_buffer_size, RawUnbufferedWriter);
@@ -531,11 +565,16 @@ pub const UIVT100 = struct {
     }
 
     pub fn clear(self: *Self) !void {
-        try self.eraseDisplay();
-        try self.moveCursor(1, 1);
-        try self.refresh();
+        try self.ccEraseDisplay();
+        try self.ccMoveCursor(1, 1);
     }
 
+    // All our output is buffered, when we actually want to display something to the screen,
+    // this function should be called. Buffered output is better for performance and it
+    // avoids cursor flickering.
+    // This function should not be used as a part of other functions inside a frontend
+    // implementation. Instead it should be used inside `UI` for building more complex
+    // control flows.
     pub fn refresh(self: *Self) !void {
         try self.buffered_writer_ctx.flush();
     }
@@ -548,19 +587,19 @@ pub const UIVT100 = struct {
         return self.cols;
     }
 
-    pub fn moveCursor2(self: *Self, direction: MoveDirection, number: u32) !void {
+    pub fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
         switch (direction) {
             .up => {
-                try self.moveCursorUp(number);
+                try self.ccMoveCursorUp(number);
             },
             .down => {
-                try self.moveCursorDown(number);
+                try self.ccMoveCursorDown(number);
             },
             .right => {
-                try self.moveCursorRight(number);
+                try self.ccMoveCursorRight(number);
             },
             .left => {
-                try self.moveCursorLeft(number);
+                try self.ccMoveCursorLeft(number);
             },
         }
     }
@@ -589,28 +628,33 @@ pub const UIVT100 = struct {
         self.cols = cols;
     }
 
-    fn eraseDisplay(self: *Self) !void {
-        try self.raw_writer().writeAll(csi ++ "2J");
+    // "cc" stands for "console code", see console_codes(4).
+    // Some of the names clash with the desired names of public-facing API functions,
+    // so we use a prefix to disambiguate them. Every console code should be in a separate
+    // function so that it has a name and has an easy opportunity for parameterization.
+
+    fn ccEraseDisplay(self: *Self) !void {
+        try self.raw_writer().print("{s}2J", .{csi});
     }
-    fn moveCursor(self: *Self, row: u32, col: u32) !void {
+    fn ccMoveCursor(self: *Self, row: u32, col: u32) !void {
         try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
     }
-    fn moveCursorUp(self: *Self, number: u32) !void {
+    fn ccMoveCursorUp(self: *Self, number: u32) !void {
         try self.raw_writer().print("{s}{d}A", .{ csi, number });
     }
-    fn moveCursorDown(self: *Self, number: u32) !void {
+    fn ccMoveCursorDown(self: *Self, number: u32) !void {
         try self.raw_writer().print("{s}{d}B", .{ csi, number });
     }
-    fn moveCursorRight(self: *Self, number: u32) !void {
+    fn ccMoveCursorRight(self: *Self, number: u32) !void {
         try self.raw_writer().print("{s}{d}C", .{ csi, number });
     }
-    fn moveCursorLeft(self: *Self, number: u32) !void {
+    fn ccMoveCursorLeft(self: *Self, number: u32) !void {
         try self.raw_writer().print("{s}{d}D", .{ csi, number });
     }
-    fn hideCursor(self: *Self) !void {
+    fn ccHideCursor(self: *Self) !void {
         try self.raw_writer().print("{s}?25l", .{csi});
     }
-    fn showCursor(self: *Self) !void {
+    fn ccShowCursor(self: *Self) !void {
         try self.raw_writer().print("{s}?25h", .{csi});
     }
 };
