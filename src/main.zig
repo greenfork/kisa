@@ -182,7 +182,6 @@ pub const DisplayWindow = struct {
     rows: u32,
     cols: u32,
     text_buffer: *TextBuffer,
-    ui: UI,
     cursor: Cursor,
     first_line_number: u32,
     mode: Mode,
@@ -190,22 +189,32 @@ pub const DisplayWindow = struct {
     const Self = @This();
     const Error = UI.Error || TextBuffer.Error;
 
-    pub fn init(text_buffer: *TextBuffer, ui: UI) Self {
+    pub fn init(text_buffer: *TextBuffer, rows: u32, cols: u32) Self {
         return Self{
-            .rows = ui.textAreaRows(),
-            .cols = ui.textAreaCols(),
+            // .rows = ui.textAreaRows(),
+            // .cols = ui.textAreaCols(),
+            .rows = rows,
+            .cols = cols,
             .text_buffer = text_buffer,
-            .ui = ui,
             .cursor = Cursor{ .line = 1, .column = 1, .x = 0, .y = 0 },
             .first_line_number = 1,
             .mode = Mode.normal,
         };
     }
 
-    pub fn render(self: *Self) Error!void {
+    // TODO: better name, we render to string
+    pub fn render(self: *Self) Error![]u8 {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
-        try self.ui.render(slice, self.first_line_number, self.text_buffer.max_line_number);
+        // TODO: better name
+        var text = std.ArrayList(u8).init(self.text_buffer.ally);
+        var w = text.writer();
+        try w.writeAll(slice);
+        try w.writeAll("|");
+        try w.print("{d}", .{self.first_line_number});
+        try w.writeAll("|");
+        try w.print("{d}", .{self.text_buffer.max_line_number});
+        return text.toOwnedSlice();
     }
 };
 
@@ -281,51 +290,163 @@ pub const TextBuffer = struct {
     }
 };
 
+pub const Client = struct {
+    ally: *std.mem.Allocator,
+    // TODO: better name like PipePair
+    server_pipe_fds: [2]os.fd_t,
+    ui: UI,
+
+    const Self = @This();
+
+    pub fn init(ally: *std.mem.Allocator, server_pipe_fds: [2]os.fd_t, ui: UI) Self {
+        return Self{
+            .ally = ally,
+            .server_pipe_fds = server_pipe_fds,
+            .ui = ui,
+        };
+    }
+
+    // TODO: better name
+    pub fn accept(self: *Client) !void {
+        const read_end = self.server_pipe_fds[0];
+        // const write_end = self.server_pipe_fds[1];
+        var read_stream = std.fs.File{
+            .handle = read_end,
+            .capable_io_mode = .blocking,
+            .intended_io_mode = .blocking,
+        };
+        var buf = [_]u8{0} ** 4096;
+        const bytes_read = try read_stream.reader().readAll(buf[0..]);
+        _ = try read_stream.reader().readAll(buf[0..]);
+        // std.debug.panic("{s}\n", .{buf[0..1]});
+        var split_it = std.mem.split(buf[0..bytes_read], "|");
+        const slice = split_it.next().?;
+        const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
+        const max_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
+        // const first_line_number = 1;
+        // const max_line_number = 5;
+        try self.ui.render(slice, first_line_number, max_line_number);
+    }
+};
+
+pub const Server = struct {
+    ally: *std.mem.Allocator,
+    // TODO: better name
+    clients: std.ArrayList(ClientPipeFds),
+    text_buffers: std.ArrayList(*TextBuffer),
+    display_windows: std.ArrayList(*DisplayWindow),
+
+    const Self = @This();
+    const ClientPipeFds = [2]os.fd_t;
+
+    pub fn init(ally: *std.mem.Allocator, client: ClientPipeFds, initial_text: []const u8) !Self {
+        var clients = std.ArrayList(ClientPipeFds).init(ally);
+        try clients.append(client);
+
+        var text_buffers = std.ArrayList(*TextBuffer).init(ally);
+        var text_buffer_ptr = try ally.create(TextBuffer);
+        text_buffer_ptr.* = try TextBuffer.init(ally, initial_text);
+        try text_buffers.append(text_buffer_ptr);
+
+        var display_windows = std.ArrayList(*DisplayWindow).init(ally);
+        var display_window_ptr = try ally.create(DisplayWindow);
+        display_window_ptr.* = DisplayWindow.init(text_buffer_ptr, 5, 100);
+        try display_windows.append(display_window_ptr);
+
+        text_buffers.items[0].display_windows[0] = display_window_ptr;
+
+        return Self{
+            .ally = ally,
+            .clients = clients,
+            // TODO: change interface to do duplication right in this function
+            .text_buffers = text_buffers,
+            .display_windows = display_windows,
+        };
+    }
+
+    // TODO: better name
+    pub fn send_text(self: *Server) !void {
+        var client = self.clients.items[0];
+        var text_buffer = self.text_buffers.items[0];
+        var display_window = text_buffer.display_windows[0];
+        const message = try display_window.render();
+        // TODO: better name
+        var write_stream = std.fs.File{
+            .handle = client[1],
+            .capable_io_mode = .blocking,
+            .intended_io_mode = .blocking,
+        };
+        try write_stream.writer().writeAll(message);
+    }
+};
+
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    const content = readInput(ally) catch |err| switch (err) {
-        error.FileNotSupplied => {
-            std.debug.print("No file supplied\n{s}", .{help_string});
+    const client_reads_server_writes = try os.pipe();
+    const server_reads_client_writes = try os.pipe();
+    const client_reads = client_reads_server_writes[0];
+    const client_writes = server_reads_client_writes[1];
+    const server_reads = server_reads_client_writes[0];
+    const server_writes = client_reads_server_writes[1];
+    const child_pid = try os.fork();
+    if (child_pid == 0) {
+        // Server
+        os.close(client_reads);
+        os.close(client_writes);
+
+        const content = readInput(ally) catch |err| switch (err) {
+            error.FileNotSupplied => {
+                std.debug.print("No file supplied\n{s}", .{help_string});
+                std.os.exit(1);
+            },
+            else => return err,
+        };
+        // var text_buffer = try TextBuffer.init(ally, content);
+        // var display_window = DisplayWindow.init(&text_buffer);
+        // // FIXME: not keep window on the stack
+        // text_buffer.display_windows[0] = &display_window;
+        // try display_window.render();
+
+        var server = try Server.init(ally, [2]os.fd_t{ server_reads, server_writes }, content);
+        try server.send_text();
+    } else {
+        // Client
+        os.close(server_reads);
+        os.close(server_writes);
+
+        var uivt100 = try UIVT100.init();
+        defer uivt100.deinit() catch {
+            std.debug.print("UIVT100 deinit ERRROR", .{});
             std.os.exit(1);
-        },
-        else => return err,
-    };
+        };
+        var ui = UI.init(uivt100);
+        var client = Client.init(ally, [2]os.fd_t{ client_reads, client_writes }, ui);
+        try client.accept();
+        while (true) {}
 
-    var text_buffer = try TextBuffer.init(ally, content);
-    var uivt100 = try UIVT100.init();
-    defer uivt100.deinit() catch {
-        std.debug.print("UIVT100 deinit ERRROR", .{});
-        std.os.exit(1);
-    };
-    var ui = UI.init(uivt100);
-    var display_window = DisplayWindow.init(&text_buffer, ui);
-    // FIXME: not keep window on the stack
-    text_buffer.display_windows[0] = &display_window;
-    var event_dispatcher = EventDispatcher.init(&text_buffer);
+        // var event_dispatcher = EventDispatcher.init(&text_buffer);
+        // while (true) {
+        //     if (ui.next_key()) |key| {
+        //         switch (key.code) {
+        //             .unicode_codepoint => {
+        //                 if (key.is_ctrl('c')) {
+        //                     break;
+        //                 } else {
+        //                     try event_dispatcher.dispatch(.{ .value = .{ .key_press = key } });
+        //                 }
+        //             },
+        //             else => {
+        //                 std.debug.print("Unrecognized key event: {}\r\n", .{key});
+        //                 std.os.exit(1);
+        //             },
+        //         }
+        //     }
 
-    try display_window.render();
-
-    while (true) {
-        if (ui.next_key()) |key| {
-            switch (key.code) {
-                .unicode_codepoint => {
-                    if (key.is_ctrl('c')) {
-                        break;
-                    } else {
-                        try event_dispatcher.dispatch(.{ .value = .{ .key_press = key } });
-                    }
-                },
-                else => {
-                    std.debug.print("Unrecognized key event: {}\r\n", .{key});
-                    std.os.exit(1);
-                },
-            }
-        }
-
-        std.time.sleep(10 * std.time.ns_per_ms);
+        //     std.time.sleep(10 * std.time.ns_per_ms);
+        // }
     }
 }
 
