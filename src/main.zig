@@ -23,7 +23,7 @@ pub const UI = struct {
     }
 
     // TODO: rewrite this to not use "cc" functions
-    pub fn render(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
+    pub fn draw(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
         try self.frontend.ccHideCursor();
         try self.frontend.clear();
         var w = self.frontend.writer();
@@ -202,19 +202,16 @@ pub const DisplayWindow = struct {
         };
     }
 
-    // TODO: better name, we render to string
-    pub fn render(self: *Self) Error![]u8 {
+    pub fn renderTextArea(self: *Self) Error![]u8 {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
-        // TODO: better name
-        var text = std.ArrayList(u8).init(self.text_buffer.ally);
-        var w = text.writer();
-        try w.writeAll(slice);
-        try w.writeAll("|");
-        try w.print("{d}", .{self.first_line_number});
-        try w.writeAll("|");
-        try w.print("{d}", .{self.text_buffer.max_line_number});
-        return text.toOwnedSlice();
+        var text_area = std.ArrayList(u8).init(self.text_buffer.ally);
+        try text_area.writer().print("{s}|{d}|{d}", .{
+            slice,
+            self.first_line_number,
+            self.text_buffer.max_line_number,
+        });
+        return text_area.toOwnedSlice();
     }
 };
 
@@ -317,15 +314,11 @@ pub const Client = struct {
         };
         var buf = [_]u8{0} ** 4096;
         const bytes_read = try read_stream.reader().readAll(buf[0..]);
-        _ = try read_stream.reader().readAll(buf[0..]);
-        // std.debug.panic("{s}\n", .{buf[0..1]});
         var split_it = std.mem.split(buf[0..bytes_read], "|");
         const slice = split_it.next().?;
         const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
         const max_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
-        // const first_line_number = 1;
-        // const max_line_number = 5;
-        try self.ui.render(slice, first_line_number, max_line_number);
+        try self.ui.draw(slice, first_line_number, max_line_number);
     }
 };
 
@@ -369,7 +362,7 @@ pub const Server = struct {
         var client = self.clients.items[0];
         var text_buffer = self.text_buffers.items[0];
         var display_window = text_buffer.display_windows[0];
-        const message = try display_window.render();
+        const message = try display_window.renderTextArea();
         // TODO: better name
         var write_stream = std.fs.File{
             .handle = client[1],
