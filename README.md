@@ -2,6 +2,8 @@
 
 Kisa is a hackable batteries-included code editor.
 
+Kisa is in its early stage and it is not usable at the moment.
+
 Further are design ideas and philosophy behind this editor. Later it will
 be moved into its own place.
 
@@ -39,7 +41,7 @@ Features not used by everyone but which provide more pleasant experience.
 * Multiple panes/tabs
 * Swapable frontends, client-server architecture
 * Mouse integration
-* Auto-completion
+* Autocompletion
 * Clipboard integration
 
 ### Out of scope
@@ -151,7 +153,7 @@ number of reasons:
 Asynchrony traditionally adds a lot of complexity to the application. We will
 explore whether we are able to solve this problem in our specific case and
 not in general by providing a limited set of API endpoints to plugins. Otherwise
-we might find ourselves solving the problem of simultenuous edits by
+we might find ourselves solving the problem of simultaneous edits by
 multiple users.
 
 For additional notes see [xi article on plugins].
@@ -196,6 +198,14 @@ in combination with the Lua language features. Looks very neat and powerful.
 It doesn't have anything in particular, just uses some regex together with
 the power of Emacs-Lisp language. The editor is the Lisp machine, it doesn't
 really need anything special.
+
+### joe
+
+Uses a full-blown description of a state machine that parses the text with
+simplified grammar rules. Quite large files, for example C grammar takes
+300 loc, Ruby grammar takes 600 loc (Ruby has complicated grammar). Although
+the grammar is correct (e.g. Kakoune grammar is not 100% correct), it takes
+some dedication to create such a grammar file.
 
 ## Implementation details
 
@@ -262,16 +272,31 @@ choices:
 
 ### Architecture
 
-ARCHITECTURE.png
+![Architecture diagram](docs/architecture.png)
+
+This structure is not complete, there are still some unknowns. Some
+considerations:
+
+- Do we need a "Query" concept which is going to provide read-only access
+  to various components? For example, in order to do jumping to functions,
+  we will need a module which is going to know simultaneously about TextBuffer
+  to get information about lines and columns and SyntaxHighlighter to get
+  semantic information about tokens. Shoving in the knowledge about these
+  components directly into SemanticJump-y thing does not scale.
+- Do we want to organize specific modules like Autocompletion and LSP as
+  plugins utilizing direct communication with the server via JSON-RPC?
+  This will reduce the capabilities to which they can interact with the
+  system but it will provide useful insight on the design of a plugin system.
 
 #### Why client-server architecture?
 
 Short answer: because it's fun, more opportunities, and it doesn't promise
 to be too overwhelming. Longer answer:
 
-* Frontends must only speak JSON, they can be written in any language
-* Commandline tools can interact with a running editor session with ease
-* TODO third point
+* Frontends must only speak JSON, they can be written in any language.
+* Commandline tools can interact with a running editor session with ease.
+* Switching to client-server architecture later is almost equal to a complete
+  rewrite of the system, so why not just do it from the start.
 
 Also see:
 * [neovim-remote]
@@ -295,6 +320,7 @@ Also see:
 [paravim]: https://github.com/paranim/paravim
 [focus]: https://github.com/jamii/focus
 [Emacs]: https://www.gnu.org/software/emacs/
+[joe]: https://joe-editor.sourceforge.io/
 
 ## Is this a task for a mere mortal?
 
