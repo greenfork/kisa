@@ -175,7 +175,7 @@ Further are some examples how editors do highlighting.
 
 ### Kakoune
 
-Uses regex with slight modifications to allow code reuse and nested structures.
+[Kakoune] uses regex with slight modifications to allow code reuse and nested structures.
 Looks almost good enough: usually it is hard to edit and some rare constructs
 seem hard to implement (I couldn't implement highlighting for [slim], but
 maybe I'm not that smart).
@@ -184,24 +184,24 @@ maybe I'm not that smart).
 
 ### amp
 
-Reuses Textmate syntax highlighting configurations. The config files look
+[amp] reuses Textmate syntax highlighting configurations. The config files look
 as a mix of regex and some kind of pushdown automata. Extremely interesting
 option but needs more research.
 
 ### vis
 
-It has direct integration with Lua and uses Parsing Grammar Expressions (PEG)
+[vis] it has direct integration with Lua and uses Parsing Grammar Expressions (PEG)
 in combination with the Lua language features. Looks very neat and powerful.
 
 ### Emacs
 
-It doesn't have anything in particular, just uses some regex together with
+[Emacs] it doesn't have anything in particular, just uses some regex together with
 the power of Emacs-Lisp language. The editor is the Lisp machine, it doesn't
 really need anything special.
 
 ### joe
 
-Uses a full-blown description of a state machine that parses the text with
+[joe] uses a full-blown description of a state machine that parses the text with
 simplified grammar rules. Quite large files, for example C grammar takes
 300 loc, Ruby grammar takes 600 loc (Ruby has complicated grammar). Although
 the grammar is correct (e.g. Kakoune grammar is not 100% correct), it takes
