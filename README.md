@@ -4,8 +4,7 @@ Kisa is a hackable batteries-included code editor.
 
 Kisa is in its early stage and it is not usable at the moment.
 
-Further are design ideas and philosophy behind this editor. Later it will
-be moved into its own place.
+Further are design ideas and philosophy behind this editor.
 
 ## Purpose
 
@@ -18,8 +17,8 @@ my steps and eventually let them lead me instead of simply being led.
 
 ## Zen
 
-1. Programmer should be able to perfect their tool.
-2. Choice is a burden.
+* Programmer must be able to perfect their tool.
+* Choice is a burden.
 
 ## Requirements
 
@@ -46,11 +45,9 @@ Features not used by everyone but which provide more pleasant experience.
 
 ### Out of scope
 
-This project can't grow into an arbitrary general purpose text editor.
-Let's just keep it a _code_ editor.
+All of it would be nice, but let's grow steadily.
 
 * Non-UTF8 encodings
-* Windows line endings "\r\n"
 * Edit binaries/hexeditor
 * Edit large files like gigabytes of csv
 
@@ -62,15 +59,23 @@ code, the Emacs-Lisp never sat right with me, it's Lisp-2 and I'm more of a
 Schemer, so maybe this is the reason. With [Kakoune] I don't want to deal
 neither with C++ to edit the source code, nor with Bash to write scripting
 extensions. Writing a non-trivial extension in a language of choice is
-something I'm afraid to look at, maybe I should have tried that.
+something I'm afraid to look at, writing something from scratch seems as
+a better option than spending hours on learning the code to understand
+the limitations and get disappointed, though there's also a happy scenario.
 
 ## Hackable
 
 I believe there are several key points to make an editor hackable:
 
-1. Extensive documentation.
-2. Preaching about it in blog posts, on streams, at conventions.
-3. Friendly attitude to anyone interested in hacking.
+* Interesting design
+* Clean code
+* Eternal polishing
+
+And some points to make it hackable for everyone who is not me:
+
+* Extensive documentation
+* Preaching about it in blog posts, on streams, at conventions
+* Friendly attitude to anyone interested in hacking
 
 ## Configuration
 
@@ -82,7 +87,7 @@ There are several possible levels of varying configurability:
 4. Expose editor API via an embedded language like Lua
 
 Let's forget about the first option, I don't want to be the only user of
-this editor.
+this editor even if I write it for myself.
 
 Second option looks like a good start, there's [editorconfig] format which we
 can gladly use. It is also possible to merge it with other options but I
@@ -140,7 +145,7 @@ we need something extra.
 
 ## Extension points and plugins
 
-Configuration with a full API exposure can be considered as a plugin/scfript
+Configuration with a full API exposure can be considered as a plugin/script
 extension. My idea is that we should have these things separate for a
 number of reasons:
 1. For large programs it could be very important to run asynchronously, so
