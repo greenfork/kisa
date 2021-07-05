@@ -32,19 +32,25 @@ pub const Value = union(enum) {
     array: []const Value,
 };
 
+pub const IdValue = union(enum) {
+    integer: i64,
+    float: f64,
+    string: []const u8,
+};
+
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
 /// For notifications the `id` field is `null`.
 pub fn Request(comptime ParamsShape: type) type {
     return struct {
         jsonrpc: []const u8,
         method: []const u8,
-        id: ?i64 = null,
+        id: ?IdValue = null,
         params: ParamsShape,
 
         const RequestSubtype = struct {
             jsonrpc: []const u8,
             method: []const u8,
-            id: i64,
+            id: IdValue,
             params: ParamsShape,
         };
         const NotificationSubtype = struct {
@@ -111,18 +117,18 @@ pub const ResponseErrorImpl = struct { code: i64, message: []const u8 };
 pub fn Response(comptime ResultShape: type) type {
     return struct {
         jsonrpc: []const u8,
-        id: ?i64,
+        id: ?IdValue,
         result: ?ResultShape = null,
         @"error": ?ResponseErrorImpl = null,
 
         const ResultSubtype = struct {
             jsonrpc: []const u8,
-            id: i64,
+            id: IdValue,
             result: ?ResultShape,
         };
         const ErrorSubtype = struct {
             jsonrpc: []const u8,
-            id: ?i64,
+            id: ?IdValue,
             @"error": ResponseErrorImpl,
         };
 
@@ -189,7 +195,7 @@ test "parse request" {
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
         .params = params_array,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
@@ -410,7 +416,7 @@ test "generate request" {
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
         .params = params_array,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
@@ -489,7 +495,7 @@ test "generate complex request" {
         .jsonrpc = jsonrpc_version,
         .method = "draw",
         .params = params_array,
-        .id = 87,
+        .id = .{ .integer = 87 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
@@ -582,7 +588,7 @@ test "parse success response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = data,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":42,"id":63}
@@ -599,7 +605,7 @@ test "parse error response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .@"error" = data,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","error":{"code":13,"message":"error message"},"id":63}
@@ -618,7 +624,7 @@ test "parse array response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = array_data,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
@@ -682,7 +688,7 @@ test "parse complex response" {
     const response = MyResponse{
         .jsonrpc = jsonrpc_version,
         .result = params_array,
-        .id = 98,
+        .id = .{ .integer = 98 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
@@ -786,7 +792,7 @@ test "generate success response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = data,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"result":42}
@@ -801,7 +807,7 @@ test "generate error response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .@"error" = data,
-        .id = 63,
+        .id = .{ .integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message"}}
@@ -862,7 +868,7 @@ test "generate complex response" {
     const response = MyResponse{
         .jsonrpc = jsonrpc_version,
         .result = params_array,
-        .id = 98,
+        .id = .{ .integer = 98 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
