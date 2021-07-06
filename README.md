@@ -282,12 +282,6 @@ choices:
 This structure is not complete, there are still some unknowns. Some
 considerations:
 
-- Do we need a "Query" concept which is going to provide read-only access
-  to various components? For example, in order to do jumping to functions,
-  we will need a module which is going to know simultaneously about TextBuffer
-  to get information about lines and columns and SyntaxHighlighter to get
-  semantic information about tokens. Shoving in the knowledge about these
-  components directly into SemanticJump-y thing does not scale.
 - Do we want to organize specific modules like Autocompletion and LSP as
   plugins utilizing direct communication with the server via JSON-RPC?
   This will reduce the capabilities to which they can interact with the
