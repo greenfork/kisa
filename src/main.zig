@@ -418,28 +418,22 @@ pub fn main() anyerror!void {
         var ui = UI.init(uivt100);
         var client = Client.init(ally, [2]os.fd_t{ client_reads, client_writes }, ui);
         try client.accept();
-        while (true) {}
 
-        // var event_dispatcher = EventDispatcher.init(&text_buffer);
-        // while (true) {
-        //     if (ui.next_key()) |key| {
-        //         switch (key.code) {
-        //             .unicode_codepoint => {
-        //                 if (key.is_ctrl('c')) {
-        //                     break;
-        //                 } else {
-        //                     try event_dispatcher.dispatch(.{ .value = .{ .key_press = key } });
-        //                 }
-        //             },
-        //             else => {
-        //                 std.debug.print("Unrecognized key event: {}\r\n", .{key});
-        //                 std.os.exit(1);
-        //             },
-        //         }
-        //     }
-
-        //     std.time.sleep(10 * std.time.ns_per_ms);
-        // }
+        while (true) {
+            if (ui.next_key()) |key| {
+                switch (key.code) {
+                    .unicode_codepoint => {
+                        if (key.is_ctrl('c')) {
+                            break;
+                        }
+                    },
+                    else => {
+                        std.debug.print("Unrecognized key type: {}\r\n", .{key});
+                        std.os.exit(1);
+                    },
+                }
+            }
+        }
     }
 }
 
