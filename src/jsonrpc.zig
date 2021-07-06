@@ -88,6 +88,7 @@ pub fn Request(comptime ParamsShape: type) type {
             try json.stringify(self, .{}, stream);
         }
 
+        /// Used by `std.json.stringify`.
         pub fn jsonStringify(
             self: Self,
             options: json.StringifyOptions,
@@ -165,6 +166,7 @@ pub fn Response(comptime ResultShape: type) type {
             try json.stringify(self, .{}, stream);
         }
 
+        /// Used by `std.json.stringify`.
         pub fn jsonStringify(
             self: Self,
             options: json.StringifyOptions,
