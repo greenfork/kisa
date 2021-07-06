@@ -58,6 +58,14 @@ pub const UI = struct {
         try self.frontend.moveCursor(direction, number);
         try self.frontend.refresh();
     }
+
+    pub inline fn setup(self: *Self) !void {
+        try self.frontend.setup();
+    }
+
+    pub inline fn teardown(self: *Self) void {
+        self.frontend.teardown();
+    }
 };
 
 pub const EventKind = enum {
@@ -373,54 +381,74 @@ pub const Server = struct {
     }
 };
 
+pub const Application = struct {
+    client: *Client,
+
+    const Self = @This();
+
+    pub const ConcurrencyModel = enum {
+        threaded,
+        forked,
+    };
+
+    pub fn init(ally: *std.mem.Allocator, concurrency_model: ConcurrencyModel) !?Self {
+        switch (concurrency_model) {
+            .forked => {
+                const client_reads_server_writes = try os.pipe();
+                const server_reads_client_writes = try os.pipe();
+                const client_reads = client_reads_server_writes[0];
+                const client_writes = server_reads_client_writes[1];
+                const server_reads = server_reads_client_writes[0];
+                const server_writes = client_reads_server_writes[1];
+                const child_pid = try os.fork();
+                if (child_pid == 0) {
+                    // Server
+                    os.close(client_reads);
+                    os.close(client_writes);
+
+                    const content = readInput(ally) catch |err| switch (err) {
+                        error.FileNotSupplied => {
+                            std.debug.print("No file supplied\n{s}", .{help_string});
+                            std.os.exit(1);
+                        },
+                        else => return err,
+                    };
+
+                    var server = try ally.create(Server);
+                    server.* = try Server.init(ally, [2]os.fd_t{ server_reads, server_writes }, content);
+                    try server.send_text();
+                    return null;
+                } else {
+                    // Client
+                    os.close(server_reads);
+                    os.close(server_writes);
+
+                    var uivt100 = try UIVT100.init();
+                    var ui = UI.init(uivt100);
+                    var client = try ally.create(Client);
+                    client.* = Client.init(ally, [2]os.fd_t{ client_reads, client_writes }, ui);
+                    try client.accept();
+                    return Self{ .client = client };
+                }
+            },
+            .threaded => {
+                return null;
+            },
+        }
+    }
+};
+
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    const client_reads_server_writes = try os.pipe();
-    const server_reads_client_writes = try os.pipe();
-    const client_reads = client_reads_server_writes[0];
-    const client_writes = server_reads_client_writes[1];
-    const server_reads = server_reads_client_writes[0];
-    const server_writes = client_reads_server_writes[1];
-    const child_pid = try os.fork();
-    if (child_pid == 0) {
-        // Server
-        os.close(client_reads);
-        os.close(client_writes);
-
-        const content = readInput(ally) catch |err| switch (err) {
-            error.FileNotSupplied => {
-                std.debug.print("No file supplied\n{s}", .{help_string});
-                std.os.exit(1);
-            },
-            else => return err,
-        };
-        // var text_buffer = try TextBuffer.init(ally, content);
-        // var display_window = DisplayWindow.init(&text_buffer);
-        // // FIXME: not keep window on the stack
-        // text_buffer.display_windows[0] = &display_window;
-        // try display_window.render();
-
-        var server = try Server.init(ally, [2]os.fd_t{ server_reads, server_writes }, content);
-        try server.send_text();
-    } else {
-        // Client
-        os.close(server_reads);
-        os.close(server_writes);
-
-        var uivt100 = try UIVT100.init();
-        defer uivt100.deinit() catch {
-            std.debug.print("UIVT100 deinit ERRROR", .{});
-            std.os.exit(1);
-        };
-        var ui = UI.init(uivt100);
-        var client = Client.init(ally, [2]os.fd_t{ client_reads, client_writes }, ui);
-        try client.accept();
-
+    if (try Application.init(ally, .forked)) |app| {
+        const client = app.client;
+        try client.ui.setup();
+        defer client.ui.teardown();
         while (true) {
-            if (ui.next_key()) |key| {
+            if (client.ui.next_key()) |key| {
                 switch (key.code) {
                     .unicode_codepoint => {
                         if (key.is_ctrl('c')) {
@@ -595,13 +623,14 @@ pub const UIVT100 = struct {
             .rows = undefined,
             .cols = undefined,
         };
-        errdefer uivt100.deinit() catch {
-            std.debug.print("UIVT100 deinit ERRROR", .{});
-        };
         try uivt100.updateWindowSize();
 
+        return uivt100;
+    }
+
+    pub fn setup(self: *Self) Error!void {
         // Black magic, see https://github.com/antirez/kilo
-        var raw_termios = uivt100.original_termois.?;
+        var raw_termios = self.original_termois.?;
         raw_termios.iflag &=
             ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
         raw_termios.oflag &= ~(@as(os.tcflag_t, os.OPOST));
@@ -610,18 +639,14 @@ pub const UIVT100 = struct {
         // Polling read, doesn't block
         raw_termios.cc[os.VMIN] = 0;
         raw_termios.cc[os.VTIME] = 0;
-        try os.tcsetattr(in_stream.handle, os.TCSA.FLUSH, raw_termios);
-
-        // Prepare terminal
-        try uivt100.clear();
-        try uivt100.refresh();
-
-        return uivt100;
+        try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, raw_termios);
     }
 
-    pub fn deinit(self: *Self) Error!void {
+    pub fn teardown(self: *Self) void {
         if (self.original_termois) |termios| {
-            try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios);
+            os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios) catch |err| {
+                std.debug.print("UIVT100.teardown failed with {}\n", .{err});
+            };
             self.original_termois = null;
         }
     }
