@@ -297,31 +297,23 @@ pub const TextBuffer = struct {
 
 pub const Client = struct {
     ally: *std.mem.Allocator,
-    // TODO: better name like PipePair
-    server_pipe_fds: [2]os.fd_t,
     ui: UI,
+    server: ClientServerRepresentation,
 
     const Self = @This();
 
-    pub fn init(ally: *std.mem.Allocator, server_pipe_fds: [2]os.fd_t, ui: UI) Self {
+    pub fn init(ally: *std.mem.Allocator, ui: UI, server: ClientServerRepresentation) Self {
         return Self{
             .ally = ally,
-            .server_pipe_fds = server_pipe_fds,
+            .server = server,
             .ui = ui,
         };
     }
 
     // TODO: better name
     pub fn accept(self: *Client) !void {
-        const read_end = self.server_pipe_fds[0];
-        // const write_end = self.server_pipe_fds[1];
-        var read_stream = std.fs.File{
-            .handle = read_end,
-            .capable_io_mode = .blocking,
-            .intended_io_mode = .blocking,
-        };
         var buf = [_]u8{0} ** 4096;
-        const bytes_read = try read_stream.reader().readAll(buf[0..]);
+        const bytes_read = try self.server.reader().readAll(buf[0..]);
         var split_it = std.mem.split(buf[0..bytes_read], "|");
         const slice = split_it.next().?;
         const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
@@ -333,15 +325,18 @@ pub const Client = struct {
 pub const Server = struct {
     ally: *std.mem.Allocator,
     // TODO: better name
-    clients: std.ArrayList(ClientPipeFds),
+    clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
 
     const Self = @This();
-    const ClientPipeFds = [2]os.fd_t;
 
-    pub fn init(ally: *std.mem.Allocator, client: ClientPipeFds, initial_text: []const u8) !Self {
-        var clients = std.ArrayList(ClientPipeFds).init(ally);
+    pub fn init(
+        ally: *std.mem.Allocator,
+        client: ClientServerRepresentation,
+        initial_text: []const u8,
+    ) !Self {
+        var clients = std.ArrayList(ClientServerRepresentation).init(ally);
         try clients.append(client);
 
         var text_buffers = std.ArrayList(*TextBuffer).init(ally);
@@ -359,7 +354,6 @@ pub const Server = struct {
         return Self{
             .ally = ally,
             .clients = clients,
-            // TODO: change interface to do duplication right in this function
             .text_buffers = text_buffers,
             .display_windows = display_windows,
         };
@@ -371,13 +365,98 @@ pub const Server = struct {
         var text_buffer = self.text_buffers.items[0];
         var display_window = text_buffer.display_windows[0];
         const message = try display_window.renderTextArea();
-        // TODO: better name
-        var write_stream = std.fs.File{
-            .handle = client[1],
+        try client.writer().writeAll(message);
+    }
+};
+
+pub const Transport = struct {
+    client_reads: os.fd_t,
+    client_writes: os.fd_t,
+    server_reads: os.fd_t,
+    server_writes: os.fd_t,
+    kind: Kind,
+
+    const Self = @This();
+
+    pub const Kind = enum {
+        pipes,
+    };
+
+    pub fn init(kind: Kind) !Self {
+        switch (kind) {
+            .pipes => {
+                const client_reads_server_writes = try os.pipe();
+                const server_reads_client_writes = try os.pipe();
+                return Self{
+                    .client_reads = client_reads_server_writes[0],
+                    .client_writes = server_reads_client_writes[1],
+                    .server_reads = server_reads_client_writes[0],
+                    .server_writes = client_reads_server_writes[1],
+                    .kind = kind,
+                };
+            },
+        }
+        unreachable;
+    }
+
+    pub fn client(self: Self) ClientServerRepresentation {
+        switch (self.kind) {
+            .pipes => {
+                return ClientServerRepresentation{
+                    .read_stream = self.client_reads,
+                    .write_stream = self.client_writes,
+                };
+            },
+        }
+        unreachable;
+    }
+
+    pub fn server(self: Self) ClientServerRepresentation {
+        switch (self.kind) {
+            .pipes => {
+                return ClientServerRepresentation{
+                    .read_stream = self.server_reads,
+                    .write_stream = self.server_writes,
+                };
+            },
+        }
+        unreachable;
+    }
+
+    pub fn closeClientStreams(self: *Self) void {
+        os.close(self.client_reads);
+        os.close(self.client_writes);
+    }
+
+    pub fn closeServerStreams(self: *Self) void {
+        os.close(self.server_reads);
+        os.close(self.server_writes);
+    }
+};
+
+/// This is how Client sees a Server and how Server sees a Client. We can't use direct pointers
+/// to memory since they can be in separate processes. Therefore they see each other as just
+/// some ways to send and receive information.
+pub const ClientServerRepresentation = struct {
+    read_stream: os.fd_t,
+    write_stream: os.fd_t,
+
+    const Self = @This();
+
+    pub fn reader(self: Self) std.fs.File.Reader {
+        return pipeToFile(self.read_stream).reader();
+    }
+
+    pub fn writer(self: Self) std.fs.File.Writer {
+        return pipeToFile(self.write_stream).writer();
+    }
+
+    fn pipeToFile(fd: os.fd_t) std.fs.File {
+        return std.fs.File{
+            .handle = fd,
             .capable_io_mode = .blocking,
             .intended_io_mode = .blocking,
         };
-        try write_stream.writer().writeAll(message);
     }
 };
 
@@ -388,23 +467,19 @@ pub const Application = struct {
 
     pub const ConcurrencyModel = enum {
         threaded,
-        forked,
+        fork,
     };
 
     pub fn init(ally: *std.mem.Allocator, concurrency_model: ConcurrencyModel) !?Self {
         switch (concurrency_model) {
-            .forked => {
-                const client_reads_server_writes = try os.pipe();
-                const server_reads_client_writes = try os.pipe();
-                const client_reads = client_reads_server_writes[0];
-                const client_writes = server_reads_client_writes[1];
-                const server_reads = server_reads_client_writes[0];
-                const server_writes = client_reads_server_writes[1];
+            .fork => {
+                var transport = try Transport.init(.pipes);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
                     // Server
-                    os.close(client_reads);
-                    os.close(client_writes);
+
+                    // We want to only keep Client's streams open.
+                    transport.closeServerStreams();
 
                     const content = readInput(ally) catch |err| switch (err) {
                         error.FileNotSupplied => {
@@ -415,19 +490,19 @@ pub const Application = struct {
                     };
 
                     var server = try ally.create(Server);
-                    server.* = try Server.init(ally, [2]os.fd_t{ server_reads, server_writes }, content);
+                    server.* = try Server.init(ally, transport.client(), content);
                     try server.send_text();
                     return null;
                 } else {
                     // Client
-                    os.close(server_reads);
-                    os.close(server_writes);
+
+                    // We want to only keep Server's streams open.
+                    transport.closeClientStreams();
 
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
                     var client = try ally.create(Client);
-                    client.* = Client.init(ally, [2]os.fd_t{ client_reads, client_writes }, ui);
-                    try client.accept();
+                    client.* = Client.init(ally, ui, transport.server());
                     return Self{ .client = client };
                 }
             },
@@ -435,6 +510,7 @@ pub const Application = struct {
                 return null;
             },
         }
+        unreachable;
     }
 };
 
@@ -443,10 +519,12 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    if (try Application.init(ally, .forked)) |app| {
-        const client = app.client;
+    var application = try Application.init(ally, .fork);
+    if (application) |app| {
+        var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
+        try client.accept();
         while (true) {
             if (client.ui.next_key()) |key| {
                 switch (key.code) {
