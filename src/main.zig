@@ -324,7 +324,6 @@ pub const Client = struct {
 
 pub const Server = struct {
     ally: *std.mem.Allocator,
-    // TODO: better name
     clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
@@ -470,7 +469,7 @@ pub const Application = struct {
         fork,
     };
 
-    pub fn init(ally: *std.mem.Allocator, concurrency_model: ConcurrencyModel) !?Self {
+    pub fn start(ally: *std.mem.Allocator, concurrency_model: ConcurrencyModel) !?Self {
         switch (concurrency_model) {
             .fork => {
                 var transport = try Transport.init(.pipes);
@@ -478,7 +477,7 @@ pub const Application = struct {
                 if (child_pid == 0) {
                     // Server
 
-                    // We want to only keep Client's streams open.
+                    // We only want to keep Client's streams open.
                     transport.closeServerStreams();
 
                     const content = readInput(ally) catch |err| switch (err) {
@@ -496,7 +495,7 @@ pub const Application = struct {
                 } else {
                     // Client
 
-                    // We want to only keep Server's streams open.
+                    // We only want to keep Server's streams open.
                     transport.closeClientStreams();
 
                     var uivt100 = try UIVT100.init();
@@ -519,8 +518,7 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    var application = try Application.init(ally, .fork);
-    if (application) |app| {
+    if (try Application.start(ally, .fork)) |app| {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
