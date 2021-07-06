@@ -80,8 +80,12 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Caller owns the memory.
         pub fn generate(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
-            try json.stringify(self, .{}, result.writer());
+            try self.writeTo(result.writer());
             return result.toOwnedSlice();
+        }
+
+        pub fn writeTo(self: Self, stream: anytype) !void {
+            try json.stringify(self, .{}, stream);
         }
 
         pub fn jsonStringify(
@@ -153,8 +157,12 @@ pub fn Response(comptime ResultShape: type) type {
         /// Caller owns the memory.
         pub fn generate(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
-            try json.stringify(self, .{}, result.writer());
+            try self.writeTo(result.writer());
             return result.toOwnedSlice();
+        }
+
+        pub fn writeTo(self: Self, stream: anytype) !void {
+            try json.stringify(self, .{}, stream);
         }
 
         pub fn jsonStringify(
