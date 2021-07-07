@@ -1,6 +1,7 @@
 const std = @import("std");
 const os = std.os;
 const io = std.io;
+const mem = std.mem;
 
 pub const MoveDirection = enum {
     up,
@@ -29,7 +30,7 @@ pub const UI = struct {
         var w = self.frontend.writer();
         var line_count = first_line_number;
         const max_line_number_width = numberWidth(max_line_number);
-        var line_it = std.mem.split(string, "\n");
+        var line_it = mem.split(string, "\n");
         while (line_it.next()) |line| : (line_count += 1) {
             // When there's a trailing newline, we don't display the very last row.
             if (line_count == max_line_number and line.len == 0) break;
@@ -226,7 +227,7 @@ pub const DisplayWindow = struct {
 /// Manages the actual text of an opened file and provides an interface for querying it and
 /// modifying.
 pub const TextBuffer = struct {
-    ally: *std.mem.Allocator,
+    ally: *mem.Allocator,
     content: Content,
     // TODO: make it usable, for now we just use a single element
     display_windows: [1]*DisplayWindow = undefined,
@@ -237,7 +238,7 @@ pub const TextBuffer = struct {
     const Self = @This();
     const Content = std.ArrayList(u8);
 
-    pub fn init(ally: *std.mem.Allocator, content: []const u8) Error!Self {
+    pub fn init(ally: *mem.Allocator, content: []const u8) Error!Self {
         const duplicated_content = try ally.dupe(u8, content);
         const our_content = Content.fromOwnedSlice(ally, duplicated_content);
         var result = Self{
@@ -296,13 +297,13 @@ pub const TextBuffer = struct {
 };
 
 pub const Client = struct {
-    ally: *std.mem.Allocator,
+    ally: *mem.Allocator,
     ui: UI,
     server: ClientServerRepresentation,
 
     const Self = @This();
 
-    pub fn init(ally: *std.mem.Allocator, ui: UI, server: ClientServerRepresentation) Self {
+    pub fn init(ally: *mem.Allocator, ui: UI, server: ClientServerRepresentation) Self {
         return Self{
             .ally = ally,
             .server = server,
@@ -314,7 +315,7 @@ pub const Client = struct {
     pub fn accept(self: *Client) !void {
         var buf: [4096]u8 = undefined;
         const bytes_read = try self.server.reader().read(buf[0..]);
-        var split_it = std.mem.split(buf[0..bytes_read], "|");
+        var split_it = mem.split(buf[0..bytes_read], "|");
         const slice = split_it.next().?;
         const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
         const max_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
@@ -323,7 +324,7 @@ pub const Client = struct {
 };
 
 pub const Server = struct {
-    ally: *std.mem.Allocator,
+    ally: *mem.Allocator,
     clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
@@ -331,7 +332,7 @@ pub const Server = struct {
     const Self = @This();
 
     pub fn init(
-        ally: *std.mem.Allocator,
+        ally: *mem.Allocator,
         client: ClientServerRepresentation,
         initial_text: []const u8,
     ) !Self {
@@ -470,7 +471,7 @@ pub const Application = struct {
     };
 
     pub fn start(
-        ally: *std.mem.Allocator,
+        ally: *mem.Allocator,
         concurrency_model: ConcurrencyModel,
         transport_kind: Transport.Kind,
     ) !?Self {
@@ -527,7 +528,7 @@ pub const Application = struct {
         unreachable;
     }
 
-    fn startServerThread(ally: *std.mem.Allocator, transport: Transport) !void {
+    fn startServerThread(ally: *mem.Allocator, transport: Transport) !void {
         const content = readInput(ally) catch |err| switch (err) {
             error.FileNotSupplied => {
                 std.debug.print("No file supplied\n{s}", .{help_string});
@@ -909,7 +910,7 @@ fn numberWidth(number: u32) u32 {
 }
 
 // TODO: support input from stdin
-fn readInput(ally: *std.mem.Allocator) ![]u8 {
+fn readInput(ally: *mem.Allocator) ![]u8 {
     var arg_it = std.process.args();
     _ = try arg_it.next(ally) orelse unreachable; // program name
     var file = blk: {
@@ -922,4 +923,23 @@ fn readInput(ally: *std.mem.Allocator) ![]u8 {
     };
     defer file.close();
     return try file.readToEndAlloc(ally, std.math.maxInt(usize));
+}
+
+fn filePathForReading(ally: *mem.Allocator) ![:0]u8 {
+    var arg_it = std.process.args();
+    _ = try arg_it.next(ally) orelse unreachable;
+    if (arg_it.next(ally)) |file_name_delimited| {
+        // V-style, the best style
+        // FIXME: how to get a string cwd?
+        const cwd_path = system.cmd("pwd");
+        return std.fs.path.resolve(ally, []const []u8{ cwd_path, file_name_delimited });
+    } else {
+        return error.FileNotSupplied;
+    }
+}
+
+fn openFileAndRead(ally: *mem.Allocator, path: [:0]u8) ![]u8 {
+    var file = try std.fs.cwd().openFile(file_name, .{});
+    defer file.close();
+    return try file.readToEndAlloc(ally, file);
 }
