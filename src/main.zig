@@ -312,8 +312,8 @@ pub const Client = struct {
 
     // TODO: better name
     pub fn accept(self: *Client) !void {
-        var buf = [_]u8{0} ** 4096;
-        const bytes_read = try self.server.reader().readAll(buf[0..]);
+        var buf: [4096]u8 = undefined;
+        const bytes_read = try self.server.reader().read(buf[0..]);
         var split_it = std.mem.split(buf[0..bytes_read], "|");
         const slice = split_it.next().?;
         const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
@@ -398,7 +398,7 @@ pub const Transport = struct {
         unreachable;
     }
 
-    pub fn client(self: Self) ClientServerRepresentation {
+    pub fn serverRepresentationForClient(self: Self) ClientServerRepresentation {
         switch (self.kind) {
             .pipes => {
                 return ClientServerRepresentation{
@@ -410,7 +410,7 @@ pub const Transport = struct {
         unreachable;
     }
 
-    pub fn server(self: Self) ClientServerRepresentation {
+    pub fn clientRepresentationForServer(self: Self) ClientServerRepresentation {
         switch (self.kind) {
             .pipes => {
                 return ClientServerRepresentation{
@@ -422,12 +422,12 @@ pub const Transport = struct {
         unreachable;
     }
 
-    pub fn closeClientStreams(self: *Self) void {
+    pub fn closeStreamsForServer(self: Self) void {
         os.close(self.client_reads);
         os.close(self.client_writes);
     }
 
-    pub fn closeServerStreams(self: *Self) void {
+    pub fn closeStreamsForClient(self: Self) void {
         os.close(self.server_reads);
         os.close(self.server_writes);
     }
@@ -460,7 +460,7 @@ pub const ClientServerRepresentation = struct {
 };
 
 pub const Application = struct {
-    client: *Client,
+    client: Client,
 
     const Self = @This();
 
@@ -469,16 +469,22 @@ pub const Application = struct {
         fork,
     };
 
-    pub fn start(ally: *std.mem.Allocator, concurrency_model: ConcurrencyModel) !?Self {
+    pub fn start(
+        ally: *std.mem.Allocator,
+        concurrency_model: ConcurrencyModel,
+        transport_kind: Transport.Kind,
+    ) !?Self {
         switch (concurrency_model) {
             .fork => {
-                var transport = try Transport.init(.pipes);
+                var transport = try Transport.init(transport_kind);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
                     // Server
 
                     // We only want to keep Client's streams open.
-                    transport.closeServerStreams();
+                    transport.closeStreamsForServer();
+                    os.close(io.getStdIn().handle);
+                    os.close(io.getStdOut().handle);
 
                     const content = readInput(ally) catch |err| switch (err) {
                         error.FileNotSupplied => {
@@ -488,28 +494,49 @@ pub const Application = struct {
                         else => return err,
                     };
 
-                    var server = try ally.create(Server);
-                    server.* = try Server.init(ally, transport.client(), content);
+                    var server = try Server.init(ally, transport.clientRepresentationForServer(), content);
                     try server.send_text();
                     return null;
                 } else {
                     // Client
 
                     // We only want to keep Server's streams open.
-                    transport.closeClientStreams();
+                    transport.closeStreamsForClient();
 
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
-                    var client = try ally.create(Client);
-                    client.* = Client.init(ally, ui, transport.server());
+                    var client = Client.init(ally, ui, transport.serverRepresentationForClient());
                     return Self{ .client = client };
                 }
             },
             .threaded => {
-                return null;
+                const transport = try Transport.init(transport_kind);
+                const server_thread = try std.Thread.spawn(
+                    .{},
+                    startServerThread,
+                    .{ ally, transport },
+                );
+                server_thread.detach();
+
+                var uivt100 = try UIVT100.init();
+                var ui = UI.init(uivt100);
+                var client = Client.init(ally, ui, transport.serverRepresentationForClient());
+                return Self{ .client = client };
             },
         }
         unreachable;
+    }
+
+    fn startServerThread(ally: *std.mem.Allocator, transport: Transport) !void {
+        const content = readInput(ally) catch |err| switch (err) {
+            error.FileNotSupplied => {
+                std.debug.print("No file supplied\n{s}", .{help_string});
+                std.os.exit(1);
+            },
+            else => return err,
+        };
+        var server = try Server.init(ally, transport.clientRepresentationForServer(), content);
+        try server.send_text();
     }
 };
 
@@ -518,7 +545,7 @@ pub fn main() anyerror!void {
     defer arena.deinit();
     var ally = &arena.allocator;
 
-    if (try Application.start(ally, .fork)) |app| {
+    if (try Application.start(ally, .threaded, .pipes)) |app| {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
