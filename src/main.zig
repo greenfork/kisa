@@ -541,9 +541,8 @@ pub const Application = struct {
 };
 
 pub fn main() anyerror!void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    var ally = &arena.allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var ally = &gpa.allocator;
 
     if (try Application.start(ally, .threaded, .pipes)) |app| {
         var client = app.client;
