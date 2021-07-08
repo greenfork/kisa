@@ -215,7 +215,6 @@ pub const DisplayWindow = struct {
     pub fn renderTextArea(self: *Self) Error!jsonrpc.SimpleRequest {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
-        // TODO: cleanup `params`
         const params = try self.text_buffer.ally.create([3]jsonrpc.Value);
         params.* = [_]jsonrpc.Value{
             .{ .string = slice },
@@ -235,7 +234,7 @@ pub const DisplayWindow = struct {
 /// modifying.
 pub const TextBuffer = struct {
     ally: *mem.Allocator,
-    content: Content,
+    content: std.ArrayList(u8),
     // TODO: make it usable, for now we just use a single element
     display_windows: [1]*DisplayWindow = undefined,
     // metrics
@@ -243,11 +242,10 @@ pub const TextBuffer = struct {
 
     pub const Error = error{ OutOfMemory, LineOutOfRange };
     const Self = @This();
-    const Content = std.ArrayList(u8);
 
     pub fn init(ally: *mem.Allocator, content: []const u8) Error!Self {
         const duplicated_content = try ally.dupe(u8, content);
-        const our_content = Content.fromOwnedSlice(ally, duplicated_content);
+        const our_content = std.ArrayList(u8).fromOwnedSlice(ally, duplicated_content);
         var result = Self{
             .ally = ally,
             .content = our_content,
@@ -255,6 +253,10 @@ pub const TextBuffer = struct {
         };
         result.countMetrics();
         return result;
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.content.deinit();
     }
 
     fn countMetrics(self: *Self) void {
@@ -334,7 +336,9 @@ pub const Client = struct {
     pub fn acceptText(self: *Client) !void {
         // FIXME: use a fixed size buffer to receive messages instead of allocator.
         const request_string = try self.server.readPacket(self.ally);
+        defer self.ally.free(request_string);
         const request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        defer request.parseFree(self.ally);
         if (mem.eql(u8, "draw", request.method)) {
             const params = request.params.array;
             try self.ui.draw(
@@ -351,8 +355,8 @@ pub const Client = struct {
         self.last_message_id += 1;
         var message = self.emptyJsonRpcRequest();
         message.method = "openFile";
-        // TODO: clean up the returned value from filePathForReading
         message.params = .{ .string = try filePathForReading(self.ally) };
+        defer self.ally.free(message.params.string);
         try message.writeTo(self.server.writer());
         try self.server.writeEndByte();
     }
@@ -400,6 +404,15 @@ pub const Server = struct {
         };
     }
 
+    pub fn deinit(self: *Self) void {
+        self.clients.deinit();
+        for (self.text_buffers.items) |text_buffer| {
+            text_buffer.deinit();
+        }
+        self.text_buffers.deinit();
+        self.display_windows.deinit();
+    }
+
     pub fn createNewTextBuffer(self: *Self, text: []const u8) !void {
         var text_buffer_ptr = try self.ally.create(TextBuffer);
         text_buffer_ptr.* = try TextBuffer.init(self.ally, text);
@@ -416,16 +429,21 @@ pub const Server = struct {
         var client = self.clients.items[0];
         var text_buffer = self.text_buffers.items[0];
         var display_window = text_buffer.display_windows[0];
+        // TODO: freeing like this does not scale for other messages
         const message = try display_window.renderTextArea();
+        defer self.ally.free(message.params.array);
         try message.writeTo(client.writer());
         try client.writeEndByte();
     }
 
     pub fn acceptOpenFileRequest(self: *Server) !void {
         var request_string: []const u8 = try self.clients.items[0].readPacket(self.ally);
+        defer self.ally.free(request_string);
         var request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        defer request.parseFree(self.ally);
         if (mem.eql(u8, "openFile", request.method)) {
             const text = try openFileAndRead(self.ally, request.params.string);
+            defer self.ally.free(text);
             try self.createNewTextBuffer(text);
         } else {
             return error.UnrecognizedMethod;
@@ -605,6 +623,7 @@ pub const Application = struct {
 
     fn startServerThread(ally: *mem.Allocator, transport: Transport) !void {
         var server = try Server.init(ally, transport.clientRepresentationForServer());
+        defer server.deinit();
         try server.acceptOpenFileRequest();
         try server.sendText();
     }
