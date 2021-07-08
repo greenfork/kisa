@@ -981,19 +981,3 @@ fn numberWidth(number: u32) u32 {
     }
     return result;
 }
-
-// TODO: support input from stdin
-fn readInput(ally: *mem.Allocator) ![]u8 {
-    var arg_it = std.process.args();
-    _ = try arg_it.next(ally) orelse unreachable; // program name
-    var file = blk: {
-        if (arg_it.next(ally)) |file_name_delimited| {
-            const file_name: []const u8 = try file_name_delimited;
-            break :blk try std.fs.cwd().openFile(file_name, .{});
-        } else {
-            return error.FileNotSupplied;
-        }
-    };
-    defer file.close();
-    return try file.readToEndAlloc(ally, std.math.maxInt(usize));
-}
