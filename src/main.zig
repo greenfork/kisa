@@ -2,6 +2,7 @@ const std = @import("std");
 const os = std.os;
 const io = std.io;
 const mem = std.mem;
+const jsonrpc = @import("jsonrpc.zig");
 
 pub const MoveDirection = enum {
     up,
@@ -211,16 +212,22 @@ pub const DisplayWindow = struct {
         };
     }
 
-    pub fn renderTextArea(self: *Self) Error![]u8 {
+    pub fn renderTextArea(self: *Self) Error!jsonrpc.SimpleRequest {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
-        var text_area = std.ArrayList(u8).init(self.text_buffer.ally);
-        try text_area.writer().print("{s}|{d}|{d}", .{
-            slice,
-            self.first_line_number,
-            self.text_buffer.max_line_number,
-        });
-        return text_area.toOwnedSlice();
+        // TODO: cleanup `params`
+        const params = try self.text_buffer.ally.create([3]jsonrpc.Value);
+        params.* = [_]jsonrpc.Value{
+            .{ .string = slice },
+            .{ .integer = self.first_line_number },
+            .{ .integer = last_line_number },
+        };
+        return jsonrpc.SimpleRequest{
+            .jsonrpc = jsonrpc.jsonrpc_version,
+            .id = null,
+            .method = "draw",
+            .params = .{ .array = params[0..] },
+        };
     }
 };
 
@@ -300,6 +307,7 @@ pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
     server: ClientServerRepresentation,
+    last_message_id: i64 = 0,
 
     const Self = @This();
 
@@ -321,6 +329,53 @@ pub const Client = struct {
         const max_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
         try self.ui.draw(slice, first_line_number, max_line_number);
     }
+
+    // TODO: better name
+    pub fn acceptText(self: *Client) !void {
+        // FIXME: use a fixed size buffer to receive messages instead of allocator.
+        const request_string = try self.server.readPacket(self.ally);
+        const request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        if (mem.eql(u8, "draw", request.method)) {
+            const params = request.params.array;
+            try self.ui.draw(
+                params[0].string,
+                @intCast(u32, params[1].integer),
+                @intCast(u32, params[1].integer),
+            );
+        } else {
+            return error.UnrecognizedMethod;
+        }
+    }
+
+    pub fn sendFileToOpen(self: *Client) !void {
+        self.last_message_id += 1;
+        var message = self.emptyJsonRpcRequest();
+        message.method = "openFile";
+        // TODO: clean up the returned value from filePathForReading
+        message.params = .{ .string = try filePathForReading(self.ally) };
+        try message.writeTo(self.server.writer());
+        try self.server.writeEndByte();
+    }
+
+    /// Caller owns the memory.
+    fn filePathForReading(ally: *mem.Allocator) ![]u8 {
+        var arg_it = std.process.args();
+        _ = try arg_it.next(ally) orelse unreachable;
+        if (arg_it.next(ally)) |file_name_delimited| {
+            return try std.fs.cwd().realpathAlloc(ally, try file_name_delimited);
+        } else {
+            return error.FileNotSupplied;
+        }
+    }
+
+    fn emptyJsonRpcRequest(self: Self) jsonrpc.SimpleRequest {
+        return jsonrpc.SimpleRequest{
+            .jsonrpc = jsonrpc.jsonrpc_version,
+            .id = .{ .integer = self.last_message_id },
+            .method = undefined,
+            .params = undefined,
+        };
+    }
 };
 
 pub const Server = struct {
@@ -331,25 +386,11 @@ pub const Server = struct {
 
     const Self = @This();
 
-    pub fn init(
-        ally: *mem.Allocator,
-        client: ClientServerRepresentation,
-        initial_text: []const u8,
-    ) !Self {
+    pub fn init(ally: *mem.Allocator, client: ClientServerRepresentation) !Self {
         var clients = std.ArrayList(ClientServerRepresentation).init(ally);
         try clients.append(client);
-
-        var text_buffers = std.ArrayList(*TextBuffer).init(ally);
-        var text_buffer_ptr = try ally.create(TextBuffer);
-        text_buffer_ptr.* = try TextBuffer.init(ally, initial_text);
-        try text_buffers.append(text_buffer_ptr);
-
-        var display_windows = std.ArrayList(*DisplayWindow).init(ally);
-        var display_window_ptr = try ally.create(DisplayWindow);
-        display_window_ptr.* = DisplayWindow.init(text_buffer_ptr, 5, 100);
-        try display_windows.append(display_window_ptr);
-
-        text_buffers.items[0].display_windows[0] = display_window_ptr;
+        const text_buffers = std.ArrayList(*TextBuffer).init(ally);
+        const display_windows = std.ArrayList(*DisplayWindow).init(ally);
 
         return Self{
             .ally = ally,
@@ -359,13 +400,43 @@ pub const Server = struct {
         };
     }
 
-    // TODO: better name
-    pub fn send_text(self: *Server) !void {
+    pub fn createNewTextBuffer(self: *Self, text: []const u8) !void {
+        var text_buffer_ptr = try self.ally.create(TextBuffer);
+        text_buffer_ptr.* = try TextBuffer.init(self.ally, text);
+        try self.text_buffers.append(text_buffer_ptr);
+
+        var display_window_ptr = try self.ally.create(DisplayWindow);
+        display_window_ptr.* = DisplayWindow.init(text_buffer_ptr, 5, 100);
+        try self.display_windows.append(display_window_ptr);
+
+        self.text_buffers.items[0].display_windows[0] = display_window_ptr;
+    }
+
+    pub fn sendText(self: *Server) !void {
         var client = self.clients.items[0];
         var text_buffer = self.text_buffers.items[0];
         var display_window = text_buffer.display_windows[0];
         const message = try display_window.renderTextArea();
-        try client.writer().writeAll(message);
+        try message.writeTo(client.writer());
+        try client.writeEndByte();
+    }
+
+    pub fn acceptOpenFileRequest(self: *Server) !void {
+        var request_string: []const u8 = try self.clients.items[0].readPacket(self.ally);
+        var request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        if (mem.eql(u8, "openFile", request.method)) {
+            const text = try openFileAndRead(self.ally, request.params.string);
+            try self.createNewTextBuffer(text);
+        } else {
+            return error.UnrecognizedMethod;
+        }
+    }
+
+    /// Caller owns the memory.
+    fn openFileAndRead(ally: *mem.Allocator, path: []const u8) ![]u8 {
+        var file = try std.fs.openFileAbsolute(path, .{});
+        defer file.close();
+        return try file.readToEndAlloc(ally, std.math.maxInt(usize));
     }
 };
 
@@ -442,13 +513,24 @@ pub const ClientServerRepresentation = struct {
     write_stream: os.fd_t,
 
     const Self = @This();
+    const end_of_message = '\x17';
+    const max_message_size: usize = 1024 * 8;
 
     pub fn reader(self: Self) std.fs.File.Reader {
         return pipeToFile(self.read_stream).reader();
     }
 
+    /// Caller owns the memory.
+    pub fn readPacket(self: Self, ally: *mem.Allocator) ![]u8 {
+        return try self.reader().readUntilDelimiterAlloc(ally, end_of_message, max_message_size);
+    }
+
     pub fn writer(self: Self) std.fs.File.Writer {
         return pipeToFile(self.write_stream).writer();
+    }
+
+    pub fn writeEndByte(self: Self) !void {
+        try self.writer().writeByte(end_of_message);
     }
 
     fn pipeToFile(fd: os.fd_t) std.fs.File {
@@ -477,6 +559,7 @@ pub const Application = struct {
     ) !?Self {
         switch (concurrency_model) {
             .fork => {
+                // FIXME: it is broken after we did a proper roundtrip for threaded mode.
                 var transport = try Transport.init(transport_kind);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
@@ -487,16 +570,8 @@ pub const Application = struct {
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    const content = readInput(ally) catch |err| switch (err) {
-                        error.FileNotSupplied => {
-                            std.debug.print("No file supplied\n{s}", .{help_string});
-                            std.os.exit(1);
-                        },
-                        else => return err,
-                    };
-
-                    var server = try Server.init(ally, transport.clientRepresentationForServer(), content);
-                    try server.send_text();
+                    var server = try Server.init(ally, transport.clientRepresentationForServer());
+                    try server.sendText();
                     return null;
                 } else {
                     // Client
@@ -529,15 +604,9 @@ pub const Application = struct {
     }
 
     fn startServerThread(ally: *mem.Allocator, transport: Transport) !void {
-        const content = readInput(ally) catch |err| switch (err) {
-            error.FileNotSupplied => {
-                std.debug.print("No file supplied\n{s}", .{help_string});
-                std.os.exit(1);
-            },
-            else => return err,
-        };
-        var server = try Server.init(ally, transport.clientRepresentationForServer(), content);
-        try server.send_text();
+        var server = try Server.init(ally, transport.clientRepresentationForServer());
+        try server.acceptOpenFileRequest();
+        try server.sendText();
     }
 };
 
@@ -549,7 +618,11 @@ pub fn main() anyerror!void {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
-        try client.accept();
+
+        // TODO: pass a file path here.
+        try client.sendFileToOpen();
+        try client.acceptText();
+
         while (true) {
             if (client.ui.next_key()) |key| {
                 switch (key.code) {
@@ -923,23 +996,4 @@ fn readInput(ally: *mem.Allocator) ![]u8 {
     };
     defer file.close();
     return try file.readToEndAlloc(ally, std.math.maxInt(usize));
-}
-
-fn filePathForReading(ally: *mem.Allocator) ![:0]u8 {
-    var arg_it = std.process.args();
-    _ = try arg_it.next(ally) orelse unreachable;
-    if (arg_it.next(ally)) |file_name_delimited| {
-        // V-style, the best style
-        // FIXME: how to get a string cwd?
-        const cwd_path = system.cmd("pwd");
-        return std.fs.path.resolve(ally, []const []u8{ cwd_path, file_name_delimited });
-    } else {
-        return error.FileNotSupplied;
-    }
-}
-
-fn openFileAndRead(ally: *mem.Allocator, path: [:0]u8) ![]u8 {
-    var file = try std.fs.cwd().openFile(file_name, .{});
-    defer file.close();
-    return try file.readToEndAlloc(ally, file);
 }

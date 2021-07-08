@@ -14,7 +14,7 @@ const std = @import("std");
 const json = std.json;
 const testing = std.testing;
 
-const jsonrpc_version = "2.0";
+pub const jsonrpc_version = "2.0";
 const default_parse_options = json.ParseOptions{
     .allocator = null,
     .duplicate_field_behavior = .Error,

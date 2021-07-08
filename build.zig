@@ -5,9 +5,6 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("kisa", "src/main.zig");
-    exe.addPackagePath("ncurses", "zig-ncurses/lib.zig");
-    exe.linkLibC();
-    exe.linkSystemLibrary("curses");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
