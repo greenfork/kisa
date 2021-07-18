@@ -309,7 +309,8 @@ pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
     server: ClientServerRepresentation,
-    last_message_id: i64 = 0,
+    // TODO: add client ID which is received from the Server on connect.
+    last_message_id: u32 = 0,
 
     const Self = @This();
 
@@ -322,22 +323,11 @@ pub const Client = struct {
     }
 
     // TODO: better name
-    pub fn accept(self: *Client) !void {
-        var buf: [4096]u8 = undefined;
-        const bytes_read = try self.server.reader().read(buf[0..]);
-        var split_it = mem.split(buf[0..bytes_read], "|");
-        const slice = split_it.next().?;
-        const first_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
-        const max_line_number = try std.fmt.parseInt(u32, split_it.next().?, 10);
-        try self.ui.draw(slice, first_line_number, max_line_number);
-    }
-
-    // TODO: better name
     pub fn acceptText(self: *Client) !void {
         // FIXME: use a fixed size buffer to receive messages instead of allocator.
-        const request_string = try self.server.readPacket(self.ally);
+        const request_string = try self.server.readPacketAlloc(self.ally);
         defer self.ally.free(request_string);
-        const request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        const request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
         defer request.parseFree(self.ally);
         if (mem.eql(u8, "draw", request.method)) {
             const params = request.params.array;
@@ -359,6 +349,29 @@ pub const Client = struct {
         defer self.ally.free(message.params.string);
         try message.writeTo(self.server.writer());
         try self.server.writeEndByte();
+    }
+
+    pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
+        const id = @intCast(i64, self.nextMessageId());
+        const message = KeypressRequest.init(
+            .{ .integer = id },
+            "keypress",
+            key,
+        );
+        try message.writeTo(self.server.writer());
+        try self.server.writeEndByte();
+        try self.waitForResponse(id);
+    }
+
+    pub fn waitForResponse(self: *Self, id: i64) !void {
+        _ = self;
+        _ = id;
+        return;
+    }
+
+    pub fn nextMessageId(self: *Self) u64 {
+        self.last_message_id += 1;
+        return self.last_message_id;
     }
 
     /// Caller owns the memory.
@@ -437,9 +450,9 @@ pub const Server = struct {
     }
 
     pub fn acceptOpenFileRequest(self: *Server) !void {
-        var request_string: []const u8 = try self.clients.items[0].readPacket(self.ally);
+        var request_string: []const u8 = try self.clients.items[0].readPacketAlloc(self.ally);
         defer self.ally.free(request_string);
-        var request = try jsonrpc.SimpleRequest.parse(self.ally, request_string);
+        var request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
         defer request.parseFree(self.ally);
         if (mem.eql(u8, "openFile", request.method)) {
             const text = try openFileAndRead(self.ally, request.params.string);
@@ -447,6 +460,25 @@ pub const Server = struct {
             try self.createNewTextBuffer(text);
         } else {
             return error.UnrecognizedMethod;
+        }
+    }
+
+    pub fn loop(self: *Server) !void {
+        var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        // var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        // var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        while (true) {
+            const packet = try self.clients.items[0].readPacket(&packet_buf);
+            // const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+            std.debug.print("packet: {s}\n", .{packet});
+
+            // if (mem.eql(u8, "keypress", method)) {
+            //     // const keypress_message = try KeypressRequest.parse(&message_buf, packet);
+            //     const keypress_message = try KeypressRequest.parseAlloc(self.ally, packet);
+            //     _ = keypress_message;
+            // } else {
+            //     @panic("unknown method in server loop");
+            // }
         }
     }
 
@@ -531,16 +563,26 @@ pub const ClientServerRepresentation = struct {
     write_stream: os.fd_t,
 
     const Self = @This();
+    // TODO: use just the curly/square braces to determine the end of a message.
     const end_of_message = '\x17';
-    const max_message_size: usize = 1024 * 8;
+    pub const max_packet_size: usize = 1024 * 16;
 
     pub fn reader(self: Self) std.fs.File.Reader {
         return pipeToFile(self.read_stream).reader();
     }
 
+    /// Returns the slice with the length of a received packet.
+    pub fn readPacket(self: Self, buf: []u8) ![]u8 {
+        if (try self.reader().readUntilDelimiterOrEof(buf, end_of_message)) |packet| {
+            return packet;
+        } else {
+            return error.EndOfStream;
+        }
+    }
+
     /// Caller owns the memory.
-    pub fn readPacket(self: Self, ally: *mem.Allocator) ![]u8 {
-        return try self.reader().readUntilDelimiterAlloc(ally, end_of_message, max_message_size);
+    pub fn readPacketAlloc(self: Self, ally: *mem.Allocator) ![]u8 {
+        return try self.reader().readUntilDelimiterAlloc(ally, end_of_message, max_packet_size);
     }
 
     pub fn writer(self: Self) std.fs.File.Writer {
@@ -626,6 +668,7 @@ pub const Application = struct {
         defer server.deinit();
         try server.acceptOpenFileRequest();
         try server.sendText();
+        try server.loop();
     }
 };
 
@@ -649,6 +692,7 @@ pub fn main() anyerror!void {
                         if (key.is_ctrl('c')) {
                             break;
                         }
+                        try client.sendKeypress(key);
                     },
                     else => {
                         std.debug.print("Unrecognized key type: {}\r\n", .{key});
@@ -660,6 +704,8 @@ pub fn main() anyerror!void {
     }
 }
 
+pub const KeypressRequest = jsonrpc.Request(Keys.Key);
+
 /// Representation of a frontend-agnostic "key" which is supposed to encode any possible key
 /// unambiguously. All UI frontends are supposed to provide a `Key` struct out of their `next_key`
 /// function for consumption by the backend.
@@ -669,6 +715,15 @@ pub const Keys = struct {
         arrow_down,
         arrow_left,
         arrow_right,
+
+        pub fn jsonStringify(
+            value: KeySym,
+            options: std.json.StringifyOptions,
+            out_stream: anytype,
+        ) @TypeOf(out_stream).Error!void {
+            _ = options;
+            try out_stream.writeAll(std.meta.tagName(value));
+        }
     };
 
     pub const MouseButton = enum {
@@ -677,6 +732,15 @@ pub const Keys = struct {
         right,
         scroll_up,
         scroll_down,
+
+        pub fn jsonStringify(
+            value: MouseButton,
+            options: std.json.StringifyOptions,
+            out_stream: anytype,
+        ) @TypeOf(out_stream).Error!void {
+            _ = options;
+            try out_stream.writeAll(std.meta.tagName(value));
+        }
     };
 
     pub const KeyKind = enum {
@@ -689,7 +753,7 @@ pub const Keys = struct {
     };
 
     pub const KeyCode = union(KeyKind) {
-        unrecognized: void,
+        unrecognized: u0,
         unicode_codepoint: u32,
         function: u8,
         keysym: KeySym,
