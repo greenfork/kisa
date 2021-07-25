@@ -5,6 +5,7 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("kisa", "src/main.zig");
+    exe.addPackagePath("yaml", "zig-yaml/src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();

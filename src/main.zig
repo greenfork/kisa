@@ -3,6 +3,7 @@ const os = std.os;
 const io = std.io;
 const mem = std.mem;
 const jsonrpc = @import("jsonrpc.zig");
+const yaml = @import("yaml");
 
 /// * Mode - a specific state which decides what set of button keymaps we use. For example,
 ///   "normal" mode allows easy navigation, whereas "insert" mode allows character typeing.
@@ -10,35 +11,52 @@ const jsonrpc = @import("jsonrpc.zig");
 ///   Action can a Command or a Query.
 /// * Key - a first part of a Keybinding which represents a pressed key that corresponds to
 ///   a number of actions.
-pub const Config = struct {
-    keymap: Keymap,
+pub const ConfigContainer = struct { // :)
+    source: yaml.Yaml,
+    config: Config,
 
-    pub const Keymap = struct {
-        modes: []Keymode,
+    pub const Config = struct {
+        keymap: Keymap,
+        source: yaml.Yaml,
+
+        pub const Keymap = struct {
+            modes: []Keymode,
+        };
+
+        pub const Keybinding = struct {
+            key: Keys.Key,
+            actions: []Action,
+        };
+
+        pub const Keymode = struct {
+            name: []const u8,
+            default: Action,
+            // Since we want to use automatic parsing for now, we use an array of kebindings instead
+            // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
+            // search shouldn't be a bottleneck.
+            // keybindings: std.AutoHashMap(Keys.Key, []Action),
+            keybindings: []Keybinding,
+        };
+
+        pub const Action = []const u8;
     };
-
-    pub const Keybinding = struct {
-        key: Keys.Key,
-        actions: []Action,
-    };
-
-    pub const Keymode = struct {
-        name: []const u8,
-        default: Action,
-        // Since we want to use automatic parsing for now, we use an array of kebindings instead
-        // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
-        // search shouldn't be a bottleneck.
-        // keybindings: std.AutoHashMap(Keys.Key, []Action),
-        keybindings: []Keybinding,
-    };
-
-    pub const Action = []const u8;
 
     const Self = @This();
 
-    pub fn parse(path: []const u8) !Self {
-        _ = path;
-        return Self{ .keymap = undefined };
+    pub fn parse(ally: *mem.Allocator, path: []const u8) !Self {
+        var file = try std.fs.openFileAbsolute(path, .{});
+        defer file.close();
+        const text = try file.readToEndAlloc(ally, std.math.maxInt(usize));
+        defer ally.free(text);
+        var untyped = try yaml.Yaml.load(ally, text);
+        errdefer untyped.deinit();
+
+        const config = try untyped.parse(Config);
+        return Self{ .config = config, .source = untyped };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.source.deinit();
     }
 };
 
@@ -438,7 +456,7 @@ pub const Server = struct {
     clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
-    config: Config,
+    config: ConfigContainer,
 
     const Self = @This();
 
@@ -464,6 +482,7 @@ pub const Server = struct {
         }
         self.text_buffers.deinit();
         self.display_windows.deinit();
+        self.config.deinit();
     }
 
     pub fn createNewTextBuffer(self: *Self, text: []const u8) !void {
@@ -521,9 +540,10 @@ pub const Server = struct {
         }
     }
 
-    fn readConfig(ally: *mem.Allocator) !Config {
-        _ = ally;
-        return Config.parse("kisarc.yml");
+    fn readConfig(ally: *mem.Allocator) !ConfigContainer {
+        var path_buf: [256]u8 = undefined;
+        const path = try std.fs.cwd().realpath("kisarc.yml", &path_buf);
+        return ConfigContainer.parse(ally, path);
     }
 
     /// Caller owns the memory.
