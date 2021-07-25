@@ -468,14 +468,15 @@ pub const Server = struct {
         var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
         var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
         while (true) {
-            const packet = try self.clients.items[0].readPacket(&packet_buf);
-            const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+            if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
+                const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
 
-            if (mem.eql(u8, "keypress", method)) {
-                const keypress_message = try KeypressRequest.parse(&message_buf, packet);
-                std.debug.print("keypress_message: {}\n", .{keypress_message});
-            } else {
-                @panic("unknown method in server loop");
+                if (mem.eql(u8, "keypress", method)) {
+                    const keypress_message = try KeypressRequest.parse(&message_buf, packet);
+                    std.debug.print("keypress_message: {}\n", .{keypress_message});
+                } else {
+                    @panic("unknown method in server loop");
+                }
             }
         }
     }
@@ -570,12 +571,8 @@ pub const ClientServerRepresentation = struct {
     }
 
     /// Returns the slice with the length of a received packet.
-    pub fn readPacket(self: Self, buf: []u8) ![]u8 {
-        if (try self.reader().readUntilDelimiterOrEof(buf, end_of_message)) |packet| {
-            return packet;
-        } else {
-            return error.EndOfStream;
-        }
+    pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
+        return try self.reader().readUntilDelimiterOrEof(buf, end_of_message);
     }
 
     /// Caller owns the memory.
@@ -610,6 +607,10 @@ pub const Application = struct {
         fork,
     };
 
+    /// Start `Server` instance on background and `Client` instance on foreground. This function
+    /// returns `null` when it launches a server instance and no actions should be performed,
+    /// currently it is only relevant for `fork` concurrency model. When this function returns
+    /// `Application` instance, this is client code.
     pub fn start(
         ally: *mem.Allocator,
         concurrency_model: ConcurrencyModel,
@@ -617,7 +618,6 @@ pub const Application = struct {
     ) !?Self {
         switch (concurrency_model) {
             .fork => {
-                // FIXME: it is broken after we did a proper roundtrip for threaded mode.
                 var transport = try Transport.init(transport_kind);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
@@ -628,8 +628,7 @@ pub const Application = struct {
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    var server = try Server.init(ally, transport.clientRepresentationForServer());
-                    try server.sendText();
+                    try startServerThread(ally, transport);
                     return null;
                 } else {
                     // Client
