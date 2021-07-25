@@ -12,12 +12,6 @@ const yaml = @import("yaml");
 // * Key - a first part of a Keybinding which represents a pressed key that corresponds to
 //   a number of actions.
 
-// insert:
-//   default: insert_character
-//   ctrl-meta-c: quit
-//   ctrl-s: save
-//   meta-d: delete-word
-
 pub const Config = struct {
     keymap: Keymap,
     source: yaml.Yaml,
@@ -123,8 +117,7 @@ pub const Config = struct {
                         try mode.default.append(key_to_binding_entry.value_ptr.string);
                     } else {
                         var keybinding = Keybinding{
-                            // TODO: [0] should be properly fixed.
-                            .key = Keys.Key.ascii(key_representation[0]),
+                            .key = try parseKeyDefinition(key_representation),
                             .actions = std.ArrayList(Action).init(ally),
                         };
                         switch (key_to_binding_entry.value_ptr.*) {
@@ -147,6 +140,61 @@ pub const Config = struct {
 
         return Self{ .keymap = keymap, .source = untyped };
     }
+
+    fn parseKeyDefinition(string: []const u8) !Keys.Key {
+        if (string.len == 1) {
+            return Keys.Key.ascii(string[0]);
+        } else if (special_keycode_map.get(string)) |keycode| {
+            return Keys.Key{ .code = keycode };
+        } else {
+            var key = Keys.Key{ .code = undefined };
+            var it = mem.split(string, "-");
+            while (it.next()) |part| {
+                if (part.len == 1) {
+                    key.code = Keys.Key.ascii(part[0]).code;
+                    return key;
+                } else if (special_keycode_map.get(part)) |keycode| {
+                    key.code = keycode;
+                    return key;
+                } else if (mem.eql(u8, "ctrl", part)) {
+                    key.addCtrl();
+                } else if (mem.eql(u8, "shift", part)) {
+                    key.addShift();
+                } else if (mem.eql(u8, "alt", part)) {
+                    key.addAlt();
+                } else if (mem.eql(u8, "super", part)) {
+                    key.addSuper();
+                } else {
+                    return error.UnknownKeyDefinition;
+                }
+            }
+            return error.UnknownKeyDefinition;
+        }
+    }
+
+    const special_keycode_map = std.ComptimeStringMap(Keys.KeyCode, .{
+        .{ "arrow_up", .{ .keysym = .arrow_up } },
+        .{ "arrow_down", .{ .keysym = .arrow_down } },
+        .{ "arrow_left", .{ .keysym = .arrow_left } },
+        .{ "arrow_right", .{ .keysym = .arrow_right } },
+        .{ "mouse_button_left", .{ .mouse_button = .left } },
+        .{ "mouse_button_middle", .{ .mouse_button = .middle } },
+        .{ "mouse_button_right", .{ .mouse_button = .right } },
+        .{ "mouse_scroll_up", .{ .mouse_button = .scroll_up } },
+        .{ "mouse_scroll_down", .{ .mouse_button = .scroll_down } },
+        .{ "f1", .{ .function = 1 } },
+        .{ "f2", .{ .function = 2 } },
+        .{ "f3", .{ .function = 3 } },
+        .{ "f4", .{ .function = 4 } },
+        .{ "f5", .{ .function = 5 } },
+        .{ "f6", .{ .function = 6 } },
+        .{ "f7", .{ .function = 7 } },
+        .{ "f8", .{ .function = 8 } },
+        .{ "f9", .{ .function = 9 } },
+        .{ "f10", .{ .function = 10 } },
+        .{ "f11", .{ .function = 11 } },
+        .{ "f12", .{ .function = 12 } },
+    });
 
     pub fn deinit(self: *Self) void {
         self.source.deinit();
@@ -843,7 +891,7 @@ pub fn main() anyerror!void {
             if (client.ui.next_key()) |key| {
                 switch (key.code) {
                     .unicode_codepoint => {
-                        if (key.is_ctrl('c')) {
+                        if (key.isCtrl('c')) {
                             break;
                         }
                         try client.sendKeypress(key);
@@ -926,29 +974,54 @@ pub const Keys = struct {
         const num_lock_bit  = @as(u8, 1 << 7);
         // zig fmt: on
 
-        pub fn has_shift(self: Key) bool {
+        pub fn hasShift(self: Key) bool {
             return (self.modifiers & shift_bit) != 0;
         }
-        pub fn has_alt(self: Key) bool {
+        pub fn hasAlt(self: Key) bool {
             return (self.modifiers & alt_bit) != 0;
         }
-        pub fn has_ctrl(self: Key) bool {
+        pub fn hasCtrl(self: Key) bool {
             return (self.modifiers & ctrl_bit) != 0;
         }
-        pub fn has_super(self: Key) bool {
+        pub fn hasSuper(self: Key) bool {
             return (self.modifiers & super_bit) != 0;
         }
-        pub fn has_hyper(self: Key) bool {
+        pub fn hasHyper(self: Key) bool {
             return (self.modifiers & hyper_bit) != 0;
         }
-        pub fn has_meta(self: Key) bool {
+        pub fn hasMeta(self: Key) bool {
             return (self.modifiers & meta_bit) != 0;
         }
-        pub fn has_caps_lock(self: Key) bool {
+        pub fn hasCapsLock(self: Key) bool {
             return (self.modifiers & caps_lock_bit) != 0;
         }
-        pub fn has_num_lock(self: Key) bool {
+        pub fn hasNumLock(self: Key) bool {
             return (self.modifiers & num_lock_bit) != 0;
+        }
+
+        pub fn addShift(self: *Key) void {
+            self.modifiers = self.modifiers | shift_bit;
+        }
+        pub fn addAlt(self: *Key) void {
+            self.modifiers = self.modifiers | alt_bit;
+        }
+        pub fn addCtrl(self: *Key) void {
+            self.modifiers = self.modifiers | ctrl_bit;
+        }
+        pub fn addSuper(self: *Key) void {
+            self.modifiers = self.modifiers | super_bit;
+        }
+        pub fn addHyper(self: *Key) void {
+            self.modifiers = self.modifiers | hyper_bit;
+        }
+        pub fn addMeta(self: *Key) void {
+            self.modifiers = self.modifiers | meta_bit;
+        }
+        pub fn addCapsLock(self: *Key) void {
+            self.modifiers = self.modifiers | caps_lock_bit;
+        }
+        pub fn addNumLock(self: *Key) void {
+            self.modifiers = self.modifiers | num_lock_bit;
         }
 
         // TODO: change scope to private
@@ -962,11 +1035,11 @@ pub const Keys = struct {
             }
             return length;
         }
-        pub fn is_ascii(self: Key) bool {
+        pub fn isAscii(self: Key) bool {
             return self.code == .unicode_codepoint and self.utf8len() == 1;
         }
-        pub fn is_ctrl(self: Key, character: u8) bool {
-            return self.is_ascii() and self.utf8[0] == character and self.modifiers == ctrl_bit;
+        pub fn isCtrl(self: Key, character: u8) bool {
+            return self.isAscii() and self.utf8[0] == character and self.modifiers == ctrl_bit;
         }
 
         pub fn ascii(character: u8) Key {
@@ -977,7 +1050,7 @@ pub const Keys = struct {
         }
         pub fn ctrl(character: u8) Key {
             var key = ascii(character);
-            key.modifiers = ctrl_bit;
+            key.addCtrl();
             return key;
         }
 
@@ -991,7 +1064,30 @@ pub const Keys = struct {
             if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
                 switch (value.code) {
                     .unicode_codepoint => |val| {
-                        // TODO: modifier keys not implemented.
+                        if (value.hasNumLock()) {
+                            try std.fmt.format(writer, "num_lock-", .{});
+                        }
+                        if (value.hasCapsLock()) {
+                            try std.fmt.format(writer, "caps_lock-", .{});
+                        }
+                        if (value.hasMeta()) {
+                            try std.fmt.format(writer, "meta-", .{});
+                        }
+                        if (value.hasHyper()) {
+                            try std.fmt.format(writer, "hyper-", .{});
+                        }
+                        if (value.hasSuper()) {
+                            try std.fmt.format(writer, "super-", .{});
+                        }
+                        if (value.hasCtrl()) {
+                            try std.fmt.format(writer, "ctrl-", .{});
+                        }
+                        if (value.hasAlt()) {
+                            try std.fmt.format(writer, "alt-", .{});
+                        }
+                        if (value.hasShift()) {
+                            try std.fmt.format(writer, "shift-", .{});
+                        }
                         try std.fmt.format(writer, "{c}", .{@intCast(u8, val)});
                     },
                     .function => |val| try std.fmt.format(writer, "F{d}", .{val}),
@@ -1009,11 +1105,11 @@ pub const Keys = struct {
 };
 
 test "keys" {
-    try std.testing.expect(!Keys.Key.ascii('c').has_ctrl());
-    try std.testing.expect(Keys.Key.ctrl('c').has_ctrl());
-    try std.testing.expect(Keys.Key.ascii('c').is_ascii());
-    try std.testing.expect(Keys.Key.ctrl('c').is_ascii());
-    try std.testing.expect(Keys.Key.ctrl('c').is_ctrl('c'));
+    try std.testing.expect(!Keys.Key.ascii('c').hasCtrl());
+    try std.testing.expect(Keys.Key.ctrl('c').hasCtrl());
+    try std.testing.expect(Keys.Key.ascii('c').isAscii());
+    try std.testing.expect(Keys.Key.ctrl('c').isAscii());
+    try std.testing.expect(Keys.Key.ctrl('c').isCtrl('c'));
 }
 
 /// UI frontent. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
