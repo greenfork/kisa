@@ -8,8 +8,3 @@ keymap:
       - cursorMoveDown
       - cursorMoveRight
     default: noop
-  # insert:
-  #   default: insert_character
-  #   ctrl-meta-c: quit
-  #   ctrl-s: save
-  #   meta-d: delete-word

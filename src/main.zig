@@ -12,18 +12,18 @@ const yaml = @import("yaml");
 // * Key - a first part of a Keybinding which represents a pressed key that corresponds to
 //   a number of actions.
 
+// insert:
+//   default: insert_character
+//   ctrl-meta-c: quit
+//   ctrl-s: save
+//   meta-d: delete-word
+
 pub const Config = struct {
     keymap: Keymap,
     source: yaml.Yaml,
 
     pub const Keymap = struct {
         modes: std.ArrayList(Keymode),
-    };
-
-    // TODO: use HashMap for keybindings.
-    pub const Keybinding = struct {
-        key: Keys.Key,
-        actions: std.ArrayList(Action),
     };
 
     pub const Keymode = struct {
@@ -36,9 +36,67 @@ pub const Config = struct {
         keybindings: std.ArrayList(Keybinding),
     };
 
+    // TODO: use HashMap for keybindings.
+    pub const Keybinding = struct {
+        key: Keys.Key,
+        actions: std.ArrayList(Action),
+    };
+
     pub const Action = []const u8;
 
     const Self = @This();
+
+    pub fn format(
+        value: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
+            const start_fmt =
+                \\Config:
+                \\  keymap:
+                \\
+            ;
+            const mode_fmt =
+                \\    {s}:
+                \\
+            ;
+            const keybinding_single_fmt =
+                \\      {s}: {s}
+                \\
+            ;
+            const keybinding_key_fmt =
+                \\      {s}:
+                \\
+            ;
+            const keybinding_value_fmt =
+                \\        - {s}
+                \\
+            ;
+            try std.fmt.format(writer, start_fmt, .{});
+            for (value.keymap.modes.items) |mode| {
+                try std.fmt.format(writer, mode_fmt, .{mode.name});
+                try std.fmt.format(writer, keybinding_single_fmt, .{ "default", mode.default.items[0] });
+                for (mode.keybindings.items) |keybinding| {
+                    if (keybinding.actions.items.len == 1) {
+                        try std.fmt.format(writer, keybinding_single_fmt, .{
+                            keybinding.key,
+                            keybinding.actions.items[0],
+                        });
+                    } else {
+                        try std.fmt.format(writer, keybinding_key_fmt, .{keybinding.key});
+                        for (keybinding.actions.items) |action| {
+                            try std.fmt.format(writer, keybinding_value_fmt, .{action});
+                        }
+                    }
+                }
+            }
+        } else {
+            @compileError("Unknown format character for Config: '" ++ fmt ++ "'");
+        }
+    }
 
     pub fn parse(ally: *mem.Allocator, path: []const u8) !Self {
         var file = try std.fs.openFileAbsolute(path, .{});
@@ -49,7 +107,6 @@ pub const Config = struct {
         errdefer untyped.deinit();
 
         var keymap = Keymap{ .modes = std.ArrayList(Keymode).init(ally) };
-
         const map = untyped.docs.items[0].map;
         if (map.get("keymap")) |keymap_value| {
             var keymap_it = keymap_value.map.iterator();
@@ -61,15 +118,13 @@ pub const Config = struct {
                 };
                 var mode_it = mode_to_keybindings_entry.value_ptr.map.iterator();
                 while (mode_it.next()) |key_to_binding_entry| {
-                    // TODO: [0] should be properly fixed.
-                    const key_representation = key_to_binding_entry.key_ptr.*[0];
-                    if (mem.eql(u8, "default", key_to_binding_entry.key_ptr.*)) {
-                        for (key_to_binding_entry.value_ptr.list) |yaml_value| {
-                            try mode.default.append(yaml_value.string);
-                        }
+                    const key_representation = key_to_binding_entry.key_ptr.*;
+                    if (mem.eql(u8, "default", key_representation)) {
+                        try mode.default.append(key_to_binding_entry.value_ptr.string);
                     } else {
                         var keybinding = Keybinding{
-                            .key = Keys.Key.ascii(key_representation),
+                            // TODO: [0] should be properly fixed.
+                            .key = Keys.Key.ascii(key_representation[0]),
                             .actions = std.ArrayList(Action).init(ally),
                         };
                         switch (key_to_binding_entry.value_ptr.*) {
@@ -83,10 +138,10 @@ pub const Config = struct {
                                 std.debug.panic("Unimplemented config value: {}", .{key_to_binding_entry.value_ptr.*});
                             },
                         }
-
                         try mode.keybindings.append(keybinding);
                     }
                 }
+                try keymap.modes.append(mode);
             }
         }
 
@@ -567,7 +622,6 @@ pub const Server = struct {
         while (true) {
             if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
                 const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
-
                 if (mem.eql(u8, "keypress", method)) {
                     const keypress_message = try KeypressRequest.parse(&message_buf, packet);
                     std.debug.print("keypress_message: {}\n", .{keypress_message});
@@ -925,6 +979,31 @@ pub const Keys = struct {
             var key = ascii(character);
             key.modifiers = ctrl_bit;
             return key;
+        }
+
+        pub fn format(
+            value: Key,
+            comptime fmt: []const u8,
+            options: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            _ = options;
+            if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
+                switch (value.code) {
+                    .unicode_codepoint => |val| {
+                        // TODO: modifier keys not implemented.
+                        try std.fmt.format(writer, "{c}", .{@intCast(u8, val)});
+                    },
+                    .function => |val| try std.fmt.format(writer, "F{d}", .{val}),
+                    .keysym => |val| try std.fmt.format(writer, "{s}", .{std.meta.tagName(val)}),
+                    .mouse_button => |val| try std.fmt.format(writer, "{s}", .{std.meta.tagName(val)}),
+                    .mouse_position => |val| {
+                        try std.fmt.format(writer, "MousePosition {d},{d}", .{ val.x, val.y });
+                    },
+                }
+            } else {
+                @compileError("Unknown format character for Key: '" ++ fmt ++ "'");
+            }
         }
     };
 };
