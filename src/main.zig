@@ -5,41 +5,38 @@ const mem = std.mem;
 const jsonrpc = @import("jsonrpc.zig");
 const yaml = @import("yaml");
 
-/// * Mode - a specific state which decides what set of button keymaps we use. For example,
-///   "normal" mode allows easy navigation, whereas "insert" mode allows character typeing.
-/// * Action - a specific function that gets triggered upon a keypress or similar event.
-///   Action can a Command or a Query.
-/// * Key - a first part of a Keybinding which represents a pressed key that corresponds to
-///   a number of actions.
-pub const ConfigContainer = struct { // :)
+// * Mode - a specific state which decides what set of button keymaps we use. For example,
+//   "normal" mode allows easy navigation, whereas "insert" mode allows character typeing.
+// * Action - a specific function that gets triggered upon a keypress or similar event.
+//   Action can a Command or a Query.
+// * Key - a first part of a Keybinding which represents a pressed key that corresponds to
+//   a number of actions.
+
+pub const Config = struct {
+    keymap: Keymap,
     source: yaml.Yaml,
-    config: Config,
 
-    pub const Config = struct {
-        keymap: Keymap,
-        source: yaml.Yaml,
-
-        pub const Keymap = struct {
-            modes: []Keymode,
-        };
-
-        pub const Keybinding = struct {
-            key: Keys.Key,
-            actions: []Action,
-        };
-
-        pub const Keymode = struct {
-            name: []const u8,
-            default: Action,
-            // Since we want to use automatic parsing for now, we use an array of kebindings instead
-            // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
-            // search shouldn't be a bottleneck.
-            // keybindings: std.AutoHashMap(Keys.Key, []Action),
-            keybindings: []Keybinding,
-        };
-
-        pub const Action = []const u8;
+    pub const Keymap = struct {
+        modes: std.ArrayList(Keymode),
     };
+
+    // TODO: use HashMap for keybindings.
+    pub const Keybinding = struct {
+        key: Keys.Key,
+        actions: std.ArrayList(Action),
+    };
+
+    pub const Keymode = struct {
+        name: []const u8,
+        default: std.ArrayList(Action),
+        // Since we want to use automatic parsing for now, we use an array of kebindings instead
+        // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
+        // search shouldn't be a bottleneck.
+        // keybindings: std.AutoHashMap(Keys.Key, []Action),
+        keybindings: std.ArrayList(Keybinding),
+    };
+
+    pub const Action = []const u8;
 
     const Self = @This();
 
@@ -51,8 +48,49 @@ pub const ConfigContainer = struct { // :)
         var untyped = try yaml.Yaml.load(ally, text);
         errdefer untyped.deinit();
 
-        const config = try untyped.parse(Config);
-        return Self{ .config = config, .source = untyped };
+        var keymap = Keymap{ .modes = std.ArrayList(Keymode).init(ally) };
+
+        const map = untyped.docs.items[0].map;
+        if (map.get("keymap")) |keymap_value| {
+            var keymap_it = keymap_value.map.iterator();
+            while (keymap_it.next()) |mode_to_keybindings_entry| {
+                var mode = Keymode{
+                    .name = mode_to_keybindings_entry.key_ptr.*,
+                    .default = std.ArrayList(Action).init(ally),
+                    .keybindings = std.ArrayList(Keybinding).init(ally),
+                };
+                var mode_it = mode_to_keybindings_entry.value_ptr.map.iterator();
+                while (mode_it.next()) |key_to_binding_entry| {
+                    // TODO: [0] should be properly fixed.
+                    const key_representation = key_to_binding_entry.key_ptr.*[0];
+                    if (mem.eql(u8, "default", key_to_binding_entry.key_ptr.*)) {
+                        for (key_to_binding_entry.value_ptr.list) |yaml_value| {
+                            try mode.default.append(yaml_value.string);
+                        }
+                    } else {
+                        var keybinding = Keybinding{
+                            .key = Keys.Key.ascii(key_representation),
+                            .actions = std.ArrayList(Action).init(ally),
+                        };
+                        switch (key_to_binding_entry.value_ptr.*) {
+                            .list => |list| {
+                                for (list) |yaml_value| {
+                                    try keybinding.actions.append(yaml_value.string);
+                                }
+                            },
+                            .string => |string| try keybinding.actions.append(string),
+                            else => {
+                                std.debug.panic("Unimplemented config value: {}", .{key_to_binding_entry.value_ptr.*});
+                            },
+                        }
+
+                        try mode.keybindings.append(keybinding);
+                    }
+                }
+            }
+        }
+
+        return Self{ .keymap = keymap, .source = untyped };
     }
 
     pub fn deinit(self: *Self) void {
@@ -456,7 +494,7 @@ pub const Server = struct {
     clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
-    config: ConfigContainer,
+    config: Config,
 
     const Self = @This();
 
@@ -540,10 +578,10 @@ pub const Server = struct {
         }
     }
 
-    fn readConfig(ally: *mem.Allocator) !ConfigContainer {
+    fn readConfig(ally: *mem.Allocator) !Config {
         var path_buf: [256]u8 = undefined;
         const path = try std.fs.cwd().realpath("kisarc.yml", &path_buf);
-        return ConfigContainer.parse(ally, path);
+        return Config.parse(ally, path);
     }
 
     /// Caller owns the memory.
@@ -740,8 +778,8 @@ pub fn main() anyerror!void {
 
     if (try Application.start(ally, .threaded, .pipes)) |app| {
         var client = app.client;
-        try client.ui.setup();
-        defer client.ui.teardown();
+        // try client.ui.setup();
+        // defer client.ui.teardown();
 
         // TODO: pass a file path here.
         try client.sendFileToOpen();
