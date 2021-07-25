@@ -465,20 +465,18 @@ pub const Server = struct {
 
     pub fn loop(self: *Server) !void {
         var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
-        // var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
-        // var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
         while (true) {
             const packet = try self.clients.items[0].readPacket(&packet_buf);
-            // const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
-            std.debug.print("packet: {s}\n", .{packet});
+            const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
 
-            // if (mem.eql(u8, "keypress", method)) {
-            //     // const keypress_message = try KeypressRequest.parse(&message_buf, packet);
-            //     const keypress_message = try KeypressRequest.parseAlloc(self.ally, packet);
-            //     _ = keypress_message;
-            // } else {
-            //     @panic("unknown method in server loop");
-            // }
+            if (mem.eql(u8, "keypress", method)) {
+                const keypress_message = try KeypressRequest.parse(&message_buf, packet);
+                std.debug.print("keypress_message: {}\n", .{keypress_message});
+            } else {
+                @panic("unknown method in server loop");
+            }
         }
     }
 
@@ -743,17 +741,11 @@ pub const Keys = struct {
         }
     };
 
-    pub const KeyKind = enum {
-        unrecognized,
-        unicode_codepoint,
-        function,
-        keysym,
-        mouse_button,
-        mouse_position,
-    };
-
-    pub const KeyCode = union(KeyKind) {
-        unrecognized: u0,
+    pub const KeyCode = union(enum) {
+        // How to represent a null value? See discussions below
+        // https://github.com/ziglang/zig/issues/9415
+        // https://github.com/greenfork/kisa/commit/23cfb17ae335dfe044eb4f1cd798deb37b48d569#r53652535
+        // unrecognized: u0,
         unicode_codepoint: u32,
         function: u8,
         keysym: KeySym,
