@@ -1,0 +1,14 @@
+keymap:
+  normal:
+    h: cursorMoveLeft
+    j: cursorMoveDown
+    k: cursorMoveUp
+    l: cursorMoveRight
+    n:
+      - cursorMoveDown
+      - cursorMoveRight
+  insert:
+    default: insert_character
+    ctrl-meta-c: quit
+    ctrl-s: save
+    meta-d: delete-word

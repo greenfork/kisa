@@ -4,6 +4,44 @@ const io = std.io;
 const mem = std.mem;
 const jsonrpc = @import("jsonrpc.zig");
 
+/// * Mode - a specific state which decides what set of button keymaps we use. For example,
+///   "normal" mode allows easy navigation, whereas "insert" mode allows character typeing.
+/// * Action - a specific function that gets triggered upon a keypress or similar event.
+///   Action can a Command or a Query.
+/// * Key - a first part of a Keybinding which represents a pressed key that corresponds to
+///   a number of actions.
+pub const Config = struct {
+    keymap: Keymap,
+
+    pub const Keymap = struct {
+        modes: []Keymode,
+    };
+
+    pub const Keybinding = struct {
+        key: Keys.Key,
+        actions: []Action,
+    };
+
+    pub const Keymode = struct {
+        name: []const u8,
+        default: Action,
+        // Since we want to use automatic parsing for now, we use an array of kebindings instead
+        // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
+        // search shouldn't be a bottleneck.
+        // keybindings: std.AutoHashMap(Keys.Key, []Action),
+        keybindings: []Keybinding,
+    };
+
+    pub const Action = []const u8;
+
+    const Self = @This();
+
+    pub fn parse(path: []const u8) !Self {
+        _ = path;
+        return Self{ .keymap = undefined };
+    }
+};
+
 pub const MoveDirection = enum {
     up,
     down,
@@ -400,6 +438,7 @@ pub const Server = struct {
     clients: std.ArrayList(ClientServerRepresentation),
     text_buffers: std.ArrayList(*TextBuffer),
     display_windows: std.ArrayList(*DisplayWindow),
+    config: Config,
 
     const Self = @This();
 
@@ -414,6 +453,7 @@ pub const Server = struct {
             .clients = clients,
             .text_buffers = text_buffers,
             .display_windows = display_windows,
+            .config = try readConfig(ally),
         };
     }
 
@@ -438,7 +478,7 @@ pub const Server = struct {
         self.text_buffers.items[0].display_windows[0] = display_window_ptr;
     }
 
-    pub fn sendText(self: *Server) !void {
+    pub fn sendText(self: *Self) !void {
         var client = self.clients.items[0];
         var text_buffer = self.text_buffers.items[0];
         var display_window = text_buffer.display_windows[0];
@@ -449,7 +489,7 @@ pub const Server = struct {
         try client.writeEndByte();
     }
 
-    pub fn acceptOpenFileRequest(self: *Server) !void {
+    pub fn acceptOpenFileRequest(self: *Self) !void {
         var request_string: []const u8 = try self.clients.items[0].readPacketAlloc(self.ally);
         defer self.ally.free(request_string);
         var request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
@@ -463,7 +503,7 @@ pub const Server = struct {
         }
     }
 
-    pub fn loop(self: *Server) !void {
+    pub fn loop(self: *Self) !void {
         var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
         var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
         var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
@@ -479,6 +519,11 @@ pub const Server = struct {
                 }
             }
         }
+    }
+
+    fn readConfig(ally: *mem.Allocator) !Config {
+        _ = ally;
+        return Config.parse("kisarc.yml");
     }
 
     /// Caller owns the memory.

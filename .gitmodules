@@ -1,3 +1,6 @@
 [submodule "zig-ncurses"]
 	path = zig-ncurses
 	url = git@github.com:greenfork/zig-ncurses.git
+[submodule "zig-yaml"]
+	path = zig-yaml
+	url = https://github.com/kubkon/zig-yaml
