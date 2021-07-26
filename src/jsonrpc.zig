@@ -25,17 +25,17 @@ const default_parse_options = json.ParseOptions{
 /// Primitive json value which can be represented as Zig value.
 /// Includes all json values but "object". For objects one should construct a Zig struct.
 pub const Value = union(enum) {
-    boolean: bool,
-    integer: i64,
-    float: f64,
-    string: []const u8,
-    array: []const Value,
+    Bool: bool,
+    Integer: i64,
+    Float: f64,
+    String: []const u8,
+    Array: []const Value,
 };
 
 pub const IdValue = union(enum) {
-    integer: i64,
-    float: f64,
-    string: []const u8,
+    Integer: i64,
+    Float: f64,
+    String: []const u8,
 };
 
 // TODO: check that the json rpc version is correct inside this library. Probably an error.
@@ -115,9 +115,9 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Used by `std.json.stringify`.
-        pub fn jsonStringify(
+        pub fn jsonstringify(
             self: Self,
-            options: json.StringifyOptions,
+            options: json.stringifyOptions,
             out_stream: anytype,
         ) @TypeOf(out_stream).Error!void {
             if (self.id == null) {
@@ -213,9 +213,9 @@ pub fn Response(comptime ResultShape: type) type {
         }
 
         /// Used by `std.json.stringify`.
-        pub fn jsonStringify(
+        pub fn jsonstringify(
             self: Self,
-            options: json.StringifyOptions,
+            options: json.stringifyOptions,
             out_stream: anytype,
         ) @TypeOf(out_stream).Error!void {
             if (self.result == null) {
@@ -245,13 +245,13 @@ pub const SimpleResponse = Response(Value);
 // no order and for the actual use it also doesn't matter.
 
 test "parse alloc request" {
-    const params = [_]Value{ .{ .string = "Bob" }, .{ .string = "Alice" }, .{ .integer = 10 } };
-    const params_array = .{ .array = std.mem.span(&params) };
+    const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
+    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
         .params = params_array,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
@@ -259,21 +259,21 @@ test "parse alloc request" {
     const parsed = try SimpleRequest.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
     try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params.array[0].string, parsed.params.array[0].string);
-    try testing.expectEqualStrings(request.params.array[1].string, parsed.params.array[1].string);
-    try testing.expectEqual(request.params.array[2].integer, parsed.params.array[2].integer);
+    try testing.expectEqualStrings(request.params.Array[0].String, parsed.params.Array[0].String);
+    try testing.expectEqualStrings(request.params.Array[1].String, parsed.params.Array[1].String);
+    try testing.expectEqual(request.params.Array[2].Integer, parsed.params.Array[2].Integer);
     try testing.expectEqual(request.id, parsed.id);
     parsed.parseFree(testing.allocator);
 }
 
 test "parse request" {
-    const params = [_]Value{ .{ .string = "Bob" }, .{ .string = "Alice" }, .{ .integer = 10 } };
-    const params_array = .{ .array = std.mem.span(&params) };
+    const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
+    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
         .params = params_array,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
@@ -282,9 +282,9 @@ test "parse request" {
     const parsed = try SimpleRequest.parse(&buf, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
     try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params.array[0].string, parsed.params.array[0].string);
-    try testing.expectEqualStrings(request.params.array[1].string, parsed.params.array[1].string);
-    try testing.expectEqual(request.params.array[2].integer, parsed.params.array[2].integer);
+    try testing.expectEqualStrings(request.params.Array[0].String, parsed.params.Array[0].String);
+    try testing.expectEqualStrings(request.params.Array[1].String, parsed.params.Array[1].String);
+    try testing.expectEqual(request.params.Array[2].Integer, parsed.params.Array[2].Integer);
     try testing.expectEqual(request.id, parsed.id);
 }
 
@@ -488,13 +488,13 @@ test "parse complex request" {
 }
 
 test "generate request" {
-    const params = [_]Value{ .{ .string = "Bob" }, .{ .string = "Alice" }, .{ .integer = 10 } };
-    const params_array = .{ .array = std.mem.span(&params) };
+    const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
+    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
         .params = params_array,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
@@ -505,8 +505,8 @@ test "generate request" {
 }
 
 test "generate notification without ID" {
-    const params = [_]Value{ .{ .string = "Bob" }, .{ .string = "Alice" }, .{ .integer = 10 } };
-    const params_array = .{ .array = std.mem.span(&params) };
+    const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
+    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
@@ -573,7 +573,7 @@ test "generate complex request" {
         .jsonrpc = jsonrpc_version,
         .method = "draw",
         .params = params_array,
-        .id = .{ .integer = 87 },
+        .id = .{ .Integer = 87 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
@@ -662,18 +662,18 @@ test "generate complex request" {
 }
 
 test "parse success response" {
-    const data = Value{ .integer = 42 };
+    const data = Value{ .Integer = 42 };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = data,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":42,"id":63}
     ;
     const parsed = try SimpleResponse.parse(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.result.?.integer, parsed.result.?.integer);
+    try testing.expectEqual(response.result.?.Integer, parsed.result.?.Integer);
     try testing.expectEqual(response.id, parsed.id);
     parsed.parseFree(testing.allocator);
 }
@@ -683,7 +683,7 @@ test "parse error response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .@"error" = data,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","error":{"code":13,"message":"error message"},"id":63}
@@ -697,20 +697,20 @@ test "parse error response" {
 }
 
 test "parse array response" {
-    const data = [_]Value{ .{ .integer = 42 }, .{ .string = "The Answer" } };
-    const array_data = .{ .array = std.mem.span(&data) };
+    const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
+    const array_data = .{ .Array = std.mem.span(&data) };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = array_data,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
     ;
     const parsed = try SimpleResponse.parse(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.result.?.array[0].integer, parsed.result.?.array[0].integer);
-    try testing.expectEqualStrings(response.result.?.array[1].string, parsed.result.?.array[1].string);
+    try testing.expectEqual(response.result.?.Array[0].Integer, parsed.result.?.Array[0].Integer);
+    try testing.expectEqualStrings(response.result.?.Array[1].String, parsed.result.?.Array[1].String);
     try testing.expectEqual(response.id, parsed.id);
     parsed.parseFree(testing.allocator);
 }
@@ -766,7 +766,7 @@ test "parse complex response" {
     const response = MyResponse{
         .jsonrpc = jsonrpc_version,
         .result = params_array,
-        .id = .{ .integer = 98 },
+        .id = .{ .Integer = 98 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
@@ -866,11 +866,11 @@ test "parse complex response" {
 }
 
 test "generate success response" {
-    const data = Value{ .integer = 42 };
+    const data = Value{ .Integer = 42 };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .result = data,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"result":42}
@@ -885,7 +885,7 @@ test "generate error response" {
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
         .@"error" = data,
-        .id = .{ .integer = 63 },
+        .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message"}}
@@ -946,7 +946,7 @@ test "generate complex response" {
     const response = MyResponse{
         .jsonrpc = jsonrpc_version,
         .result = params_array,
-        .id = .{ .integer = 98 },
+        .id = .{ .Integer = 98 },
     };
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =

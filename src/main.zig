@@ -414,15 +414,15 @@ pub const DisplayWindow = struct {
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
         const params = try self.text_buffer.ally.create([3]jsonrpc.Value);
         params.* = [_]jsonrpc.Value{
-            .{ .string = slice },
-            .{ .integer = self.first_line_number },
-            .{ .integer = last_line_number },
+            .{ .String = slice },
+            .{ .Integer = self.first_line_number },
+            .{ .Integer = last_line_number },
         };
         return jsonrpc.SimpleRequest{
             .jsonrpc = jsonrpc.jsonrpc_version,
             .id = null,
             .method = "draw",
-            .params = .{ .array = params[0..] },
+            .params = .{ .Array = params[0..] },
         };
     }
 };
@@ -527,11 +527,11 @@ pub const Client = struct {
         const request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
         defer request.parseFree(self.ally);
         if (mem.eql(u8, "draw", request.method)) {
-            const params = request.params.array;
+            const params = request.params.Array;
             try self.ui.draw(
-                params[0].string,
-                @intCast(u32, params[1].integer),
-                @intCast(u32, params[1].integer),
+                params[0].String,
+                @intCast(u32, params[1].Integer),
+                @intCast(u32, params[1].Integer),
             );
         } else {
             return error.UnrecognizedMethod;
@@ -542,8 +542,8 @@ pub const Client = struct {
         self.last_message_id += 1;
         var message = self.emptyJsonRpcRequest();
         message.method = "openFile";
-        message.params = .{ .string = try filePathForReading(self.ally) };
-        defer self.ally.free(message.params.string);
+        message.params = .{ .String = try filePathForReading(self.ally) };
+        defer self.ally.free(message.params.String);
         try message.writeTo(self.server.writer());
         try self.server.writeEndByte();
     }
@@ -551,7 +551,7 @@ pub const Client = struct {
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
         const id = @intCast(i64, self.nextMessageId());
         const message = KeypressRequest.init(
-            .{ .integer = id },
+            .{ .Integer = id },
             "keypress",
             key,
         );
@@ -585,7 +585,7 @@ pub const Client = struct {
     fn emptyJsonRpcRequest(self: Self) jsonrpc.SimpleRequest {
         return jsonrpc.SimpleRequest{
             .jsonrpc = jsonrpc.jsonrpc_version,
-            .id = .{ .integer = self.last_message_id },
+            .id = .{ .Integer = self.last_message_id },
             .method = undefined,
             .params = undefined,
         };
@@ -644,7 +644,7 @@ pub const Server = struct {
         var display_window = text_buffer.display_windows[0];
         // TODO: freeing like this does not scale for other messages
         const message = try display_window.renderTextArea();
-        defer self.ally.free(message.params.array);
+        defer self.ally.free(message.params.Array);
         try message.writeTo(client.writer());
         try client.writeEndByte();
     }
@@ -655,7 +655,7 @@ pub const Server = struct {
         var request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
         defer request.parseFree(self.ally);
         if (mem.eql(u8, "openFile", request.method)) {
-            const text = try openFileAndRead(self.ally, request.params.string);
+            const text = try openFileAndRead(self.ally, request.params.String);
             defer self.ally.free(text);
             try self.createNewTextBuffer(text);
         } else {
