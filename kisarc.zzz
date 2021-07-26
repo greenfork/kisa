@@ -1,0 +1,17 @@
+keymap:
+  normal:
+    h: cursorMoveLeft
+    j: cursorMoveDown
+    k: cursorMoveUp
+    l: cursorMoveRight
+    n:
+      cursorMoveDown
+      cursorMoveRight
+    default: noop
+  insert:
+    default: insertCharacter
+    ctrl-alt-c: quit
+    ctrl-s: save
+    shift-d: deleteWord
+    arrow_up: cursorMoveUp
+    super-arrow_up: cursorMoveUp

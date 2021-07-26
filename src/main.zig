@@ -1,9 +1,10 @@
 const std = @import("std");
+const testing = std.testing;
 const os = std.os;
 const io = std.io;
 const mem = std.mem;
 const jsonrpc = @import("jsonrpc.zig");
-const yaml = @import("yaml");
+const zzz = @import("zzz");
 
 // * Mode - a specific state which decides what set of button keymaps we use. For example,
 //   "normal" mode allows easy navigation, whereas "insert" mode allows character typeing.
@@ -12,133 +13,109 @@ const yaml = @import("yaml");
 // * Key - a first part of a Keybinding which represents a pressed key that corresponds to
 //   a number of actions.
 
+/// Must call first `init`, then `setup` for initialization.
+/// Call `addConfigFile` to continuously add more and more config files in order of
+/// precedence from lowest to highest. After that corresponding fields such as `keymap`
+/// will be populated.
 pub const Config = struct {
+    arena: std.heap.ArenaAllocator,
+    ally: *mem.Allocator,
+    sources: std.ArrayList([]const u8),
+    tree: Tree,
     keymap: Keymap,
-    source: yaml.Yaml,
 
-    pub const Keymap = struct {
-        modes: std.ArrayList(Keymode),
+    const max_files = 32;
+    const max_nodes = 2048;
+    pub const Tree = zzz.ZTree(max_files, max_nodes);
+
+    pub const Keymap = std.AutoHashMap(EditorMode, Bindings);
+
+    pub const Bindings = struct {
+        default: Actions,
+        keys: std.AutoHashMap(Keys.Key, Actions),
     };
 
-    pub const Keymode = struct {
-        name: []const u8,
-        default: std.ArrayList(Action),
-        // Since we want to use automatic parsing for now, we use an array of kebindings instead
-        // of a hashmap. We expect our keybindings to not exceed 100 in total so linear array
-        // search shouldn't be a bottleneck.
-        // keybindings: std.AutoHashMap(Keys.Key, []Action),
-        keybindings: std.ArrayList(Keybinding),
-    };
-
-    // TODO: use HashMap for keybindings.
-    pub const Keybinding = struct {
-        key: Keys.Key,
-        actions: std.ArrayList(Action),
-    };
-
-    pub const Action = []const u8;
+    pub const Actions = std.ArrayList([]const u8);
 
     const Self = @This();
 
-    pub fn format(
-        value: Self,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = options;
-        if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
-            const start_fmt =
-                \\Config:
-                \\  keymap:
-                \\
-            ;
-            const mode_fmt =
-                \\    {s}:
-                \\
-            ;
-            const keybinding_single_fmt =
-                \\      {s}: {s}
-                \\
-            ;
-            const keybinding_key_fmt =
-                \\      {s}:
-                \\
-            ;
-            const keybinding_value_fmt =
-                \\        - {s}
-                \\
-            ;
-            try std.fmt.format(writer, start_fmt, .{});
-            for (value.keymap.modes.items) |mode| {
-                try std.fmt.format(writer, mode_fmt, .{mode.name});
-                try std.fmt.format(writer, keybinding_single_fmt, .{ "default", mode.default.items[0] });
-                for (mode.keybindings.items) |keybinding| {
-                    if (keybinding.actions.items.len == 1) {
-                        try std.fmt.format(writer, keybinding_single_fmt, .{
-                            keybinding.key,
-                            keybinding.actions.items[0],
-                        });
-                    } else {
-                        try std.fmt.format(writer, keybinding_key_fmt, .{keybinding.key});
-                        for (keybinding.actions.items) |action| {
-                            try std.fmt.format(writer, keybinding_value_fmt, .{action});
-                        }
-                    }
-                }
-            }
-        } else {
-            @compileError("Unknown format character for Config: '" ++ fmt ++ "'");
+    pub fn init(ally: *mem.Allocator) Self {
+        return Self{
+            .arena = std.heap.ArenaAllocator.init(ally),
+            .ally = undefined,
+            .sources = undefined,
+            .tree = undefined,
+            .keymap = undefined,
+        };
+    }
+
+    pub fn setup(self: *Self) !void {
+        self.ally = &self.arena.allocator;
+        self.sources = std.ArrayList([]const u8).init(self.ally);
+        self.tree = Tree{};
+        self.keymap = Keymap.init(self.ally);
+        inline for (std.meta.fields(EditorMode)) |enum_field| {
+            try self.keymap.put(@intToEnum(EditorMode, enum_field.value), Bindings{
+                .default = Actions.init(self.ally),
+                .keys = std.AutoHashMap(Keys.Key, Actions).init(self.ally),
+            });
         }
     }
 
-    pub fn parse(ally: *mem.Allocator, path: []const u8) !Self {
-        var file = try std.fs.openFileAbsolute(path, .{});
-        defer file.close();
-        const text = try file.readToEndAlloc(ally, std.math.maxInt(usize));
-        defer ally.free(text);
-        var untyped = try yaml.Yaml.load(ally, text);
-        errdefer untyped.deinit();
+    pub fn deinit(self: *Self) void {
+        self.arena.deinit();
+    }
 
-        var keymap = Keymap{ .modes = std.ArrayList(Keymode).init(ally) };
-        const map = untyped.docs.items[0].map;
-        if (map.get("keymap")) |keymap_value| {
-            var keymap_it = keymap_value.map.iterator();
-            while (keymap_it.next()) |mode_to_keybindings_entry| {
-                var mode = Keymode{
-                    .name = mode_to_keybindings_entry.key_ptr.*,
-                    .default = std.ArrayList(Action).init(ally),
-                    .keybindings = std.ArrayList(Keybinding).init(ally),
+    /// Add a config file.
+    pub fn addConfigFile(self: *Self, absolute_path: []const u8) !void {
+        var file = try std.fs.openFileAbsolute(absolute_path, .{});
+        defer file.close();
+        const text = try file.readToEndAlloc(self.ally, std.math.maxInt(usize));
+        try self.addConfig(text, false);
+    }
+
+    // TODO: add several config files loading.
+    /// Add config to current tree of configs. Several configs can be added consecutively,
+    /// order matters, configs must be added from lowest to highest precedence. When `default`
+    /// is `true`, it means that this is the very first initialization of a config and all the
+    /// values must be present, it is an error if any value is missing.
+    pub fn addConfig(self: *Self, content: []const u8, default: bool) !void {
+        const root = try self.tree.appendText(content);
+        if (root.findNth(0, .{ .String = "keymap" })) |keymap| {
+            var mode_it = keymap.nextChild(null);
+            while (mode_it) |mode| : (mode_it = keymap.nextChild(mode_it)) {
+                const mode_name = switch (mode.value) {
+                    .String => |val| val,
+                    else => return error.IncorrectModeName,
                 };
-                var mode_it = mode_to_keybindings_entry.value_ptr.map.iterator();
-                while (mode_it.next()) |key_to_binding_entry| {
-                    const key_representation = key_to_binding_entry.key_ptr.*;
-                    if (mem.eql(u8, "default", key_representation)) {
-                        try mode.default.append(key_to_binding_entry.value_ptr.string);
-                    } else {
-                        var keybinding = Keybinding{
-                            .key = try parseKeyDefinition(key_representation),
-                            .actions = std.ArrayList(Action).init(ally),
+                if (std.meta.stringToEnum(EditorMode, mode_name)) |editor_mode| {
+                    var bindings = self.keymap.getPtr(editor_mode).?;
+                    var bindings_it = mode.nextChild(null);
+                    while (bindings_it) |binding| : (bindings_it = mode.nextChild(bindings_it)) {
+                        var key_binding = blk: {
+                            if (mem.eql(u8, "default", binding.value.String)) {
+                                break :blk &bindings.default;
+                            } else {
+                                const key = try parseKeyDefinition(binding.value.String);
+                                try bindings.keys.put(key, Actions.init(self.ally));
+                                break :blk bindings.keys.getPtr(key).?;
+                            }
                         };
-                        switch (key_to_binding_entry.value_ptr.*) {
-                            .list => |list| {
-                                for (list) |yaml_value| {
-                                    try keybinding.actions.append(yaml_value.string);
-                                }
-                            },
-                            .string => |string| try keybinding.actions.append(string),
-                            else => {
-                                std.debug.panic("Unimplemented config value: {}", .{key_to_binding_entry.value_ptr.*});
-                            },
+                        var actions_it = binding.nextChild(null);
+                        while (actions_it) |action| : (actions_it = binding.nextChild(actions_it)) {
+                            const action_name = switch (action.value) {
+                                .String => |val| val,
+                                else => return error.IncorrectActionName,
+                            };
+                            try key_binding.append(action_name);
                         }
-                        try mode.keybindings.append(keybinding);
                     }
+                    if (default and bindings.default.items.len == 0) return error.MissingDefault;
+                } else {
+                    return error.UnknownMode;
                 }
-                try keymap.modes.append(mode);
             }
         }
-
-        return Self{ .keymap = keymap, .source = untyped };
     }
 
     fn parseKeyDefinition(string: []const u8) !Keys.Key {
@@ -196,10 +173,70 @@ pub const Config = struct {
         .{ "f12", .{ .function = 12 } },
     });
 
-    pub fn deinit(self: *Self) void {
-        self.source.deinit();
+    pub fn format(
+        value: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
+            const start_fmt =
+                \\Config:
+                \\  keymap:
+                \\
+            ;
+            const mode_fmt =
+                \\    {s}:
+                \\
+            ;
+            const keybinding_single_fmt =
+                \\      {s}: {s}
+                \\
+            ;
+            const keybinding_key_fmt =
+                \\      {s}:
+                \\
+            ;
+            const keybinding_value_fmt =
+                \\        {s}
+                \\
+            ;
+            try std.fmt.format(writer, start_fmt, .{});
+            var keymap_it = value.keymap.iterator();
+            while (keymap_it.next()) |keymap_entry| {
+                const mode = keymap_entry.key_ptr.*;
+                const bindings = keymap_entry.value_ptr.*;
+                try std.fmt.format(writer, mode_fmt, .{std.meta.tagName(mode)});
+                try std.fmt.format(writer, keybinding_single_fmt, .{ "default", bindings.default.items[0] });
+                var bindings_it = bindings.keys.iterator();
+                while (bindings_it.next()) |binding_entry| {
+                    const key = binding_entry.key_ptr.*;
+                    const actions = binding_entry.value_ptr.*;
+                    if (actions.items.len == 1) {
+                        try std.fmt.format(writer, keybinding_single_fmt, .{ key, actions.items[0] });
+                    } else {
+                        try std.fmt.format(writer, keybinding_key_fmt, .{key});
+                        for (actions.items) |action| {
+                            try std.fmt.format(writer, keybinding_value_fmt, .{action});
+                        }
+                    }
+                }
+            }
+        } else {
+            @compileError("Unknown format character for Config: '" ++ fmt ++ "'");
+        }
     }
 };
+
+test "add default config" {
+    var ally = testing.allocator;
+    const config_content = @embedFile("../kisarc.zzz");
+    var config = Config.init(ally);
+    defer config.deinit();
+    try config.setup();
+    try config.addConfig(config_content, true);
+}
 
 pub const MoveDirection = enum {
     up,
@@ -377,7 +414,7 @@ pub const Cursor = struct {
 
 /// Modes are different states of a display window which allow to interpret same keys as having
 /// a different meaning.
-pub const Mode = enum {
+pub const EditorMode = enum {
     normal,
     insert,
 };
@@ -391,7 +428,7 @@ pub const DisplayWindow = struct {
     text_buffer: *TextBuffer,
     cursor: Cursor,
     first_line_number: u32,
-    mode: Mode,
+    mode: EditorMode,
 
     const Self = @This();
     const Error = UI.Error || TextBuffer.Error;
@@ -405,7 +442,7 @@ pub const DisplayWindow = struct {
             .text_buffer = text_buffer,
             .cursor = Cursor{ .line = 1, .column = 1, .x = 0, .y = 0 },
             .first_line_number = 1,
-            .mode = Mode.normal,
+            .mode = .normal,
         };
     }
 
@@ -681,9 +718,13 @@ pub const Server = struct {
     }
 
     fn readConfig(ally: *mem.Allocator) !Config {
-        var path_buf: [256]u8 = undefined;
-        const path = try std.fs.cwd().realpath("kisarc.yml", &path_buf);
-        return Config.parse(ally, path);
+        // var path_buf: [256]u8 = undefined;
+        // const path = try std.fs.cwd().realpath("kisarc.zzz", &path_buf);
+        var config = Config.init(ally);
+        try config.setup();
+        try config.addConfig(@embedFile("../kisarc.zzz"), true);
+        // try config.addConfigFile(path);
+        return config;
     }
 
     /// Caller owns the memory.
@@ -880,8 +921,8 @@ pub fn main() anyerror!void {
 
     if (try Application.start(ally, .threaded, .pipes)) |app| {
         var client = app.client;
-        // try client.ui.setup();
-        // defer client.ui.teardown();
+        try client.ui.setup();
+        defer client.ui.teardown();
 
         // TODO: pass a file path here.
         try client.sendFileToOpen();
