@@ -1,9 +1,3 @@
-[submodule "zig-ncurses"]
-	path = zig-ncurses
-	url = git@github.com:greenfork/zig-ncurses.git
-[submodule "zig-yaml"]
-	path = zig-yaml
-	url = git@github.com:greenfork/zig-yaml.git
 [submodule "zzz"]
 	path = zzz
 	url = https://github.com/gruebite/zzz
