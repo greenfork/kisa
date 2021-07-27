@@ -29,10 +29,16 @@ pub const Config = struct {
     pub const Tree = zzz.ZTree(max_files, max_nodes);
 
     pub const Keymap = std.AutoHashMap(EditorMode, Bindings);
+    pub const KeysToActions = std.HashMap(
+        Keys.Key,
+        Actions,
+        Keys.Key.HashMapContext,
+        std.hash_map.default_max_load_percentage,
+    );
 
     pub const Bindings = struct {
         default: Actions,
-        keys: std.AutoHashMap(Keys.Key, Actions),
+        keys: KeysToActions,
     };
 
     pub const Actions = std.ArrayList([]const u8);
@@ -57,7 +63,7 @@ pub const Config = struct {
         inline for (std.meta.fields(EditorMode)) |enum_field| {
             try self.keymap.put(@intToEnum(EditorMode, enum_field.value), Bindings{
                 .default = Actions.init(self.ally),
-                .keys = std.AutoHashMap(Keys.Key, Actions).init(self.ally),
+                .keys = KeysToActions.init(self.ally),
             });
         }
     }
@@ -231,11 +237,70 @@ pub const Config = struct {
 
 test "add default config" {
     var ally = testing.allocator;
-    const config_content = @embedFile("../kisarc.zzz");
+    const config_content =
+        \\keymap:
+        \\  normal:
+        \\    h: cursorMoveLeft
+        \\    j: cursorMoveDown
+        \\    k: cursorMoveUp
+        \\    l: cursorMoveRight
+        \\    n:
+        \\      cursorMoveDown
+        \\      cursorMoveRight
+        \\    default: noop
+        \\  insert:
+        \\    default: insertCharacter
+        \\    ctrl-alt-c: quit
+        \\    ctrl-s: save
+        \\    shift-d: deleteWord
+        \\    arrow_up: cursorMoveUp
+        \\    super-arrow_up: cursorMoveUpSuper
+    ;
     var config = Config.init(ally);
     defer config.deinit();
     try config.setup();
     try config.addConfig(config_content, true);
+
+    const normal = config.keymap.get(.normal).?;
+    const nkeys = normal.keys;
+    const insert = config.keymap.get(.insert).?;
+    const ikeys = insert.keys;
+    const key_arrow_up = Keys.Key{ .code = .{ .keysym = .arrow_up } };
+    const key_super_arrow_up = Keys.Key{ .code = .{ .keysym = .arrow_up }, .modifiers = Keys.Key.super_bit };
+    var ctrl_alt_c = Keys.Key.ascii('c');
+    ctrl_alt_c.addCtrl();
+    ctrl_alt_c.addAlt();
+
+    try testing.expectEqual(@as(usize, 2), config.keymap.count());
+    try testing.expectEqual(@as(usize, 5), nkeys.count());
+    try testing.expectEqual(@as(usize, 5), ikeys.count());
+
+    try testing.expectEqual(@as(usize, 1), normal.default.items.len);
+    try testing.expectEqualStrings("noop", normal.default.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('h')).?.items.len);
+    try testing.expectEqualStrings("cursorMoveLeft", nkeys.get(Keys.Key.ascii('h')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('j')).?.items.len);
+    try testing.expectEqualStrings("cursorMoveDown", nkeys.get(Keys.Key.ascii('j')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('k')).?.items.len);
+    try testing.expectEqualStrings("cursorMoveUp", nkeys.get(Keys.Key.ascii('k')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('l')).?.items.len);
+    try testing.expectEqualStrings("cursorMoveRight", nkeys.get(Keys.Key.ascii('l')).?.items[0]);
+    try testing.expectEqual(@as(usize, 2), nkeys.get(Keys.Key.ascii('n')).?.items.len);
+    try testing.expectEqualStrings("cursorMoveDown", nkeys.get(Keys.Key.ascii('n')).?.items[0]);
+    try testing.expectEqualStrings("cursorMoveRight", nkeys.get(Keys.Key.ascii('n')).?.items[1]);
+
+    try testing.expectEqual(@as(usize, 1), insert.default.items.len);
+    try testing.expectEqualStrings("insertCharacter", insert.default.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.ctrl('s')).?.items.len);
+    try testing.expectEqualStrings("save", ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.shift('d')).?.items.len);
+    try testing.expectEqualStrings("deleteWord", ikeys.get(Keys.Key.shift('d')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(key_arrow_up).?.items.len);
+    try testing.expectEqualStrings("cursorMoveUp", ikeys.get(key_arrow_up).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(key_super_arrow_up).?.items.len);
+    try testing.expectEqualStrings("cursorMoveUpSuper", ikeys.get(key_super_arrow_up).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(ctrl_alt_c).?.items.len);
+    try testing.expectEqualStrings("quit", ikeys.get(ctrl_alt_c).?.items[0]);
 }
 
 pub const MoveDirection = enum {
@@ -1094,6 +1159,39 @@ pub const Keys = struct {
             key.addCtrl();
             return key;
         }
+        pub fn alt(character: u8) Key {
+            var key = ascii(character);
+            key.addAlt();
+            return key;
+        }
+        pub fn shift(character: u8) Key {
+            var key = ascii(character);
+            key.addShift();
+            return key;
+        }
+
+        // We don't use `utf8` field for equality because it only contains necessary information
+        // to represent other values and must not be considered to be always present.
+        pub fn eql(a: Key, b: Key) bool {
+            return std.meta.eql(a.code, b.code) and std.meta.eql(a.modifiers, b.modifiers);
+        }
+        pub fn hash(key: Key) u64 {
+            var hasher = std.hash.Wyhash.init(0);
+            std.hash.autoHash(&hasher, key.code);
+            std.hash.autoHash(&hasher, key.modifiers);
+            return hasher.final();
+        }
+
+        pub const HashMapContext = struct {
+            pub fn hash(self: @This(), s: Key) u64 {
+                _ = self;
+                return Key.hash(s);
+            }
+            pub fn eql(self: @This(), a: Key, b: Key) bool {
+                _ = self;
+                return Key.eql(a, b);
+            }
+        };
 
         pub fn format(
             value: Key,
