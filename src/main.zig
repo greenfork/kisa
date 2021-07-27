@@ -1235,18 +1235,18 @@ pub const Keys = struct {
                     .unicode_codepoint => |val| {
                         try std.fmt.format(writer, "{c}", .{@intCast(u8, val)});
                     },
-                    .function => |val| try std.fmt.format(writer, "F{d}", .{val}),
+                    .function => |val| try std.fmt.format(writer, "f{d}", .{val}),
                     .keysym => |val| try std.fmt.format(writer, "{s}", .{std.meta.tagName(val)}),
                     .mouse_button => |val| try std.fmt.format(writer, "{s}", .{std.meta.tagName(val)}),
                     .mouse_position => |val| {
-                        try std.fmt.format(writer, "MousePosition {d},{d}", .{ val.x, val.y });
+                        try std.fmt.format(writer, "MousePosition({d},{d})", .{ val.x, val.y });
                     },
                 }
                 try writer.writeAll(")");
             } else if (fmt.len == 0) {
                 try std.fmt.format(
                     writer,
-                    "{s}({}, .modifiers = {b}, .utf8 = {any})",
+                    "{s}{{ .code = {}, .modifiers = {b}, .utf8 = {any} }}",
                     .{ @typeName(@TypeOf(value)), value.code, value.modifiers, value.utf8 },
                 );
             } else {
