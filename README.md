@@ -277,15 +277,15 @@ choices:
 
 ### Architecture
 
+This section is volatile and may change frequently.
+
 ![Architecture diagram](docs/architecture.png)
 
-This structure is not complete, there are still some unknowns. Some
-considerations:
-
-- Do we want to organize specific modules like Autocompletion and LSP as
-  plugins utilizing direct communication with the server via JSON-RPC?
-  This will reduce the capabilities to which they can interact with the
-  system but it will provide useful insight on the design of a plugin system.
+Examples of a Generic Plugin:
+- Language Server Protocol
+- Autocompletion
+- Pair autoinsertion
+- Jumping inside a file
 
 #### Why client-server architecture?
 
