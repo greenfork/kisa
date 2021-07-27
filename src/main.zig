@@ -1102,33 +1102,18 @@ pub const Keys = struct {
             writer: anytype,
         ) !void {
             _ = options;
-            if (fmt.len == 0 or fmt.len == 1 and fmt[0] == 's') {
+            if (fmt.len == 1 and fmt[0] == 's') {
+                try writer.writeAll("Key(");
+                if (value.hasNumLock()) try writer.writeAll("num_lock-");
+                if (value.hasCapsLock()) try writer.writeAll("caps_lock-");
+                if (value.hasMeta()) try writer.writeAll("meta-");
+                if (value.hasHyper()) try writer.writeAll("hyper-");
+                if (value.hasSuper()) try writer.writeAll("super-");
+                if (value.hasCtrl()) try writer.writeAll("ctrl-");
+                if (value.hasAlt()) try writer.writeAll("alt-");
+                if (value.hasShift()) try writer.writeAll("shift-");
                 switch (value.code) {
                     .unicode_codepoint => |val| {
-                        if (value.hasNumLock()) {
-                            try std.fmt.format(writer, "num_lock-", .{});
-                        }
-                        if (value.hasCapsLock()) {
-                            try std.fmt.format(writer, "caps_lock-", .{});
-                        }
-                        if (value.hasMeta()) {
-                            try std.fmt.format(writer, "meta-", .{});
-                        }
-                        if (value.hasHyper()) {
-                            try std.fmt.format(writer, "hyper-", .{});
-                        }
-                        if (value.hasSuper()) {
-                            try std.fmt.format(writer, "super-", .{});
-                        }
-                        if (value.hasCtrl()) {
-                            try std.fmt.format(writer, "ctrl-", .{});
-                        }
-                        if (value.hasAlt()) {
-                            try std.fmt.format(writer, "alt-", .{});
-                        }
-                        if (value.hasShift()) {
-                            try std.fmt.format(writer, "shift-", .{});
-                        }
                         try std.fmt.format(writer, "{c}", .{@intCast(u8, val)});
                     },
                     .function => |val| try std.fmt.format(writer, "F{d}", .{val}),
@@ -1138,6 +1123,13 @@ pub const Keys = struct {
                         try std.fmt.format(writer, "MousePosition {d},{d}", .{ val.x, val.y });
                     },
                 }
+                try writer.writeAll(")");
+            } else if (fmt.len == 0) {
+                try std.fmt.format(
+                    writer,
+                    "{s}({}, .modifiers = {b}, .utf8 = {any})",
+                    .{ @typeName(@TypeOf(value)), value.code, value.modifiers, value.utf8 },
+                );
             } else {
                 @compileError("Unknown format character for Key: '" ++ fmt ++ "'");
             }
