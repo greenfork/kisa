@@ -41,7 +41,7 @@ pub const Config = struct {
         keys: KeysToActions,
     };
 
-    pub const Actions = std.ArrayList([]const u8);
+    pub const Actions = std.ArrayList(EventKind);
 
     const Self = @This();
 
@@ -109,11 +109,16 @@ pub const Config = struct {
                         };
                         var actions_it = binding.nextChild(null);
                         while (actions_it) |action| : (actions_it = binding.nextChild(actions_it)) {
-                            const action_name = switch (action.value) {
-                                .String => |val| val,
-                                else => return error.IncorrectActionName,
-                            };
-                            try key_binding.append(action_name);
+                            switch (action.value) {
+                                .String => |val| {
+                                    if (std.meta.stringToEnum(EventKind, val)) |event_kind| {
+                                        try key_binding.append(event_kind);
+                                    } else {
+                                        return error.UnknownKeyAction;
+                                    }
+                                },
+                                else => unreachable,
+                            }
                         }
                     }
                     if (default and bindings.default.items.len == 0) return error.MissingDefault;
@@ -240,21 +245,21 @@ test "add default config" {
     const config_content =
         \\keymap:
         \\  normal:
-        \\    h: cursorMoveLeft
-        \\    j: cursorMoveDown
-        \\    k: cursorMoveUp
-        \\    l: cursorMoveRight
+        \\    h: cursor_move_left
+        \\    j: cursor_move_down
+        \\    k: cursor_move_up
+        \\    l: cursor_move_right
         \\    n:
-        \\      cursorMoveDown
-        \\      cursorMoveRight
+        \\      cursor_move_down
+        \\      cursor_move_right
         \\    default: noop
         \\  insert:
-        \\    default: insertCharacter
+        \\    default: insert_character
         \\    ctrl-alt-c: quit
         \\    ctrl-s: save
-        \\    shift-d: deleteWord
-        \\    arrow_up: cursorMoveUp
-        \\    super-arrow_up: cursorMoveUpSuper
+        \\    shift-d: delete_word
+        \\    arrow_up: cursor_move_up
+        \\    super-arrow_up: delete_line
     ;
     var config = Config.init(ally);
     defer config.deinit();
@@ -276,31 +281,31 @@ test "add default config" {
     try testing.expectEqual(@as(usize, 5), ikeys.count());
 
     try testing.expectEqual(@as(usize, 1), normal.default.items.len);
-    try testing.expectEqualStrings("noop", normal.default.items[0]);
+    try testing.expectEqual(EventKind.noop, normal.default.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('h')).?.items.len);
-    try testing.expectEqualStrings("cursorMoveLeft", nkeys.get(Keys.Key.ascii('h')).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_left, nkeys.get(Keys.Key.ascii('h')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('j')).?.items.len);
-    try testing.expectEqualStrings("cursorMoveDown", nkeys.get(Keys.Key.ascii('j')).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('j')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('k')).?.items.len);
-    try testing.expectEqualStrings("cursorMoveUp", nkeys.get(Keys.Key.ascii('k')).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_up, nkeys.get(Keys.Key.ascii('k')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('l')).?.items.len);
-    try testing.expectEqualStrings("cursorMoveRight", nkeys.get(Keys.Key.ascii('l')).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('l')).?.items[0]);
     try testing.expectEqual(@as(usize, 2), nkeys.get(Keys.Key.ascii('n')).?.items.len);
-    try testing.expectEqualStrings("cursorMoveDown", nkeys.get(Keys.Key.ascii('n')).?.items[0]);
-    try testing.expectEqualStrings("cursorMoveRight", nkeys.get(Keys.Key.ascii('n')).?.items[1]);
+    try testing.expectEqual(EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('n')).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('n')).?.items[1]);
 
     try testing.expectEqual(@as(usize, 1), insert.default.items.len);
-    try testing.expectEqualStrings("insertCharacter", insert.default.items[0]);
+    try testing.expectEqual(EventKind.insert_character, insert.default.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.ctrl('s')).?.items.len);
-    try testing.expectEqualStrings("save", ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
+    try testing.expectEqual(EventKind.save, ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.shift('d')).?.items.len);
-    try testing.expectEqualStrings("deleteWord", ikeys.get(Keys.Key.shift('d')).?.items[0]);
+    try testing.expectEqual(EventKind.delete_word, ikeys.get(Keys.Key.shift('d')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_arrow_up).?.items.len);
-    try testing.expectEqualStrings("cursorMoveUp", ikeys.get(key_arrow_up).?.items[0]);
+    try testing.expectEqual(EventKind.cursor_move_up, ikeys.get(key_arrow_up).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_super_arrow_up).?.items.len);
-    try testing.expectEqualStrings("cursorMoveUpSuper", ikeys.get(key_super_arrow_up).?.items[0]);
+    try testing.expectEqual(EventKind.delete_line, ikeys.get(key_super_arrow_up).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(ctrl_alt_c).?.items.len);
-    try testing.expectEqualStrings("quit", ikeys.get(ctrl_alt_c).?.items[0]);
+    try testing.expectEqual(EventKind.quit, ikeys.get(ctrl_alt_c).?.items[0]);
 }
 
 pub const MoveDirection = enum {
@@ -370,23 +375,39 @@ pub const UI = struct {
 };
 
 pub const EventKind = enum {
-    none,
-    key_press,
+    noop,
     insert_character,
+    cursor_move_down,
+    cursor_move_left,
+    cursor_move_up,
+    cursor_move_right,
+    quit,
+    save,
+    delete_word,
+    delete_line,
 };
 
-pub const EventValue = union(EventKind) {
-    none: void,
-    key_press: Keys.Key,
+/// Event is a generic notion of an action happenning on the server, usually as a response to
+/// client actions.
+pub const Event = union(EventKind) {
+    noop,
+    quit,
+    save,
+    /// Value is inserted character.
     insert_character: u8,
+    /// Value is multiplier.
+    cursor_move_down: u32,
+    /// Value is multiplier.
+    cursor_move_left: u32,
+    /// Value is multiplier.
+    cursor_move_up: u32,
+    /// Value is multiplier.
+    cursor_move_right: u32,
+    /// Value is multiplier.
+    delete_word: u32,
+    /// Value is multiplier.
+    delete_line: u32,
 };
-
-pub const Event = struct {
-    value: EventValue,
-};
-
-// TODO: use `Mode`
-var current_mode_is_insert = false;
 
 /// An interface for processing all the events. Events can be of any kind, such as modifying the
 /// `TextBuffer` or just changing the cursor position on the screen. Events can spawn more events
