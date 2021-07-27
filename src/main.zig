@@ -409,67 +409,40 @@ pub const Event = union(EventKind) {
     delete_line: u32,
 };
 
-/// An interface for processing all the events. Events can be of any kind, such as modifying the
-/// `TextBuffer` or just changing the cursor position on the screen. Events can spawn more events
-/// and are processed sequentially. This should also allow us to add so called "hooks" which are
-/// actions that will be executed only when a specific event is fired, they will be useful as
-/// an extension point for user-defined hooks.
+/// Event dispatcher processes any events happening on the server. The result is usually
+/// mutation of state, firing of registered hooks if any, and sending response back to client.
 pub const EventDispatcher = struct {
     text_buffer: *TextBuffer,
 
-    pub const Error = TextBuffer.Error || DisplayWindow.Error;
     const Self = @This();
 
     pub fn init(text_buffer: *TextBuffer) Self {
         return .{ .text_buffer = text_buffer };
     }
 
-    pub fn dispatch(self: Self, event: Event) Error!void {
-        switch (event.value) {
-            .key_press => |val| {
-                if (val.utf8len() > 1) {
-                    std.debug.print("Character sequence longer than 1 byte: {s}\n", .{val.utf8});
-                    std.os.exit(1);
-                }
-                if (current_mode_is_insert) {
-                    if (val.utf8[0] == 'q') {
-                        current_mode_is_insert = false;
-                    } else {
-                        try self.dispatch(.{ .value = .{ .insert_character = val.utf8[0] } });
-                    }
-                } else {
-                    switch (val.utf8[0]) {
-                        'k' => {
-                            try self.text_buffer.display_windows[0].ui.moveCursor(.up, 1);
-                        },
-                        'j' => {
-                            try self.text_buffer.display_windows[0].ui.moveCursor(.down, 1);
-                        },
-                        'l' => {
-                            try self.text_buffer.display_windows[0].ui.moveCursor(.right, 1);
-                        },
-                        'h' => {
-                            try self.text_buffer.display_windows[0].ui.moveCursor(.left, 1);
-                        },
-                        'i' => {
-                            current_mode_is_insert = true;
-                        },
-                        else => {
-                            std.debug.print("Unknown command: {c}\n", .{val.utf8[0]});
-                            std.os.exit(1);
-                        },
-                    }
-                }
-            },
+    pub fn dispatch(self: Self, event: Event) !void {
+        switch (event) {
+            .noop => {},
+            .quit => {},
+            .save => {},
             .insert_character => |val| {
-                try self.text_buffer.insert(100, val);
-                try self.text_buffer.display_windows[0].render();
+                self.cmd.insertCharacter(val);
             },
-            else => {
-                std.debug.print("Not supported event: {}\n", .{event});
-                std.os.exit(1);
-            },
+            .cursor_move_down => {},
+            .cursor_move_left => {},
+            .cursor_move_up => {},
+            .cursor_move_right => {},
+            .delete_word => {},
+            .delete_line => {},
         }
+    }
+};
+
+/// Commands and occasionally queries is a general interface for interacting with the State
+/// of a text editor.
+pub const Commands = struct {
+    pub fn init() Commands {
+        return Commands{};
     }
 };
 
