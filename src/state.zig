@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
+const assert = std.debug.assert;
 
 /// Currently active elements that are displayed on the client.
 pub const ActiveDisplayState = struct {
@@ -92,8 +93,8 @@ pub const Workspace = struct {
         };
     }
 
-    /// Adds new text buffer, new display window. Assumes that we open a new text buffer
-    /// in the current window pane and current window tab.
+    /// Adds new text buffer, new display window, removes old display window.
+    /// Assumes that we open a new text buffer in the current window pane and current window tab.
     pub fn addTextBuffer(
         self: *Self,
         active_display_state: ActiveDisplayState,
@@ -109,6 +110,7 @@ pub const Workspace = struct {
         text_buffer.data.display_window_ids.append(display_window_id);
         var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
         window_pane.data.display_window_id = display_window.data.id;
+        self.destroyDisplayWindow(active_display_state.display_window_id);
         return ActiveDisplayState{
             .display_window_id = display_window.data.id,
             .window_pane_id = active_display_state.window_pane_id,
@@ -183,6 +185,38 @@ pub const Workspace = struct {
         }
         return null;
     }
+
+    fn destroyTextBuffer(self: *Self, id: Id) void {
+        if (self.findTextBuffer(id)) |text_buffer| {
+            self.text_buffers.remove(text_buffer);
+            text_buffer.data.deinit();
+            self.ally.destroy(text_buffer);
+        }
+    }
+
+    fn destroyDisplayWindow(self: *Self, id: Id) void {
+        if (self.findDisplayWindow(id)) |display_window| {
+            self.display_windows.remove(display_window);
+            display_window.data.deinit();
+            self.ally.destroy(display_window);
+        }
+    }
+
+    fn destroyWindowPane(self: *Self, id: Id) void {
+        if (self.findWindowPane(id)) |window_pane| {
+            self.window_panes.remove(window_pane);
+            window_pane.data.deinit();
+            self.ally.destroy(window_pane);
+        }
+    }
+
+    fn destroyWindowTab(self: *Self, id: Id) void {
+        if (self.findWindowTab(id)) |window_tab| {
+            self.window_tabs.remove(window_tab);
+            window_tab.data.deinit();
+            self.ally.destroy(window_tab);
+        }
+    }
 };
 
 test "new workspace" {
@@ -227,7 +261,7 @@ test "add text buffer to workspace" {
     const text_buffer = workspace.text_buffers.last.?;
 
     try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
-    try testing.expectEqual(@as(usize, 2), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
     try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
@@ -393,7 +427,8 @@ pub const DisplayWindow = struct {
     const Self = @This();
 
     pub fn init(workspace: *Workspace, rows: u32, cols: u32) Self {
-        if (rows == 0 or cols == 0) @panic("Rows and cols must be greater than 0.");
+        assert(rows != 0);
+        assert(cols != 0);
         return Self{
             .workspace = workspace,
             .rows = rows,
