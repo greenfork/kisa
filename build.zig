@@ -19,11 +19,20 @@ pub fn build(b: *std.build.Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const main_test = b.addTest("src/main.zig");
-    main_test.addPackagePath("zzz", "zzz/src/main.zig");
-    main_test.setTarget(target);
-    main_test.setBuildMode(mode);
-
     const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&main_test.step);
+
+    {
+        const test_cases = b.addTest("src/main.zig");
+        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/state.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+    }
 }
