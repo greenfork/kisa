@@ -363,10 +363,10 @@ pub const TextBuffer = struct {
 /// are absolute values inside a file whereas `x` and `y` are relative coordinates to the
 /// upper-left corner of the window.
 pub const Cursor = struct {
+    /// Absolute line position inside text buffer.
     line: u32,
+    /// Absolute column position inside text buffer.
     column: u32,
-    x: u32,
-    y: u32,
 };
 
 /// Manages the data of what the user sees on the screen. Sends all the necessary data
@@ -377,22 +377,24 @@ pub const DisplayWindow = struct {
     id: Workspace.Id = 0,
     window_pane_id: Workspace.Id = 0,
     text_buffer_id: Workspace.Id = 0,
-    rows: u32,
-    cols: u32,
+    /// y dimension of available space.
+    text_area_rows: u32,
+    /// x dimension of available space.
+    text_area_cols: u32,
     cursor: Cursor,
     first_line_number: u32,
     mode: EditorMode,
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace, rows: u32, cols: u32) Self {
-        assert(rows != 0);
-        assert(cols != 0);
+    pub fn init(workspace: *Workspace, text_area_rows: u32, text_area_cols: u32) Self {
+        assert(text_area_rows != 0);
+        assert(text_area_cols != 0);
         return Self{
             .workspace = workspace,
-            .rows = rows,
-            .cols = cols,
-            .cursor = Cursor{ .line = 1, .column = 1, .x = 0, .y = 0 },
+            .text_area_rows = text_area_rows,
+            .text_area_cols = text_area_cols,
+            .cursor = Cursor{ .line = 1, .column = 1 },
             .first_line_number = 1,
             .mode = .normal,
         };
