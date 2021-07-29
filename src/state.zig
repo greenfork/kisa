@@ -55,7 +55,8 @@ pub const Workspace = struct {
         }
     }
 
-    pub fn newWindow(self: *Self, content: []u8, row: u32, col: u32) !void {
+    /// Initializes all the state elements for a new workspace.
+    pub fn new(self: *Self, content: []u8, row: u32, col: u32) !void {
         var text_buffer = try self.ally.create(std.TailQueue(TextBuffer).Node);
         text_buffer.data = try TextBuffer.init(self, content);
         self.text_buffer_id_counter += 1;
@@ -94,11 +95,11 @@ pub const Workspace = struct {
     }
 };
 
-test "workspace new window" {
+test "workspace new" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var text = try testing.allocator.dupe(u8, "hello");
-    try workspace.newWindow(text, 0, 0);
+    try workspace.new(text, 0, 0);
     const window_tab = workspace.window_tabs.first.?;
     const window_pane = workspace.window_panes.first.?;
     const display_window = workspace.display_windows.first.?;
