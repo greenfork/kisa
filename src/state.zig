@@ -57,29 +57,10 @@ pub const Workspace = struct {
 
     /// Initializes all the state elements for a new workspace.
     pub fn new(self: *Self, content: []u8, row: u32, col: u32) !void {
-        var text_buffer = try self.ally.create(std.TailQueue(TextBuffer).Node);
-        text_buffer.data = try TextBuffer.init(self, content);
-        self.text_buffer_id_counter += 1;
-        text_buffer.data.id = self.text_buffer_id_counter;
-        self.text_buffers.append(text_buffer);
-
-        var display_window = try self.ally.create(std.TailQueue(DisplayWindow).Node);
-        display_window.data = DisplayWindow.init(self, row, col);
-        self.display_window_id_counter += 1;
-        display_window.data.id = self.display_window_id_counter;
-        self.display_windows.append(display_window);
-
-        var window_tab = try self.ally.create(std.TailQueue(WindowTab).Node);
-        window_tab.data = WindowTab.init(self);
-        self.window_tab_id_counter += 1;
-        window_tab.data.id = self.window_tab_id_counter;
-        self.window_tabs.append(window_tab);
-
-        var window_pane = try self.ally.create(std.TailQueue(WindowPane).Node);
-        window_pane.data = WindowPane.init(self);
-        self.window_pane_id_counter += 1;
-        window_pane.data.id = self.window_pane_id_counter;
-        self.window_panes.append(window_pane);
+        var text_buffer = try self.newTextBuffer(content);
+        var display_window = try self.newDisplayWindow(row, col);
+        var window_tab = try self.newWindowTab();
+        var window_pane = try self.newWindowPane();
 
         display_window.data.text_buffer_id = text_buffer.data.id;
         window_pane.data.window_tab_id = window_tab.data.id;
@@ -92,6 +73,42 @@ pub const Workspace = struct {
         var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
         display_window_id.data = display_window.data.id;
         text_buffer.data.display_window_ids.append(display_window_id);
+    }
+
+    fn newTextBuffer(self: *Self, content: []u8) !*std.TailQueue(TextBuffer).Node {
+        var text_buffer = try self.ally.create(std.TailQueue(TextBuffer).Node);
+        text_buffer.data = try TextBuffer.init(self, content);
+        self.text_buffer_id_counter += 1;
+        text_buffer.data.id = self.text_buffer_id_counter;
+        self.text_buffers.append(text_buffer);
+        return text_buffer;
+    }
+
+    fn newDisplayWindow(self: *Self, row: u32, col: u32) !*std.TailQueue(DisplayWindow).Node {
+        var display_window = try self.ally.create(std.TailQueue(DisplayWindow).Node);
+        display_window.data = DisplayWindow.init(self, row, col);
+        self.display_window_id_counter += 1;
+        display_window.data.id = self.display_window_id_counter;
+        self.display_windows.append(display_window);
+        return display_window;
+    }
+
+    fn newWindowTab(self: *Self) !*std.TailQueue(WindowTab).Node {
+        var window_tab = try self.ally.create(std.TailQueue(WindowTab).Node);
+        window_tab.data = WindowTab.init(self);
+        self.window_tab_id_counter += 1;
+        window_tab.data.id = self.window_tab_id_counter;
+        self.window_tabs.append(window_tab);
+        return window_tab;
+    }
+
+    fn newWindowPane(self: *Self) !*std.TailQueue(WindowPane).Node {
+        var window_pane = try self.ally.create(std.TailQueue(WindowPane).Node);
+        window_pane.data = WindowPane.init(self);
+        self.window_pane_id_counter += 1;
+        window_pane.data.id = self.window_pane_id_counter;
+        self.window_panes.append(window_pane);
+        return window_pane;
     }
 };
 
