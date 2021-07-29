@@ -4,6 +4,7 @@ const mem = std.mem;
 const assert = std.debug.assert;
 
 /// Currently active elements that are displayed on the client.
+/// Assumes that these values can only be changed via 1 client and are always present in Workspace.
 pub const ActiveDisplayState = struct {
     display_window_id: Workspace.Id,
     window_pane_id: Workspace.Id,
@@ -35,6 +36,7 @@ pub const Workspace = struct {
     const DisplayWindowNode = std.TailQueue(DisplayWindow).Node;
     const WindowTabNode = std.TailQueue(WindowTab).Node;
     const WindowPaneNode = std.TailQueue(WindowPane).Node;
+    const IdNode = std.TailQueue(Id).Node;
 
     pub fn init(ally: *mem.Allocator) Workspace {
         return Self{ .ally = ally };
@@ -68,23 +70,24 @@ pub const Workspace = struct {
     }
 
     /// Initializes all the state elements for a new workspace.
-    pub fn new(self: *Self, path: ?[]u8, content: []u8, rows: u32, cols: u32) !ActiveDisplayState {
+    pub fn new(
+        self: *Self,
+        path: ?[]u8,
+        content: []u8,
+        text_area_rows: u32,
+        text_area_cols: u32,
+    ) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
-        var display_window = try self.newDisplayWindow(rows, cols);
-        var window_pane = try self.newWindowPane();
+        var display_window = try self.newDisplayWindow();
+        var window_pane = try self.newWindowPane(text_area_rows, text_area_cols);
         var window_tab = try self.newWindowTab();
 
         display_window.data.text_buffer_id = text_buffer.data.id;
         window_pane.data.window_tab_id = window_tab.data.id;
         display_window.data.window_pane_id = window_pane.data.id;
         window_pane.data.display_window_id = display_window.data.id;
-
-        var window_pane_id = try self.ally.create(std.TailQueue(Id).Node);
-        window_pane_id.data = window_pane.data.id;
-        window_tab.data.window_pane_ids.append(window_pane_id);
-        var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
-        display_window_id.data = display_window.data.id;
-        text_buffer.data.display_window_ids.append(display_window_id);
+        try text_buffer.data.addDisplayWindowId(display_window.data.id);
+        try window_tab.data.addWindowPaneId(window_pane.data.id);
 
         return ActiveDisplayState{
             .display_window_id = display_window.data.id,
@@ -94,7 +97,7 @@ pub const Workspace = struct {
     }
 
     /// Adds text buffer, display window, removes old display window.
-    /// Assumes that we open a new text buffer in the current window pane and current window tab.
+    /// Assumes that we open a new text buffer in the current window pane.
     pub fn addTextBuffer(
         self: *Self,
         active_display_state: ActiveDisplayState,
@@ -102,12 +105,10 @@ pub const Workspace = struct {
         content: []u8,
     ) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
-        var display_window = try self.newDisplayWindow(1, 1);
+        var display_window = try self.newDisplayWindow();
         display_window.data.text_buffer_id = text_buffer.data.id;
         display_window.data.window_pane_id = active_display_state.window_pane_id;
-        var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
-        display_window_id.data = display_window.data.id;
-        text_buffer.data.display_window_ids.append(display_window_id);
+        try text_buffer.data.addDisplayWindowId(display_window.data.id);
         var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
         window_pane.data.display_window_id = display_window.data.id;
         self.destroyDisplayWindow(active_display_state.display_window_id);
@@ -116,6 +117,32 @@ pub const Workspace = struct {
             .window_pane_id = active_display_state.window_pane_id,
             .window_tab_id = active_display_state.window_tab_id,
         };
+    }
+
+    /// Adds display window, removes old display window.
+    /// Assumes that we open an existing text buffer in the current window pane.
+    pub fn addDisplayWindow(
+        self: *Self,
+        active_display_state: ActiveDisplayState,
+        text_buffer_id: Id,
+    ) !ActiveDisplayState {
+        if (self.findTextBuffer(text_buffer_id)) |text_buffer| {
+            var display_window = try self.newDisplayWindow();
+            display_window.data.text_buffer_id = text_buffer.data.id;
+            display_window.data.window_pane_id = active_display_state.window_pane_id;
+            var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
+            window_pane.data.display_window_id = display_window.data.id;
+            try text_buffer.data.addDisplayWindowId(display_window.data.id);
+            text_buffer.data.removeDisplayWindowId(active_display_state.display_window_id);
+            self.destroyDisplayWindow(active_display_state.display_window_id);
+            return ActiveDisplayState{
+                .display_window_id = display_window.data.id,
+                .window_pane_id = active_display_state.window_pane_id,
+                .window_tab_id = active_display_state.window_tab_id,
+            };
+        } else {
+            return error.TextBufferNotFound;
+        }
     }
 
     fn newTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
@@ -127,18 +154,18 @@ pub const Workspace = struct {
         return text_buffer;
     }
 
-    fn newDisplayWindow(self: *Self, rows: u32, cols: u32) !*DisplayWindowNode {
+    fn newDisplayWindow(self: *Self) !*DisplayWindowNode {
         var display_window = try self.ally.create(DisplayWindowNode);
-        display_window.data = DisplayWindow.init(self, rows, cols);
+        display_window.data = DisplayWindow.init(self);
         self.display_window_id_counter += 1;
         display_window.data.id = self.display_window_id_counter;
         self.display_windows.append(display_window);
         return display_window;
     }
 
-    fn newWindowPane(self: *Self) !*WindowPaneNode {
+    fn newWindowPane(self: *Self, text_area_rows: u32, text_area_cols: u32) !*WindowPaneNode {
         var window_pane = try self.ally.create(WindowPaneNode);
-        window_pane.data = WindowPane.init(self);
+        window_pane.data = WindowPane.init(self, text_area_rows, text_area_cols);
         self.window_pane_id_counter += 1;
         window_pane.data.id = self.window_pane_id_counter;
         self.window_panes.append(window_pane);
@@ -240,8 +267,8 @@ test "new workspace" {
     try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
     try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
     try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
-    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.first.?.data);
-    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.first.?.data);
+    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.last.?.data);
+    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.last.?.data);
 
     try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
     try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
@@ -271,8 +298,41 @@ test "add text buffer to workspace" {
     try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
     try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
     try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
-    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.first.?.data);
-    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.first.?.data);
+    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.last.?.data);
+    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.last.?.data);
+
+    try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
+    try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
+    try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
+}
+
+test "add display window to workspace" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+    var old_text = try testing.allocator.dupe(u8, "hello");
+    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
+    const active_display_state = try workspace.addDisplayWindow(
+        old_active_display_state,
+        workspace.text_buffers.last.?.data.id,
+    );
+    const window_tab = workspace.window_tabs.last.?;
+    const window_pane = workspace.window_panes.last.?;
+    const display_window = workspace.display_windows.last.?;
+    const text_buffer = workspace.text_buffers.last.?;
+
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
+
+    try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
+    try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
+    try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
+    try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
+    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.last.?.data);
+    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.last.?.data);
 
     try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
     try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
@@ -310,6 +370,23 @@ pub const TextBuffer = struct {
         while (display_window_id) |dw_id| {
             display_window_id = dw_id.next;
             self.workspace.ally.destroy(dw_id);
+        }
+    }
+
+    pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
+        var display_window_id = try self.workspace.ally.create(Workspace.IdNode);
+        display_window_id.data = id;
+        self.display_window_ids.append(display_window_id);
+    }
+
+    pub fn removeDisplayWindowId(self: *Self, id: Workspace.Id) void {
+        var display_window_id = self.display_window_ids.first;
+        while (display_window_id) |dw_id| : (display_window_id = dw_id.next) {
+            if (dw_id.data == id) {
+                self.display_window_ids.remove(dw_id);
+                self.workspace.ally.destroy(dw_id);
+                return;
+            }
         }
     }
 
@@ -377,23 +454,15 @@ pub const DisplayWindow = struct {
     id: Workspace.Id = 0,
     window_pane_id: Workspace.Id = 0,
     text_buffer_id: Workspace.Id = 0,
-    /// y dimension of available space.
-    text_area_rows: u32,
-    /// x dimension of available space.
-    text_area_cols: u32,
     cursor: Cursor,
     first_line_number: u32,
     mode: EditorMode,
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace, text_area_rows: u32, text_area_cols: u32) Self {
-        assert(text_area_rows != 0);
-        assert(text_area_cols != 0);
+    pub fn init(workspace: *Workspace) Self {
         return Self{
             .workspace = workspace,
-            .text_area_rows = text_area_rows,
-            .text_area_cols = text_area_cols,
             .cursor = Cursor{ .line = 1, .column = 1 },
             .first_line_number = 1,
             .mode = .normal,
@@ -402,6 +471,12 @@ pub const DisplayWindow = struct {
 
     pub fn deinit(self: Self) void {
         _ = self;
+    }
+
+    /// Text buffer could have been removed from server, it is not fully controlled by
+    /// current display window.
+    pub fn textBuffer(self: Self) ?*Workspace.TextBufferNode {
+        self.workspace.findTextBuffer(self.text_buffer_id);
     }
 
     pub fn renderTextArea(self: *Self) !jsonrpc.SimpleRequest {
@@ -428,12 +503,20 @@ pub const WindowPane = struct {
     id: Workspace.Id = 0,
     window_tab_id: Workspace.Id = 0,
     display_window_id: Workspace.Id = 0,
+    /// y dimension of available space.
+    text_area_rows: u32,
+    /// x dimension of available space.
+    text_area_cols: u32,
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace) Self {
+    pub fn init(workspace: *Workspace, text_area_rows: u32, text_area_cols: u32) Self {
+        assert(text_area_rows != 0);
+        assert(text_area_cols != 0);
         return Self{
             .workspace = workspace,
+            .text_area_rows = text_area_rows,
+            .text_area_cols = text_area_cols,
         };
     }
 
@@ -459,6 +542,23 @@ pub const WindowTab = struct {
         while (window_pane_id) |wp_id| {
             window_pane_id = wp_id.next;
             self.workspace.ally.destroy(wp_id);
+        }
+    }
+
+    pub fn addWindowPaneId(self: *Self, id: Workspace.Id) !void {
+        var window_pane_id = try self.workspace.ally.create(Workspace.IdNode);
+        window_pane_id.data = id;
+        self.window_pane_ids.append(window_pane_id);
+    }
+
+    pub fn removeWindowPaneId(self: *Self, id: Workspace.Id) void {
+        var window_pane_id = self.window_pane_ids.first;
+        while (window_pane_id) |wp_id| : (window_pane_id = wp_id.next) {
+            if (wp_id.data == id) {
+                self.window_pane_ids.remove(wp_id);
+                self.workspace.ally.destroy(wp_id);
+                return;
+            }
         }
     }
 };
