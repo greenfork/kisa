@@ -246,22 +246,12 @@ pub const Workspace = struct {
     }
 };
 
-test "new workspace" {
-    var workspace = Workspace.init(testing.allocator);
-    defer workspace.deinit();
-    var text = try testing.allocator.dupe(u8, "hello");
-    const active_display_state = try workspace.new(null, text, 1, 1);
+/// Assumes that all the currently active elements are the very last ones.
+fn checkLastStateItemsCongruence(workspace: Workspace, active_display_state: ActiveDisplayState) !void {
     const window_tab = workspace.window_tabs.last.?;
     const window_pane = workspace.window_panes.last.?;
     const display_window = workspace.display_windows.last.?;
     const text_buffer = workspace.text_buffers.last.?;
-
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
-    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
-    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
-    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
-    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
-    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
 
     try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
     try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
@@ -275,6 +265,22 @@ test "new workspace" {
     try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
 }
 
+test "new workspace" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+    var text = try testing.allocator.dupe(u8, "hello");
+    const active_display_state = try workspace.new(null, text, 1, 1);
+
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.last.?.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.last.?.data.display_window_ids.len);
+
+    try checkLastStateItemsCongruence(workspace, active_display_state);
+}
+
 test "add text buffer to workspace" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
@@ -282,28 +288,15 @@ test "add text buffer to workspace" {
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
     var text = try testing.allocator.dupe(u8, "hello");
     const active_display_state = try workspace.addTextBuffer(old_active_display_state, null, text);
-    const window_tab = workspace.window_tabs.last.?;
-    const window_pane = workspace.window_panes.last.?;
-    const display_window = workspace.display_windows.last.?;
-    const text_buffer = workspace.text_buffers.last.?;
 
     try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
-    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
-    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.last.?.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.last.?.data.display_window_ids.len);
 
-    try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
-    try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
-    try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
-    try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
-    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.last.?.data);
-    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.last.?.data);
-
-    try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
-    try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
-    try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
+    try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
 test "add display window to workspace" {
@@ -315,28 +308,15 @@ test "add display window to workspace" {
         old_active_display_state,
         workspace.text_buffers.last.?.data.id,
     );
-    const window_tab = workspace.window_tabs.last.?;
-    const window_pane = workspace.window_panes.last.?;
-    const display_window = workspace.display_windows.last.?;
-    const text_buffer = workspace.text_buffers.last.?;
 
     try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
-    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
-    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.last.?.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.last.?.data.display_window_ids.len);
 
-    try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
-    try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
-    try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
-    try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
-    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.last.?.data);
-    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.last.?.data);
-
-    try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
-    try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
-    try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
+    try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
 /// Manages the actual text of an opened file and provides an interface for querying it and
