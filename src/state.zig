@@ -52,17 +52,17 @@ pub const Workspace = struct {
             dw.data.deinit();
             self.ally.destroy(dw);
         }
-        var window_tab = self.window_tabs.first;
-        while (window_tab) |wt| {
-            window_tab = wt.next;
-            wt.data.deinit();
-            self.ally.destroy(wt);
-        }
         var window_pane = self.window_panes.first;
         while (window_pane) |wp| {
             window_pane = wp.next;
             wp.data.deinit();
             self.ally.destroy(wp);
+        }
+        var window_tab = self.window_tabs.first;
+        while (window_tab) |wt| {
+            window_tab = wt.next;
+            wt.data.deinit();
+            self.ally.destroy(wt);
         }
     }
 
@@ -70,8 +70,8 @@ pub const Workspace = struct {
     pub fn new(self: *Self, path: ?[]u8, content: []u8, rows: u32, cols: u32) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
         var display_window = try self.newDisplayWindow(rows, cols);
-        var window_tab = try self.newWindowTab();
         var window_pane = try self.newWindowPane();
+        var window_tab = try self.newWindowTab();
 
         display_window.data.text_buffer_id = text_buffer.data.id;
         window_pane.data.window_tab_id = window_tab.data.id;
@@ -134,15 +134,6 @@ pub const Workspace = struct {
         return display_window;
     }
 
-    fn newWindowTab(self: *Self) !*WindowTabNode {
-        var window_tab = try self.ally.create(WindowTabNode);
-        window_tab.data = WindowTab.init(self);
-        self.window_tab_id_counter += 1;
-        window_tab.data.id = self.window_tab_id_counter;
-        self.window_tabs.append(window_tab);
-        return window_tab;
-    }
-
     fn newWindowPane(self: *Self) !*WindowPaneNode {
         var window_pane = try self.ally.create(WindowPaneNode);
         window_pane.data = WindowPane.init(self);
@@ -150,6 +141,15 @@ pub const Workspace = struct {
         window_pane.data.id = self.window_pane_id_counter;
         self.window_panes.append(window_pane);
         return window_pane;
+    }
+
+    fn newWindowTab(self: *Self) !*WindowTabNode {
+        var window_tab = try self.ally.create(WindowTabNode);
+        window_tab.data = WindowTab.init(self);
+        self.window_tab_id_counter += 1;
+        window_tab.data.id = self.window_tab_id_counter;
+        self.window_tabs.append(window_tab);
+        return window_tab;
     }
 
     fn findTextBuffer(self: Self, id: Id) ?*TextBufferNode {
@@ -160,10 +160,26 @@ pub const Workspace = struct {
         return null;
     }
 
+    fn findDisplayWindow(self: Self, id: Id) ?*DisplayWindowNode {
+        var display_window = self.display_windows.first;
+        while (display_window) |dw| : (display_window = dw.next) {
+            if (dw.data.id == id) return dw;
+        }
+        return null;
+    }
+
     fn findWindowPane(self: Self, id: Id) ?*WindowPaneNode {
         var window_pane = self.window_panes.first;
         while (window_pane) |wp| : (window_pane = wp.next) {
             if (wp.data.id == id) return wp;
+        }
+        return null;
+    }
+
+    fn findWindowTab(self: Self, id: Id) ?*WindowTabNode {
+        var window_tab = self.window_tabs.first;
+        while (window_tab) |wt| : (window_tab = wt.next) {
+            if (wt.data.id == id) return wt;
         }
         return null;
     }
