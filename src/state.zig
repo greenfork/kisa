@@ -93,7 +93,7 @@ pub const Workspace = struct {
         };
     }
 
-    /// Adds new text buffer, new display window, removes old display window.
+    /// Adds text buffer, display window, removes old display window.
     /// Assumes that we open a new text buffer in the current window pane and current window tab.
     pub fn addTextBuffer(
         self: *Self,
@@ -279,47 +279,6 @@ test "add text buffer to workspace" {
     try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
 }
 
-/// Editor can have several tabs, each tab can have several window panes.
-pub const WindowTab = struct {
-    workspace: *Workspace,
-    id: Workspace.Id = 0,
-    window_pane_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
-
-    const Self = @This();
-
-    pub fn init(workspace: *Workspace) Self {
-        return Self{ .workspace = workspace };
-    }
-
-    pub fn deinit(self: Self) void {
-        var window_pane_id = self.window_pane_ids.first;
-        while (window_pane_id) |wp_id| {
-            window_pane_id = wp_id.next;
-            self.workspace.ally.destroy(wp_id);
-        }
-    }
-};
-
-/// Editor tab can have several panes, each pane can have several display windows.
-pub const WindowPane = struct {
-    workspace: *Workspace,
-    id: Workspace.Id = 0,
-    window_tab_id: Workspace.Id = 0,
-    display_window_id: Workspace.Id = 0,
-
-    const Self = @This();
-
-    pub fn init(workspace: *Workspace) Self {
-        return Self{
-            .workspace = workspace,
-        };
-    }
-
-    pub fn deinit(self: Self) void {
-        _ = self;
-    }
-};
-
 /// Manages the actual text of an opened file and provides an interface for querying it and
 /// modifying.
 pub const TextBuffer = struct {
@@ -458,5 +417,46 @@ pub const DisplayWindow = struct {
             .method = "draw",
             .params = .{ .Array = params[0..] },
         };
+    }
+};
+
+/// Editor tab can have several panes, each pane can have several display windows.
+pub const WindowPane = struct {
+    workspace: *Workspace,
+    id: Workspace.Id = 0,
+    window_tab_id: Workspace.Id = 0,
+    display_window_id: Workspace.Id = 0,
+
+    const Self = @This();
+
+    pub fn init(workspace: *Workspace) Self {
+        return Self{
+            .workspace = workspace,
+        };
+    }
+
+    pub fn deinit(self: Self) void {
+        _ = self;
+    }
+};
+
+/// Editor can have several tabs, each tab can have several window panes.
+pub const WindowTab = struct {
+    workspace: *Workspace,
+    id: Workspace.Id = 0,
+    window_pane_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
+
+    const Self = @This();
+
+    pub fn init(workspace: *Workspace) Self {
+        return Self{ .workspace = workspace };
+    }
+
+    pub fn deinit(self: Self) void {
+        var window_pane_id = self.window_pane_ids.first;
+        while (window_pane_id) |wp_id| {
+            window_pane_id = wp_id.next;
+            self.workspace.ally.destroy(wp_id);
+        }
     }
 };
