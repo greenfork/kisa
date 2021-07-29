@@ -2,6 +2,13 @@ const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
 
+/// Currently active elements that are displayed on the client.
+pub const ActiveDisplayState = struct {
+    display_window_id: Workspace.Id,
+    window_pane_id: Workspace.Id,
+    window_tab_id: Workspace.Id,
+};
+
 /// Modes are different states of a display window which allow to interpret same keys as having
 /// a different meaning.
 pub const EditorMode = enum {
@@ -23,6 +30,10 @@ pub const Workspace = struct {
 
     const Self = @This();
     const Id = u32;
+    const TextBufferNode = std.TailQueue(TextBuffer).Node;
+    const DisplayWindowNode = std.TailQueue(DisplayWindow).Node;
+    const WindowTabNode = std.TailQueue(WindowTab).Node;
+    const WindowPaneNode = std.TailQueue(WindowPane).Node;
 
     pub fn init(ally: *mem.Allocator) Workspace {
         return Self{ .ally = ally };
@@ -56,9 +67,9 @@ pub const Workspace = struct {
     }
 
     /// Initializes all the state elements for a new workspace.
-    pub fn new(self: *Self, content: []u8, row: u32, col: u32) !void {
-        var text_buffer = try self.newTextBuffer(content);
-        var display_window = try self.newDisplayWindow(row, col);
+    pub fn new(self: *Self, path: ?[]u8, content: []u8, rows: u32, cols: u32) !ActiveDisplayState {
+        var text_buffer = try self.newTextBuffer(path, content);
+        var display_window = try self.newDisplayWindow(rows, cols);
         var window_tab = try self.newWindowTab();
         var window_pane = try self.newWindowPane();
 
@@ -73,28 +84,58 @@ pub const Workspace = struct {
         var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
         display_window_id.data = display_window.data.id;
         text_buffer.data.display_window_ids.append(display_window_id);
+
+        return ActiveDisplayState{
+            .display_window_id = display_window.data.id,
+            .window_pane_id = window_pane.data.id,
+            .window_tab_id = window_tab.data.id,
+        };
     }
 
-    fn newTextBuffer(self: *Self, content: []u8) !*std.TailQueue(TextBuffer).Node {
-        var text_buffer = try self.ally.create(std.TailQueue(TextBuffer).Node);
-        text_buffer.data = try TextBuffer.init(self, content);
+    /// Adds new text buffer, new display window. Assumes that we open a new text buffer
+    /// in the current window pane and current window tab.
+    pub fn addTextBuffer(
+        self: *Self,
+        active_display_state: ActiveDisplayState,
+        path: ?[]u8,
+        content: []u8,
+    ) !ActiveDisplayState {
+        var text_buffer = try self.newTextBuffer(path, content);
+        var display_window = try self.newDisplayWindow(1, 1);
+        display_window.data.text_buffer_id = text_buffer.data.id;
+        display_window.data.window_pane_id = active_display_state.window_pane_id;
+        var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
+        display_window_id.data = display_window.data.id;
+        text_buffer.data.display_window_ids.append(display_window_id);
+        var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
+        window_pane.data.display_window_id = display_window.data.id;
+        return ActiveDisplayState{
+            .display_window_id = display_window.data.id,
+            .window_pane_id = active_display_state.window_pane_id,
+            .window_tab_id = active_display_state.window_tab_id,
+        };
+    }
+
+    fn newTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
+        var text_buffer = try self.ally.create(TextBufferNode);
+        text_buffer.data = try TextBuffer.init(self, path, content);
         self.text_buffer_id_counter += 1;
         text_buffer.data.id = self.text_buffer_id_counter;
         self.text_buffers.append(text_buffer);
         return text_buffer;
     }
 
-    fn newDisplayWindow(self: *Self, row: u32, col: u32) !*std.TailQueue(DisplayWindow).Node {
-        var display_window = try self.ally.create(std.TailQueue(DisplayWindow).Node);
-        display_window.data = DisplayWindow.init(self, row, col);
+    fn newDisplayWindow(self: *Self, rows: u32, cols: u32) !*DisplayWindowNode {
+        var display_window = try self.ally.create(DisplayWindowNode);
+        display_window.data = DisplayWindow.init(self, rows, cols);
         self.display_window_id_counter += 1;
         display_window.data.id = self.display_window_id_counter;
         self.display_windows.append(display_window);
         return display_window;
     }
 
-    fn newWindowTab(self: *Self) !*std.TailQueue(WindowTab).Node {
-        var window_tab = try self.ally.create(std.TailQueue(WindowTab).Node);
+    fn newWindowTab(self: *Self) !*WindowTabNode {
+        var window_tab = try self.ally.create(WindowTabNode);
         window_tab.data = WindowTab.init(self);
         self.window_tab_id_counter += 1;
         window_tab.data.id = self.window_tab_id_counter;
@@ -102,25 +143,41 @@ pub const Workspace = struct {
         return window_tab;
     }
 
-    fn newWindowPane(self: *Self) !*std.TailQueue(WindowPane).Node {
-        var window_pane = try self.ally.create(std.TailQueue(WindowPane).Node);
+    fn newWindowPane(self: *Self) !*WindowPaneNode {
+        var window_pane = try self.ally.create(WindowPaneNode);
         window_pane.data = WindowPane.init(self);
         self.window_pane_id_counter += 1;
         window_pane.data.id = self.window_pane_id_counter;
         self.window_panes.append(window_pane);
         return window_pane;
     }
+
+    fn findTextBuffer(self: Self, id: Id) ?*TextBufferNode {
+        var text_buffer = self.text_buffers.first;
+        while (text_buffer) |tb| : (text_buffer = tb.next) {
+            if (tb.data.id == id) return tb;
+        }
+        return null;
+    }
+
+    fn findWindowPane(self: Self, id: Id) ?*WindowPaneNode {
+        var window_pane = self.window_panes.first;
+        while (window_pane) |wp| : (window_pane = wp.next) {
+            if (wp.data.id == id) return wp;
+        }
+        return null;
+    }
 };
 
-test "workspace new" {
+test "new workspace" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var text = try testing.allocator.dupe(u8, "hello");
-    try workspace.new(text, 0, 0);
-    const window_tab = workspace.window_tabs.first.?;
-    const window_pane = workspace.window_panes.first.?;
-    const display_window = workspace.display_windows.first.?;
-    const text_buffer = workspace.text_buffers.first.?;
+    const active_display_state = try workspace.new(null, text, 1, 1);
+    const window_tab = workspace.window_tabs.last.?;
+    const window_pane = workspace.window_panes.last.?;
+    const display_window = workspace.display_windows.last.?;
+    const text_buffer = workspace.text_buffers.last.?;
 
     try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
@@ -135,6 +192,41 @@ test "workspace new" {
     try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
     try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.first.?.data);
     try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.first.?.data);
+
+    try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
+    try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
+    try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
+}
+
+test "add text buffer to workspace" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+    var old_text = try testing.allocator.dupe(u8, "hello");
+    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
+    var text = try testing.allocator.dupe(u8, "hello");
+    const active_display_state = try workspace.addTextBuffer(old_active_display_state, null, text);
+    const window_tab = workspace.window_tabs.last.?;
+    const window_pane = workspace.window_panes.last.?;
+    const display_window = workspace.display_windows.last.?;
+    const text_buffer = workspace.text_buffers.last.?;
+
+    try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 2), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
+
+    try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
+    try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
+    try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
+    try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
+    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.first.?.data);
+    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.first.?.data);
+
+    try testing.expectEqual(window_pane.data.id, active_display_state.window_pane_id);
+    try testing.expectEqual(window_tab.data.id, active_display_state.window_tab_id);
+    try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
 }
 
 /// Editor can have several tabs, each tab can have several window panes.
@@ -185,15 +277,19 @@ pub const TextBuffer = struct {
     id: Workspace.Id = 0,
     display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
     content: std.ArrayList(u8),
+    /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
+    path: ?[]u8,
     // metrics
     max_line_number: u32 = 0,
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace, content: []u8) !Self {
+    /// Takes ownership of `path` and `content`, they must be allocated with `workspaces` allocator.
+    pub fn init(workspace: *Workspace, path: ?[]u8, content: []u8) !Self {
         var result = Self{
             .workspace = workspace,
             .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
+            .path = path,
         };
         result.countMetrics();
         return result;
@@ -279,9 +375,9 @@ pub const DisplayWindow = struct {
     mode: EditorMode,
 
     const Self = @This();
-    const Error = UI.Error || TextBuffer.Error;
 
     pub fn init(workspace: *Workspace, rows: u32, cols: u32) Self {
+        if (rows == 0 or cols == 0) @panic("Rows and cols must be greater than 0.");
         return Self{
             .workspace = workspace,
             .rows = rows,
@@ -296,7 +392,7 @@ pub const DisplayWindow = struct {
         _ = self;
     }
 
-    pub fn renderTextArea(self: *Self) Error!jsonrpc.SimpleRequest {
+    pub fn renderTextArea(self: *Self) !jsonrpc.SimpleRequest {
         const last_line_number = self.first_line_number + self.rows;
         const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
         const params = try self.text_buffer.ally.create([3]jsonrpc.Value);
