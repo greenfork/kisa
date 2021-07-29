@@ -12,58 +12,85 @@ pub const EditorMode = enum {
 /// Workspace is a collection of all elements in code editor that can be considered a state.
 pub const Workspace = struct {
     ally: *mem.Allocator,
-    text_buffers: std.ArrayList(TextBuffer),
-    display_windows: std.ArrayList(DisplayWindow),
-    window_tabs: std.ArrayList(WindowTab),
-    window_panes: std.ArrayList(WindowPane),
+    text_buffers: std.TailQueue(TextBuffer) = std.TailQueue(TextBuffer){},
+    display_windows: std.TailQueue(DisplayWindow) = std.TailQueue(DisplayWindow){},
+    window_tabs: std.TailQueue(WindowTab) = std.TailQueue(WindowTab){},
+    window_panes: std.TailQueue(WindowPane) = std.TailQueue(WindowPane){},
+    text_buffer_id_counter: Id = 0,
+    display_window_id_counter: Id = 0,
+    window_tab_id_counter: Id = 0,
+    window_pane_id_counter: Id = 0,
 
     const Self = @This();
     const Id = u32;
 
     pub fn init(ally: *mem.Allocator) Workspace {
-        return Self{
-            .ally = ally,
-            .text_buffers = std.ArrayList(TextBuffer).init(ally),
-            .display_windows = std.ArrayList(DisplayWindow).init(ally),
-            .window_tabs = std.ArrayList(WindowTab).init(ally),
-            .window_panes = std.ArrayList(WindowPane).init(ally),
-        };
+        return Self{ .ally = ally };
     }
 
     pub fn deinit(self: Self) void {
-        for (self.text_buffers.items) |*text_buffer| text_buffer.deinit();
-        self.text_buffers.deinit();
-        for (self.display_windows.items) |*display_window| display_window.deinit();
-        self.display_windows.deinit();
-        for (self.window_tabs.items) |*window_tab| window_tab.deinit();
-        self.window_tabs.deinit();
-        for (self.window_panes.items) |*window_pane| window_pane.deinit();
-        self.window_panes.deinit();
+        var text_buffer = self.text_buffers.first;
+        while (text_buffer) |tb| {
+            text_buffer = tb.next;
+            tb.data.deinit();
+            self.ally.destroy(tb);
+        }
+        var display_window = self.display_windows.first;
+        while (display_window) |dw| {
+            display_window = dw.next;
+            dw.data.deinit();
+            self.ally.destroy(dw);
+        }
+        var window_tab = self.window_tabs.first;
+        while (window_tab) |wt| {
+            window_tab = wt.next;
+            wt.data.deinit();
+            self.ally.destroy(wt);
+        }
+        var window_pane = self.window_panes.first;
+        while (window_pane) |wp| {
+            window_pane = wp.next;
+            wp.data.deinit();
+            self.ally.destroy(wp);
+        }
     }
 
-    pub fn newWindow(self: *Self, content: []u8, rows: u32, cols: u32) !void {
-        var text_buffer = try self.text_buffers.addOne();
-        text_buffer.* = try TextBuffer.init(self, content);
-        text_buffer.id = @intCast(Id, self.text_buffers.items.len);
+    pub fn newWindow(self: *Self, content: []u8, row: u32, col: u32) !void {
+        var text_buffer = try self.ally.create(std.TailQueue(TextBuffer).Node);
+        text_buffer.data = try TextBuffer.init(self, content);
+        self.text_buffer_id_counter += 1;
+        text_buffer.data.id = self.text_buffer_id_counter;
+        self.text_buffers.append(text_buffer);
 
-        var display_window = try self.display_windows.addOne();
-        display_window.* = DisplayWindow.init(self, rows, cols);
-        display_window.id = @intCast(Id, self.display_windows.items.len);
+        var display_window = try self.ally.create(std.TailQueue(DisplayWindow).Node);
+        display_window.data = DisplayWindow.init(self, row, col);
+        self.display_window_id_counter += 1;
+        display_window.data.id = self.display_window_id_counter;
+        self.display_windows.append(display_window);
 
-        var window_tab = try self.window_tabs.addOne();
-        window_tab.* = WindowTab.init(self);
-        window_tab.id = @intCast(Id, self.window_tabs.items.len);
+        var window_tab = try self.ally.create(std.TailQueue(WindowTab).Node);
+        window_tab.data = WindowTab.init(self);
+        self.window_tab_id_counter += 1;
+        window_tab.data.id = self.window_tab_id_counter;
+        self.window_tabs.append(window_tab);
 
-        var window_pane = try self.window_panes.addOne();
-        window_pane.* = WindowPane.init(self);
-        window_pane.id = @intCast(Id, self.window_panes.items.len);
+        var window_pane = try self.ally.create(std.TailQueue(WindowPane).Node);
+        window_pane.data = WindowPane.init(self);
+        self.window_pane_id_counter += 1;
+        window_pane.data.id = self.window_pane_id_counter;
+        self.window_panes.append(window_pane);
 
-        display_window.text_buffer_id = text_buffer.id;
-        window_pane.window_tab_id = window_tab.id;
-        display_window.window_pane_id = window_pane.id;
-        window_pane.display_window_id = display_window.id;
-        try window_tab.window_pane_ids.append(window_pane.id);
-        try text_buffer.display_window_ids.append(display_window.id);
+        display_window.data.text_buffer_id = text_buffer.data.id;
+        window_pane.data.window_tab_id = window_tab.data.id;
+        display_window.data.window_pane_id = window_pane.data.id;
+        window_pane.data.display_window_id = display_window.data.id;
+
+        var window_pane_id = try self.ally.create(std.TailQueue(Id).Node);
+        window_pane_id.data = window_pane.data.id;
+        window_tab.data.window_pane_ids.append(window_pane_id);
+        var display_window_id = try self.ally.create(std.TailQueue(Id).Node);
+        display_window_id.data = display_window.data.id;
+        text_buffer.data.display_window_ids.append(display_window_id);
     }
 };
 
@@ -72,43 +99,44 @@ test "workspace new window" {
     defer workspace.deinit();
     var text = try testing.allocator.dupe(u8, "hello");
     try workspace.newWindow(text, 0, 0);
-    const window_tab = workspace.window_tabs.items[0];
-    const window_pane = workspace.window_panes.items[0];
-    const display_window = workspace.display_windows.items[0];
-    const text_buffer = workspace.text_buffers.items[0];
+    const window_tab = workspace.window_tabs.first.?;
+    const window_pane = workspace.window_panes.first.?;
+    const display_window = workspace.display_windows.first.?;
+    const text_buffer = workspace.text_buffers.first.?;
 
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.items.len);
-    try testing.expectEqual(@as(usize, 1), workspace.display_windows.items.len);
-    try testing.expectEqual(@as(usize, 1), workspace.window_panes.items.len);
-    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.items.len);
-    try testing.expectEqual(@as(usize, 1), window_tab.window_pane_ids.items.len);
-    try testing.expectEqual(@as(usize, 1), text_buffer.display_window_ids.items.len);
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 1), window_tab.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), text_buffer.data.display_window_ids.len);
 
-    try testing.expectEqual(display_window.id, text_buffer.display_window_ids.items[0]);
-    try testing.expectEqual(display_window.id, window_pane.display_window_id);
-    try testing.expectEqual(window_tab.id, window_pane.window_tab_id);
-    try testing.expectEqual(window_pane.id, window_tab.window_pane_ids.items[0]);
-    try testing.expectEqual(window_pane.id, display_window.window_pane_id);
-    try testing.expectEqual(text_buffer.id, display_window.text_buffer_id);
+    try testing.expectEqual(display_window.data.id, window_pane.data.display_window_id);
+    try testing.expectEqual(window_tab.data.id, window_pane.data.window_tab_id);
+    try testing.expectEqual(window_pane.data.id, display_window.data.window_pane_id);
+    try testing.expectEqual(text_buffer.data.id, display_window.data.text_buffer_id);
+    try testing.expectEqual(display_window.data.id, text_buffer.data.display_window_ids.first.?.data);
+    try testing.expectEqual(window_pane.data.id, window_tab.data.window_pane_ids.first.?.data);
 }
 
 /// Editor can have several tabs, each tab can have several window panes.
 pub const WindowTab = struct {
     workspace: *Workspace,
     id: Workspace.Id = 0,
-    window_pane_ids: std.ArrayList(Workspace.Id),
+    window_pane_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
 
     const Self = @This();
 
     pub fn init(workspace: *Workspace) Self {
-        return Self{
-            .workspace = workspace,
-            .window_pane_ids = std.ArrayList(Workspace.Id).init(workspace.ally),
-        };
+        return Self{ .workspace = workspace };
     }
 
     pub fn deinit(self: Self) void {
-        self.window_pane_ids.deinit();
+        var window_pane_id = self.window_pane_ids.first;
+        while (window_pane_id) |wp_id| {
+            window_pane_id = wp_id.next;
+            self.workspace.ally.destroy(wp_id);
+        }
     }
 };
 
@@ -137,7 +165,7 @@ pub const WindowPane = struct {
 pub const TextBuffer = struct {
     workspace: *Workspace,
     id: Workspace.Id = 0,
-    display_window_ids: std.ArrayList(Workspace.Id),
+    display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
     content: std.ArrayList(u8),
     // metrics
     max_line_number: u32 = 0,
@@ -148,7 +176,6 @@ pub const TextBuffer = struct {
         var result = Self{
             .workspace = workspace,
             .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
-            .display_window_ids = std.ArrayList(Workspace.Id).init(workspace.ally),
         };
         result.countMetrics();
         return result;
@@ -156,7 +183,11 @@ pub const TextBuffer = struct {
 
     pub fn deinit(self: Self) void {
         self.content.deinit();
-        self.display_window_ids.deinit();
+        var display_window_id = self.display_window_ids.first;
+        while (display_window_id) |dw_id| {
+            display_window_id = dw_id.next;
+            self.workspace.ally.destroy(dw_id);
+        }
     }
 
     fn countMetrics(self: *Self) void {
