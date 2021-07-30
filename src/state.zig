@@ -3,7 +3,8 @@ const testing = std.testing;
 const mem = std.mem;
 const assert = std.debug.assert;
 
-/// Currently active elements that are displayed on the client.
+/// Currently active elements that are displayed on the client. Each client has 1 such struct
+/// assigned but it is stored on the server still.
 /// Assumes that these values can only be changed via 1 client and are always present in Workspace.
 pub const ActiveDisplayState = struct {
     display_window_id: Workspace.Id,
@@ -105,17 +106,12 @@ pub const Workspace = struct {
         content: []u8,
     ) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
-        var display_window = try self.newDisplayWindow();
-        display_window.data.text_buffer_id = text_buffer.data.id;
-        display_window.data.window_pane_id = active_display_state.window_pane_id;
-        try text_buffer.data.addDisplayWindowId(display_window.data.id);
-        var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
-        window_pane.data.display_window_id = display_window.data.id;
-        self.destroyDisplayWindow(active_display_state.display_window_id);
-        return ActiveDisplayState{
-            .display_window_id = display_window.data.id,
-            .window_pane_id = active_display_state.window_pane_id,
-            .window_tab_id = active_display_state.window_tab_id,
+        return self.addDisplayWindow(
+            active_display_state,
+            text_buffer.data.id,
+        ) catch |err| switch (err) {
+            error.TextBufferNotFound => unreachable,
+            else => return err,
         };
     }
 
