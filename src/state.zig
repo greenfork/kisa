@@ -19,6 +19,48 @@ pub const EditorMode = enum {
     insert,
 };
 
+// Supports actions, some optionally take a filename parameter which means they create new
+// text buffer:
+// * pane [filename] - create new window pane with current orientation and open last buffer
+// * panev [filename] - for horizontal/vertical layout, create new window pane vertically
+//   aligned and open last buffer
+// * tab [filename] - create new tab and open last buffer
+// * edit filename - open new or existing text buffer in current window pane
+// * quit - close current window pane but keep text buffer, closes tab and/or editor if
+//   current window pane is a single pane in the tab/editor
+// * open-buffer - open existing text buffer in current window pane
+// * delete-buffer - close current text buffer and open the next on in the current window pane
+// * buffer-only - delete all text buffers but current buffer
+// * next-buffer - open next text buffer in current window pane
+// * prev-buffer - open previous text buffer in current window pane
+// * last-buffer - open last opened buffer for current pane (not globally last opened)
+// * next-pane - move active pane to next one
+// * left-pane - for horizontal/vertical layout, move active pane to the left one
+// * right-pane - for horizontal/vertical layout, move active pane to the right one
+// * quit-editor - fully deinitialize all the state
+//
+// * pane - newWindowPane(orientation: vertical, fileparams: null)
+// * pane filename - newWindowPane(orientation: vertical, fileparams: data)
+// * panev - newWindowPane(orientation: horizontal, fileparams: null)
+// * panev filename - newWindowPane(orientation: horizontal, fileparams: data)
+// * tab - newWindowTab(fileparams: null)
+// * tab filename - newWindowTab(fileparams: data)
+// * edit filename - newTextBuffer(fileparams: data) / openTextBuffer()
+// * quit - closeWindowPane()
+// * open-buffer - openTextBuffer()
+// * delete-buffer - closeTextBuffer()
+// * delete-all-buffers - closeAllTextBuffers()
+// * only-buffer - closeAllTextBuffersButCurrent()
+// * next-buffer - switchTextBuffer(direction: next)
+// * prev-buffer - switchTextBuffer(direction: previous)
+// * last-buffer - switchTextBuffer(direction: last)
+// * next-pane - switchWindowPane(direction: next)
+// * prev-pane - switchWindowPane(direction: previous)
+// * last-pane - switchWindowPane(direction: last)
+// * left-pane - switchWindowPane(direction: left)
+// * right-pane - switchWindowPane(direction: right)
+// * quit-editor - deinit()
+
 /// Workspace is a collection of all elements in code editor that can be considered a state.
 pub const Workspace = struct {
     ally: *mem.Allocator,
