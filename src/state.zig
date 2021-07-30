@@ -79,16 +79,22 @@ pub const Workspace = struct {
         text_area_cols: u32,
     ) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
+        errdefer self.destroyTextBuffer(text_buffer.data.id);
         var display_window = try self.newDisplayWindow();
+        errdefer self.destroyDisplayWindow(display_window.data.id);
         var window_pane = try self.newWindowPane(text_area_rows, text_area_cols);
+        errdefer self.destroyWindowPane(window_pane.data.id);
         var window_tab = try self.newWindowTab();
+        errdefer self.destroyWindowTab(window_tab.data.id);
 
         display_window.data.text_buffer_id = text_buffer.data.id;
         window_pane.data.window_tab_id = window_tab.data.id;
         display_window.data.window_pane_id = window_pane.data.id;
         window_pane.data.display_window_id = display_window.data.id;
         try text_buffer.data.addDisplayWindowId(display_window.data.id);
+        errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
         try window_tab.data.addWindowPaneId(window_pane.data.id);
+        errdefer window_tab.data.removeWindowPaneId(window_pane.data.id);
 
         return ActiveDisplayState{
             .display_window_id = display_window.data.id,
@@ -106,6 +112,7 @@ pub const Workspace = struct {
         content: []u8,
     ) !ActiveDisplayState {
         var text_buffer = try self.newTextBuffer(path, content);
+        errdefer self.destroyTextBuffer(text_buffer.data.id);
         return self.addDisplayWindow(
             active_display_state,
             text_buffer.data.id,
@@ -124,11 +131,13 @@ pub const Workspace = struct {
     ) !ActiveDisplayState {
         if (self.findTextBuffer(text_buffer_id)) |text_buffer| {
             var display_window = try self.newDisplayWindow();
+            errdefer self.destroyDisplayWindow(display_window.data.id);
             display_window.data.text_buffer_id = text_buffer.data.id;
             display_window.data.window_pane_id = active_display_state.window_pane_id;
             var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
             window_pane.data.display_window_id = display_window.data.id;
             try text_buffer.data.addDisplayWindowId(display_window.data.id);
+            errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
             text_buffer.data.removeDisplayWindowId(active_display_state.display_window_id);
             self.destroyDisplayWindow(active_display_state.display_window_id);
             return ActiveDisplayState{
@@ -143,7 +152,7 @@ pub const Workspace = struct {
 
     fn newTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
-        text_buffer.data = try TextBuffer.init(self, path, content);
+        text_buffer.data = TextBuffer.init(self, path, content);
         self.text_buffer_id_counter += 1;
         text_buffer.data.id = self.text_buffer_id_counter;
         self.text_buffers.append(text_buffer);
@@ -315,6 +324,16 @@ test "add display window to workspace" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
+test "handle failing conditions" {
+    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 10).allocator;
+    var workspace = Workspace.init(failing_allocator);
+    defer workspace.deinit();
+    var old_text = try failing_allocator.dupe(u8, "hello");
+    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
+    var text = try failing_allocator.dupe(u8, "hello");
+    try testing.expectError(error.OutOfMemory, workspace.addTextBuffer(old_active_display_state, null, text));
+}
+
 /// Manages the actual text of an opened file and provides an interface for querying it and
 /// modifying.
 pub const TextBuffer = struct {
@@ -330,7 +349,7 @@ pub const TextBuffer = struct {
     const Self = @This();
 
     /// Takes ownership of `path` and `content`, they must be allocated with `workspaces` allocator.
-    pub fn init(workspace: *Workspace, path: ?[]u8, content: []u8) !Self {
+    pub fn init(workspace: *Workspace, path: ?[]u8, content: []u8) Self {
         var result = Self{
             .workspace = workspace,
             .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
