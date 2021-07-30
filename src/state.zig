@@ -78,13 +78,13 @@ pub const Workspace = struct {
         text_area_rows: u32,
         text_area_cols: u32,
     ) !ActiveDisplayState {
-        var text_buffer = try self.newTextBuffer(path, content);
+        var text_buffer = try self.createTextBuffer(path, content);
         errdefer self.destroyTextBuffer(text_buffer.data.id);
-        var display_window = try self.newDisplayWindow();
+        var display_window = try self.createDisplayWindow();
         errdefer self.destroyDisplayWindow(display_window.data.id);
-        var window_pane = try self.newWindowPane(text_area_rows, text_area_cols);
+        var window_pane = try self.createWindowPane(text_area_rows, text_area_cols);
         errdefer self.destroyWindowPane(window_pane.data.id);
-        var window_tab = try self.newWindowTab();
+        var window_tab = try self.createWindowTab();
         errdefer self.destroyWindowTab(window_tab.data.id);
 
         display_window.data.text_buffer_id = text_buffer.data.id;
@@ -104,16 +104,15 @@ pub const Workspace = struct {
     }
 
     /// Adds text buffer, display window, removes old display window.
-    /// Assumes that we open a new text buffer in the current window pane.
-    pub fn addTextBuffer(
+    pub fn createAndOpenTextBufferInActiveWindowPane(
         self: *Self,
         active_display_state: ActiveDisplayState,
         path: ?[]u8,
         content: []u8,
     ) !ActiveDisplayState {
-        var text_buffer = try self.newTextBuffer(path, content);
+        var text_buffer = try self.createTextBuffer(path, content);
         errdefer self.destroyTextBuffer(text_buffer.data.id);
-        return self.addDisplayWindow(
+        return self.openTextBufferInActiveWindowPane(
             active_display_state,
             text_buffer.data.id,
         ) catch |err| switch (err) {
@@ -123,14 +122,13 @@ pub const Workspace = struct {
     }
 
     /// Adds display window, removes old display window.
-    /// Assumes that we open an existing text buffer in the current window pane.
-    pub fn addDisplayWindow(
+    pub fn openTextBufferInActiveWindowPane(
         self: *Self,
         active_display_state: ActiveDisplayState,
         text_buffer_id: Id,
     ) !ActiveDisplayState {
         if (self.findTextBuffer(text_buffer_id)) |text_buffer| {
-            var display_window = try self.newDisplayWindow();
+            var display_window = try self.createDisplayWindow();
             errdefer self.destroyDisplayWindow(display_window.data.id);
             display_window.data.text_buffer_id = text_buffer.data.id;
             display_window.data.window_pane_id = active_display_state.window_pane_id;
@@ -150,7 +148,7 @@ pub const Workspace = struct {
         }
     }
 
-    fn newTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
+    fn createTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
         text_buffer.data = TextBuffer.init(self, path, content);
         self.text_buffer_id_counter += 1;
@@ -159,7 +157,7 @@ pub const Workspace = struct {
         return text_buffer;
     }
 
-    fn newDisplayWindow(self: *Self) !*DisplayWindowNode {
+    fn createDisplayWindow(self: *Self) !*DisplayWindowNode {
         var display_window = try self.ally.create(DisplayWindowNode);
         display_window.data = DisplayWindow.init(self);
         self.display_window_id_counter += 1;
@@ -168,7 +166,7 @@ pub const Workspace = struct {
         return display_window;
     }
 
-    fn newWindowPane(self: *Self, text_area_rows: u32, text_area_cols: u32) !*WindowPaneNode {
+    fn createWindowPane(self: *Self, text_area_rows: u32, text_area_cols: u32) !*WindowPaneNode {
         var window_pane = try self.ally.create(WindowPaneNode);
         window_pane.data = WindowPane.init(self, text_area_rows, text_area_cols);
         self.window_pane_id_counter += 1;
@@ -177,7 +175,7 @@ pub const Workspace = struct {
         return window_pane;
     }
 
-    fn newWindowTab(self: *Self) !*WindowTabNode {
+    fn createWindowTab(self: *Self) !*WindowTabNode {
         var window_tab = try self.ally.create(WindowTabNode);
         window_tab.data = WindowTab.init(self);
         self.window_tab_id_counter += 1;
@@ -292,7 +290,11 @@ test "add text buffer to workspace" {
     var old_text = try testing.allocator.dupe(u8, "hello");
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
     var text = try testing.allocator.dupe(u8, "hello");
-    const active_display_state = try workspace.addTextBuffer(old_active_display_state, null, text);
+    const active_display_state = try workspace.createAndOpenTextBufferInActiveWindowPane(
+        old_active_display_state,
+        null,
+        text,
+    );
 
     try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
@@ -309,7 +311,7 @@ test "add display window to workspace" {
     defer workspace.deinit();
     var old_text = try testing.allocator.dupe(u8, "hello");
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
-    const active_display_state = try workspace.addDisplayWindow(
+    const active_display_state = try workspace.openTextBufferInActiveWindowPane(
         old_active_display_state,
         workspace.text_buffers.last.?.data.id,
     );
@@ -331,7 +333,11 @@ test "handle failing conditions" {
     var old_text = try failing_allocator.dupe(u8, "hello");
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
     var text = try failing_allocator.dupe(u8, "hello");
-    try testing.expectError(error.OutOfMemory, workspace.addTextBuffer(old_active_display_state, null, text));
+    try testing.expectError(error.OutOfMemory, workspace.createAndOpenTextBufferInActiveWindowPane(
+        old_active_display_state,
+        null,
+        text,
+    ));
 }
 
 /// Manages the actual text of an opened file and provides an interface for querying it and
