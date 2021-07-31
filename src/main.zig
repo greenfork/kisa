@@ -502,12 +502,12 @@ pub const Application = struct {
 
     pub const ConcurrencyModel = enum {
         threaded,
-        fork,
+        forked,
     };
 
     /// Start `Server` instance on background and `Client` instance on foreground. This function
     /// returns `null` when it launches a server instance and no actions should be performed,
-    /// currently it is only relevant for `fork` concurrency model. When this function returns
+    /// currently it is only relevant for `forked` concurrency model. When this function returns
     /// `Application` instance, this is client code.
     pub fn start(
         ally: *mem.Allocator,
@@ -515,7 +515,7 @@ pub const Application = struct {
         transport_kind: Transport.Kind,
     ) !?Self {
         switch (concurrency_model) {
-            .fork => {
+            .forked => {
                 var transport = try Transport.init(transport_kind);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
@@ -576,14 +576,14 @@ test "main: start application threaded via pipes" {
     defer testing.allocator.free(filename);
     if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
         defer app.deinit();
-        var client = app.client;
-        // try client.sendExitNotification();
-        // client.server.deinit();
-        // std.time.sleep(std.time.ns_per_s * 1);
-        // while (true) {}
-        _ = client;
-        // try client.sendFileToOpen(filename);
-        // try client.acceptText();
+    }
+}
+
+test "main: start application forked via pipes" {
+    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
+    defer testing.allocator.free(filename);
+    if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
+        defer app.deinit();
     }
 }
 
