@@ -12,14 +12,13 @@ pub const ActiveDisplayState = struct {
     window_tab_id: Workspace.Id,
 };
 
-/// Modes are different states of a display window which allow to interpret same keys as having
-/// a different meaning.
+/// Modes are different states of an editor which allow to interpret same key presses differently.
 pub const EditorMode = enum {
     normal,
     insert,
 };
 
-// Supports actions, some optionally take a filename parameter which means they create new
+// Workspace supports actions, some optionally take a filename parameter which means they create new
 // text buffer:
 // * pane [filename] - create new window pane with current orientation and open last buffer
 // * panev [filename] - for horizontal/vertical layout, create new window pane vertically
@@ -61,7 +60,8 @@ pub const EditorMode = enum {
 // * right-pane - switchWindowPane(direction: right)
 // * quit-editor - deinit()
 
-/// Workspace is a collection of all elements in code editor that can be considered a state.
+/// Workspace is a collection of all elements in code editor that can be considered a state,
+/// as well as a set of actions to operate on them from a high-level perspective.
 pub const Workspace = struct {
     ally: *mem.Allocator,
     text_buffers: std.TailQueue(TextBuffer) = std.TailQueue(TextBuffer){},
@@ -81,7 +81,7 @@ pub const Workspace = struct {
     const WindowPaneNode = std.TailQueue(WindowPane).Node;
     const IdNode = std.TailQueue(Id).Node;
 
-    pub fn init(ally: *mem.Allocator) Workspace {
+    pub fn init(ally: *mem.Allocator) Self {
         return Self{ .ally = ally };
     }
 
@@ -115,16 +115,14 @@ pub const Workspace = struct {
     /// Initializes all the state elements for a new workspace.
     pub fn new(
         self: *Self,
-        path: ?[]u8,
-        content: []u8,
-        text_area_rows: u32,
-        text_area_cols: u32,
+        text_buffer_init_params: TextBuffer.InitParams,
+        window_pane_init_params: WindowPane.InitParams,
     ) !ActiveDisplayState {
-        var text_buffer = try self.createTextBuffer(path, content);
+        var text_buffer = try self.createTextBuffer(text_buffer_init_params);
         errdefer self.destroyTextBuffer(text_buffer.data.id);
         var display_window = try self.createDisplayWindow();
         errdefer self.destroyDisplayWindow(display_window.data.id);
-        var window_pane = try self.createWindowPane(text_area_rows, text_area_cols);
+        var window_pane = try self.createWindowPane(window_pane_init_params);
         errdefer self.destroyWindowPane(window_pane.data.id);
         var window_tab = try self.createWindowTab();
         errdefer self.destroyWindowTab(window_tab.data.id);
@@ -149,10 +147,9 @@ pub const Workspace = struct {
     pub fn newTextBuffer(
         self: *Self,
         active_display_state: ActiveDisplayState,
-        path: ?[]u8,
-        content: []u8,
+        text_buffer_init_params: TextBuffer.InitParams,
     ) !ActiveDisplayState {
-        var text_buffer = try self.createTextBuffer(path, content);
+        var text_buffer = try self.createTextBuffer(text_buffer_init_params);
         errdefer self.destroyTextBuffer(text_buffer.data.id);
         return self.openTextBuffer(
             active_display_state,
@@ -190,9 +187,9 @@ pub const Workspace = struct {
         }
     }
 
-    fn createTextBuffer(self: *Self, path: ?[]u8, content: []u8) !*TextBufferNode {
+    fn createTextBuffer(self: *Self, init_params: TextBuffer.InitParams) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
-        text_buffer.data = TextBuffer.init(self, path, content);
+        text_buffer.data = TextBuffer.init(self, init_params);
         self.text_buffer_id_counter += 1;
         text_buffer.data.id = self.text_buffer_id_counter;
         self.text_buffers.append(text_buffer);
@@ -208,9 +205,9 @@ pub const Workspace = struct {
         return display_window;
     }
 
-    fn createWindowPane(self: *Self, text_area_rows: u32, text_area_cols: u32) !*WindowPaneNode {
+    fn createWindowPane(self: *Self, init_params: WindowPane.InitParams) !*WindowPaneNode {
         var window_pane = try self.ally.create(WindowPaneNode);
-        window_pane.data = WindowPane.init(self, text_area_rows, text_area_cols);
+        window_pane.data = WindowPane.init(self, init_params);
         self.window_pane_id_counter += 1;
         window_pane.data.id = self.window_pane_id_counter;
         self.window_panes.append(window_pane);
@@ -314,7 +311,14 @@ test "new workspace" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var text = try testing.allocator.dupe(u8, "hello");
-    const active_display_state = try workspace.new(null, text, 1, 1);
+    var name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .content = text,
+        .path = null,
+        .name = name,
+    };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
 
     try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
@@ -326,16 +330,28 @@ test "new workspace" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-test "add text buffer to workspace" {
+test "new text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var old_text = try testing.allocator.dupe(u8, "hello");
-    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
+    var old_name = try testing.allocator.dupe(u8, "name");
+    const old_text_buffer_init_params = TextBuffer.InitParams{
+        .content = old_text,
+        .path = null,
+        .name = old_name,
+    };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const old_active_display_state = try workspace.new(old_text_buffer_init_params, window_pane_init_params);
     var text = try testing.allocator.dupe(u8, "hello");
+    var name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .content = text,
+        .path = null,
+        .name = name,
+    };
     const active_display_state = try workspace.newTextBuffer(
         old_active_display_state,
-        null,
-        text,
+        text_buffer_init_params,
     );
 
     try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
@@ -348,11 +364,19 @@ test "add text buffer to workspace" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-test "add display window to workspace" {
+test "open existing text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
+
     var old_text = try testing.allocator.dupe(u8, "hello");
-    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
+    var old_name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .content = old_text,
+        .path = null,
+        .name = old_name,
+    };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
     const active_display_state = try workspace.openTextBuffer(
         old_active_display_state,
         workspace.text_buffers.last.?.data.id,
@@ -369,21 +393,22 @@ test "add display window to workspace" {
 }
 
 test "handle failing conditions" {
-    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 10).allocator;
+    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 7).allocator;
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
-    var old_text = try failing_allocator.dupe(u8, "hello");
-    const old_active_display_state = try workspace.new(null, old_text, 1, 1);
-    var text = try failing_allocator.dupe(u8, "hello");
-    try testing.expectError(error.OutOfMemory, workspace.createAndOpenTextBufferInActiveWindowPane(
+    var text = try testing.allocator.dupe(u8, "hello");
+    var name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{ .content = text, .path = null, .name = name };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
+    try testing.expectError(error.OutOfMemory, workspace.openTextBuffer(
         old_active_display_state,
-        null,
-        text,
+        workspace.text_buffers.last.?.data.id,
     ));
 }
 
-/// Manages the actual text of an opened file and provides an interface for querying it and
-/// modifying.
+/// Manages the content of an opened file on a filesystem or of a virtual file
+/// and provides an interface for querying and modifying it.
 pub const TextBuffer = struct {
     workspace: *Workspace,
     id: Workspace.Id = 0,
@@ -391,17 +416,26 @@ pub const TextBuffer = struct {
     content: std.ArrayList(u8),
     /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
     path: ?[]u8,
+    /// A textual representation of the buffer name, either path or name for virtual buffer.
+    name: []u8,
     // metrics
     max_line_number: u32 = 0,
 
     const Self = @This();
 
+    pub const InitParams = struct {
+        path: ?[]u8,
+        name: []u8,
+        content: []u8,
+    };
+
     /// Takes ownership of `path` and `content`, they must be allocated with `workspaces` allocator.
-    pub fn init(workspace: *Workspace, path: ?[]u8, content: []u8) Self {
+    pub fn init(workspace: *Workspace, init_params: InitParams) Self {
         var result = Self{
             .workspace = workspace,
-            .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
-            .path = path,
+            .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, init_params.content),
+            .path = init_params.path,
+            .name = init_params.name,
         };
         result.countMetrics();
         return result;
@@ -414,6 +448,8 @@ pub const TextBuffer = struct {
             display_window_id = dw_id.next;
             self.workspace.ally.destroy(dw_id);
         }
+        if (self.path) |p| self.workspace.ally.free(p);
+        self.workspace.ally.free(self.name);
     }
 
     pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
@@ -553,13 +589,18 @@ pub const WindowPane = struct {
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace, text_area_rows: u32, text_area_cols: u32) Self {
-        assert(text_area_rows != 0);
-        assert(text_area_cols != 0);
+    pub const InitParams = struct {
+        text_area_rows: u32,
+        text_area_cols: u32,
+    };
+
+    pub fn init(workspace: *Workspace, init_params: InitParams) Self {
+        assert(init_params.text_area_rows != 0);
+        assert(init_params.text_area_cols != 0);
         return Self{
             .workspace = workspace,
-            .text_area_rows = text_area_rows,
-            .text_area_cols = text_area_cols,
+            .text_area_rows = init_params.text_area_rows,
+            .text_area_cols = init_params.text_area_cols,
         };
     }
 
