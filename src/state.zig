@@ -308,7 +308,7 @@ fn checkLastStateItemsCongruence(workspace: Workspace, active_display_state: Act
     try testing.expectEqual(display_window.data.id, active_display_state.display_window_id);
 }
 
-test "new workspace" {
+test "state: new workspace" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var text = try testing.allocator.dupe(u8, "hello");
@@ -331,7 +331,7 @@ test "new workspace" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-test "new text buffer" {
+test "state: new text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
     var old_text = try testing.allocator.dupe(u8, "hello");
@@ -365,7 +365,7 @@ test "new text buffer" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-test "open existing text buffer" {
+test "state: open existing text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
 
@@ -393,7 +393,7 @@ test "open existing text buffer" {
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-test "handle failing conditions" {
+test "state: handle failing conditions" {
     const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 7).allocator;
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();

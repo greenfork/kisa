@@ -115,9 +115,9 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Used by `std.json.stringify`.
-        pub fn jsonstringify(
+        pub fn jsonStringify(
             self: Self,
-            options: json.stringifyOptions,
+            options: json.StringifyOptions,
             out_stream: anytype,
         ) @TypeOf(out_stream).Error!void {
             if (self.id == null) {
@@ -185,10 +185,18 @@ pub fn Response(comptime ResultShape: type) type {
 
         const Self = @This();
 
+        pub fn initResult(id: ?IdValue, result: ResultShape) Self {
+            return Self{
+                .jsonrpc = jsonrpc_version,
+                .id = id,
+                .result = result,
+            };
+        }
+
         /// Parses a string into specified `Response` structure. Requires `allocator` if
         /// any of the `Response` values are arrays/pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
-        pub fn parse(allocator: ?*std.mem.Allocator, string: []const u8) !Self {
+        pub fn parseAlloc(allocator: ?*std.mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
@@ -199,6 +207,11 @@ pub fn Response(comptime ResultShape: type) type {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
+        }
+
+        pub fn parse(buf: []u8, string: []const u8) !Self {
+            var fba = std.heap.FixedBufferAllocator.init(buf);
+            return try parseAlloc(&fba.allocator, string);
         }
 
         /// Caller owns the memory.
@@ -213,9 +226,9 @@ pub fn Response(comptime ResultShape: type) type {
         }
 
         /// Used by `std.json.stringify`.
-        pub fn jsonstringify(
+        pub fn jsonStringify(
             self: Self,
-            options: json.stringifyOptions,
+            options: json.StringifyOptions,
             out_stream: anytype,
         ) @TypeOf(out_stream).Error!void {
             if (self.result == null) {
@@ -244,7 +257,7 @@ pub const SimpleResponse = Response(Value);
 // Note that "generate" tests depend on how Zig orders keys in the object type. In spec they have
 // no order and for the actual use it also doesn't matter.
 
-test "parse alloc request" {
+test "jsonrpc: parse alloc request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
     const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
@@ -266,7 +279,7 @@ test "parse alloc request" {
     parsed.parseFree(testing.allocator);
 }
 
-test "parse request" {
+test "jsonrpc: parse request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
     const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
@@ -336,7 +349,7 @@ fn removeSpaces(allocator: *std.mem.Allocator, str: []const u8) ![]u8 {
     return result.items;
 }
 
-test "parse complex request" {
+test "jsonrpc: parse complex request" {
     const reverse_attr = [_][]const u8{"reverse"};
     const final_attr = [_][]const u8{ "final_fg", "final_bg" };
     const Parameter = union(enum) {
@@ -487,7 +500,7 @@ test "parse complex request" {
     parsed.parseFree(testing.allocator);
 }
 
-test "generate request" {
+test "jsonrpc: generate request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
     const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
@@ -504,7 +517,7 @@ test "generate request" {
     testing.allocator.free(generated);
 }
 
-test "generate notification without ID" {
+test "jsonrpc: generate notification without ID" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
     const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
@@ -521,7 +534,7 @@ test "generate notification without ID" {
     testing.allocator.free(generated);
 }
 
-test "generate complex request" {
+test "jsonrpc: generate complex request" {
     const reverse_attr = [_][]const u8{"reverse"};
     const final_attr = [_][]const u8{ "final_fg", "final_bg" };
     const Parameter = union(enum) {
@@ -661,7 +674,7 @@ test "generate complex request" {
     testing.allocator.free(stripped_jsonrpc_string);
 }
 
-test "parse success response" {
+test "jsonrpc: parse alloc success response" {
     const data = Value{ .Integer = 42 };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
@@ -671,14 +684,31 @@ test "parse success response" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":42,"id":63}
     ;
-    const parsed = try SimpleResponse.parse(testing.allocator, jsonrpc_string);
+    const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
     try testing.expectEqual(response.result.?.Integer, parsed.result.?.Integer);
     try testing.expectEqual(response.id, parsed.id);
     parsed.parseFree(testing.allocator);
 }
 
-test "parse error response" {
+test "jsonrpc: parse buf success response" {
+    const data = Value{ .Integer = 42 };
+    const response = SimpleResponse{
+        .jsonrpc = jsonrpc_version,
+        .result = data,
+        .id = .{ .Integer = 63 },
+    };
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","result":42,"id":63}
+    ;
+    var buf: [4096]u8 = undefined;
+    const parsed = try SimpleResponse.parse(&buf, jsonrpc_string);
+    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
+    try testing.expectEqual(response.result.?.Integer, parsed.result.?.Integer);
+    try testing.expectEqual(response.id, parsed.id);
+}
+
+test "jsonrpc: parse error response" {
     const data = ResponseErrorImpl{ .code = 13, .message = "error message" };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
@@ -688,7 +718,7 @@ test "parse error response" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","error":{"code":13,"message":"error message"},"id":63}
     ;
-    const parsed = try SimpleResponse.parse(testing.allocator, jsonrpc_string);
+    const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
     try testing.expectEqual(response.@"error".?.code, parsed.@"error".?.code);
     try testing.expectEqualStrings(response.@"error".?.message, parsed.@"error".?.message);
@@ -696,7 +726,7 @@ test "parse error response" {
     parsed.parseFree(testing.allocator);
 }
 
-test "parse array response" {
+test "jsonrpc: parse array response" {
     const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
     const array_data = .{ .Array = std.mem.span(&data) };
     const response = SimpleResponse{
@@ -707,7 +737,7 @@ test "parse array response" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
     ;
-    const parsed = try SimpleResponse.parse(testing.allocator, jsonrpc_string);
+    const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
     try testing.expectEqual(response.result.?.Array[0].Integer, parsed.result.?.Array[0].Integer);
     try testing.expectEqualStrings(response.result.?.Array[1].String, parsed.result.?.Array[1].String);
@@ -715,7 +745,7 @@ test "parse array response" {
     parsed.parseFree(testing.allocator);
 }
 
-test "parse complex response" {
+test "jsonrpc: parse complex response" {
     const reverse_attr = [_][]const u8{"reverse"};
     const final_attr = [_][]const u8{ "final_fg", "final_bg" };
     const Parameter = union(enum) {
@@ -846,7 +876,7 @@ test "parse complex response" {
         \\  ]
         \\}
     ;
-    const parsed = try MyResponse.parse(testing.allocator, jsonrpc_string);
+    const parsed = try MyResponse.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
     try testing.expectEqual(response.id, parsed.id);
 
@@ -865,7 +895,7 @@ test "parse complex response" {
     parsed.parseFree(testing.allocator);
 }
 
-test "generate success response" {
+test "jsonrpc: generate success response" {
     const data = Value{ .Integer = 42 };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
@@ -880,7 +910,7 @@ test "generate success response" {
     testing.allocator.free(generated);
 }
 
-test "generate error response" {
+test "jsonrpc: generate error response" {
     const data = ResponseErrorImpl{ .code = 13, .message = "error message" };
     const response = SimpleResponse{
         .jsonrpc = jsonrpc_version,
@@ -891,11 +921,11 @@ test "generate error response" {
         \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message"}}
     ;
     const generated = try response.generate(testing.allocator);
+    defer testing.allocator.free(generated);
     try testing.expectEqualStrings(jsonrpc_string, generated);
-    testing.allocator.free(generated);
 }
 
-test "generate complex response" {
+test "jsonrpc: generate complex response" {
     const reverse_attr = [_][]const u8{"reverse"};
     const final_attr = [_][]const u8{ "final_fg", "final_bg" };
     const Parameter = union(enum) {
@@ -1033,7 +1063,7 @@ test "generate complex response" {
     testing.allocator.free(stripped_jsonrpc_string);
 }
 
-test "parse request and only return a method" {
+test "jsonrpc: parse request and only return a method" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
@@ -1042,7 +1072,7 @@ test "parse request and only return a method" {
     testing.allocator.free(method);
 }
 
-test "parse request and only return a method" {
+test "jsonrpc: parse request and only return a method" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;

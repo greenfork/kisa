@@ -110,11 +110,9 @@ pub const Event = union(EventKind) {
 /// Event dispatcher processes any events happening on the server. The result is usually
 /// mutation of state, firing of registered hooks if any, and sending response back to client.
 pub const EventDispatcher = struct {
-    text_buffer: *TextBuffer,
-
     const Self = @This();
 
-    pub fn init(text_buffer: *TextBuffer) Self {
+    pub fn init() Self {
         return .{ .text_buffer = text_buffer };
     }
 
@@ -176,6 +174,24 @@ pub const Client = struct {
         };
     }
 
+    pub fn deinit(self: *Self) void {
+        self.sendExitNotify() catch unreachable;
+        self.server.deinit();
+    }
+
+    /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
+    /// we want to receive an acknowledgement from the server.
+    pub fn sendExitNotify(self: *Client) !void {
+        // std.time.sleep(std.time.ns_per_s * 1);
+        var message = self.emptyJsonRpcRequest();
+        message.method = "exitNotify";
+        // TODO: 1 should be changed to id or something.
+        message.params = .{ .Integer = 1 };
+        try message.writeTo(self.server.writer());
+        try self.server.writeEndByte();
+        try self.waitForResponse(message.id);
+    }
+
     // TODO: better name
     pub fn acceptText(self: *Client) !void {
         // FIXME: use a fixed size buffer to receive messages instead of allocator.
@@ -195,12 +211,11 @@ pub const Client = struct {
         }
     }
 
-    pub fn sendFileToOpen(self: *Client) !void {
+    pub fn sendFileToOpen(self: *Client, filename: []u8) !void {
         self.last_message_id += 1;
         var message = self.emptyJsonRpcRequest();
         message.method = "openFile";
-        message.params = .{ .String = try filePathForReading(self.ally) };
-        defer self.ally.free(message.params.String);
+        message.params = .{ .String = filename };
         try message.writeTo(self.server.writer());
         try self.server.writeEndByte();
     }
@@ -217,13 +232,21 @@ pub const Client = struct {
         try self.waitForResponse(id);
     }
 
-    pub fn waitForResponse(self: *Self, id: i64) !void {
-        _ = self;
-        _ = id;
-        return;
+    pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
+        const response_packet = try self.server.readPacketAlloc(self.ally);
+        defer self.ally.free(response_packet);
+        const response = try jsonrpc.SimpleResponse.parseAlloc(self.ally, response_packet);
+        defer response.parseFree(self.ally);
+        if (response.result != null) {
+            if (!std.meta.eql(id, response.id)) {
+                return error.InvalidIdInResponse;
+            }
+        } else {
+            return error.ErrorResponse;
+        }
     }
 
-    pub fn nextMessageId(self: *Self) u64 {
+    pub fn nextMessageId(self: *Self) u32 {
         self.last_message_id += 1;
         return self.last_message_id;
     }
@@ -239,10 +262,10 @@ pub const Client = struct {
         }
     }
 
-    fn emptyJsonRpcRequest(self: Self) jsonrpc.SimpleRequest {
+    fn emptyJsonRpcRequest(self: *Self) jsonrpc.SimpleRequest {
         return jsonrpc.SimpleRequest{
             .jsonrpc = jsonrpc.jsonrpc_version,
-            .id = .{ .Integer = self.last_message_id },
+            .id = .{ .Integer = self.nextMessageId() },
             .method = undefined,
             .params = undefined,
         };
@@ -252,8 +275,6 @@ pub const Client = struct {
 pub const Server = struct {
     ally: *mem.Allocator,
     clients: std.ArrayList(ClientServerRepresentation),
-    text_buffers: std.ArrayList(*TextBuffer),
-    display_windows: std.ArrayList(*DisplayWindow),
     config: Config,
 
     const Self = @This();
@@ -261,49 +282,45 @@ pub const Server = struct {
     pub fn init(ally: *mem.Allocator, client: ClientServerRepresentation) !Self {
         var clients = std.ArrayList(ClientServerRepresentation).init(ally);
         try clients.append(client);
-        const text_buffers = std.ArrayList(*TextBuffer).init(ally);
-        const display_windows = std.ArrayList(*DisplayWindow).init(ally);
 
         return Self{
             .ally = ally,
             .clients = clients,
-            .text_buffers = text_buffers,
-            .display_windows = display_windows,
             .config = try readConfig(ally),
         };
     }
 
     pub fn deinit(self: *Self) void {
+        for (self.clients.items) |*client| client.deinit();
         self.clients.deinit();
-        for (self.text_buffers.items) |text_buffer| {
-            text_buffer.deinit();
-        }
-        self.text_buffers.deinit();
-        self.display_windows.deinit();
         self.config.deinit();
     }
 
+    // TODO: text buffer
     pub fn createNewTextBuffer(self: *Self, text: []const u8) !void {
-        var text_buffer_ptr = try self.ally.create(TextBuffer);
-        text_buffer_ptr.* = try TextBuffer.init(self.ally, text);
-        try self.text_buffers.append(text_buffer_ptr);
+        _ = self;
+        _ = text;
+        // var text_buffer_ptr = try self.ally.create(TextBuffer);
+        // text_buffer_ptr.* = try TextBuffer.init(self.ally, text);
+        // try self.text_buffers.append(text_buffer_ptr);
 
-        var display_window_ptr = try self.ally.create(DisplayWindow);
-        display_window_ptr.* = DisplayWindow.init(text_buffer_ptr, 5, 100);
-        try self.display_windows.append(display_window_ptr);
+        // var display_window_ptr = try self.ally.create(DisplayWindow);
+        // display_window_ptr.* = DisplayWindow.init(text_buffer_ptr, 5, 100);
+        // try self.display_windows.append(display_window_ptr);
 
-        self.text_buffers.items[0].display_windows[0] = display_window_ptr;
+        // self.text_buffers.items[0].display_windows[0] = display_window_ptr;
     }
 
     pub fn sendText(self: *Self) !void {
-        var client = self.clients.items[0];
-        var text_buffer = self.text_buffers.items[0];
-        var display_window = text_buffer.display_windows[0];
-        // TODO: freeing like this does not scale for other messages
-        const message = try display_window.renderTextArea();
-        defer self.ally.free(message.params.Array);
-        try message.writeTo(client.writer());
-        try client.writeEndByte();
+        _ = self;
+        // var client = self.clients.items[0];
+        // var text_buffer = self.text_buffers.items[0];
+        // var display_window = text_buffer.display_windows[0];
+        // // TODO: freeing like this does not scale for other messages
+        // const message = try display_window.renderTextArea();
+        // defer self.ally.free(message.params.Array);
+        // try message.writeTo(client.writer());
+        // try client.writeEndByte();
     }
 
     pub fn acceptOpenFileRequest(self: *Self) !void {
@@ -330,6 +347,16 @@ pub const Server = struct {
                 if (mem.eql(u8, "keypress", method)) {
                     const keypress_message = try KeypressRequest.parse(&message_buf, packet);
                     std.debug.print("keypress_message: {}\n", .{keypress_message});
+                } else if (mem.eql(u8, "exitNotify", method)) {
+                    const exit_request_message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
+                    const ack_response = jsonrpc.SimpleResponse.initResult(
+                        exit_request_message.id,
+                        .{ .Bool = true },
+                    );
+                    try ack_response.writeTo(self.clients.items[0].writer());
+                    try self.clients.items[0].writeEndByte();
+                    self.deinit();
+                    break;
                 } else {
                     @panic("unknown method in server loop");
                 }
@@ -432,6 +459,11 @@ pub const ClientServerRepresentation = struct {
     const end_of_message = '\x17';
     pub const max_packet_size: usize = 1024 * 16;
 
+    pub fn deinit(self: Self) void {
+        os.close(self.read_stream);
+        os.close(self.write_stream);
+    }
+
     pub fn reader(self: Self) std.fs.File.Reader {
         return pipeToFile(self.read_stream).reader();
     }
@@ -528,24 +560,53 @@ pub const Application = struct {
 
     fn startServerThread(ally: *mem.Allocator, transport: Transport) !void {
         var server = try Server.init(ally, transport.clientRepresentationForServer());
-        defer server.deinit();
-        try server.acceptOpenFileRequest();
-        try server.sendText();
+        errdefer server.deinit();
+        // try server.acceptOpenFileRequest();
+        // try server.sendText();
         try server.loop();
     }
+
+    pub fn deinit(self: *Self) void {
+        self.client.deinit();
+    }
 };
+
+test "main: start application threaded via pipes" {
+    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
+    defer testing.allocator.free(filename);
+    if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
+        defer app.deinit();
+        var client = app.client;
+        // try client.sendExitNotification();
+        // client.server.deinit();
+        // std.time.sleep(std.time.ns_per_s * 1);
+        // while (true) {}
+        _ = client;
+        // try client.sendFileToOpen(filename);
+        // try client.acceptText();
+    }
+}
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var ally = &gpa.allocator;
+
+    var arg_it = std.process.args();
+    _ = try arg_it.next(ally) orelse unreachable;
+    const filename = blk: {
+        if (arg_it.next(ally)) |file_name_delimited| {
+            break :blk try std.fs.cwd().realpathAlloc(ally, try file_name_delimited);
+        } else {
+            return error.FileNotSupplied;
+        }
+    };
 
     if (try Application.start(ally, .threaded, .pipes)) |app| {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
 
-        // TODO: pass a file path here.
-        try client.sendFileToOpen();
+        try client.sendFileToOpen(filename);
         try client.acceptText();
 
         while (true) {
@@ -790,7 +851,7 @@ pub const Keys = struct {
     };
 };
 
-test "keys" {
+test "main: keys" {
     try std.testing.expect(!Keys.Key.ascii('c').hasCtrl());
     try std.testing.expect(Keys.Key.ctrl('c').hasCtrl());
     try std.testing.expect(Keys.Key.ascii('c').isAscii());

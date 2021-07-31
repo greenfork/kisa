@@ -233,7 +233,7 @@ pub const Config = struct {
     }
 };
 
-test "add default config" {
+test "config: add default config" {
     var ally = testing.allocator;
     const config_content =
         \\keymap:
