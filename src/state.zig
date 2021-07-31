@@ -146,7 +146,7 @@ pub const Workspace = struct {
     }
 
     /// Adds text buffer, display window, removes old display window.
-    pub fn createAndOpenTextBufferInActiveWindowPane(
+    pub fn newTextBuffer(
         self: *Self,
         active_display_state: ActiveDisplayState,
         path: ?[]u8,
@@ -154,7 +154,7 @@ pub const Workspace = struct {
     ) !ActiveDisplayState {
         var text_buffer = try self.createTextBuffer(path, content);
         errdefer self.destroyTextBuffer(text_buffer.data.id);
-        return self.openTextBufferInActiveWindowPane(
+        return self.openTextBuffer(
             active_display_state,
             text_buffer.data.id,
         ) catch |err| switch (err) {
@@ -164,7 +164,7 @@ pub const Workspace = struct {
     }
 
     /// Adds display window, removes old display window.
-    pub fn openTextBufferInActiveWindowPane(
+    pub fn openTextBuffer(
         self: *Self,
         active_display_state: ActiveDisplayState,
         text_buffer_id: Id,
@@ -332,7 +332,7 @@ test "add text buffer to workspace" {
     var old_text = try testing.allocator.dupe(u8, "hello");
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
     var text = try testing.allocator.dupe(u8, "hello");
-    const active_display_state = try workspace.createAndOpenTextBufferInActiveWindowPane(
+    const active_display_state = try workspace.newTextBuffer(
         old_active_display_state,
         null,
         text,
@@ -353,7 +353,7 @@ test "add display window to workspace" {
     defer workspace.deinit();
     var old_text = try testing.allocator.dupe(u8, "hello");
     const old_active_display_state = try workspace.new(null, old_text, 1, 1);
-    const active_display_state = try workspace.openTextBufferInActiveWindowPane(
+    const active_display_state = try workspace.openTextBuffer(
         old_active_display_state,
         workspace.text_buffers.last.?.data.id,
     );
