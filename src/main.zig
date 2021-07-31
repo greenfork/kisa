@@ -182,7 +182,6 @@ pub const Client = struct {
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
     /// we want to receive an acknowledgement from the server.
     pub fn sendExitNotify(self: *Client) !void {
-        // std.time.sleep(std.time.ns_per_s * 1);
         var message = self.emptyJsonRpcRequest();
         message.method = "exitNotify";
         // TODO: 1 should be changed to id or something.
@@ -194,13 +193,12 @@ pub const Client = struct {
 
     // TODO: better name
     pub fn acceptText(self: *Client) !void {
-        // FIXME: use a fixed size buffer to receive messages instead of allocator.
-        const request_string = try self.server.readPacketAlloc(self.ally);
-        defer self.ally.free(request_string);
-        const request = try jsonrpc.SimpleRequest.parseAlloc(self.ally, request_string);
-        defer request.parseFree(self.ally);
-        if (mem.eql(u8, "draw", request.method)) {
-            const params = request.params.Array;
+        var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        const packet = try self.server.readPacket(&packet_buf);
+        const message = try jsonrpc.SimpleRequest.parseAlloc(&message_buf, packet);
+        if (mem.eql(u8, "draw", message.method)) {
+            const params = message.params.Array;
             try self.ui.draw(
                 params[0].String,
                 @intCast(u32, params[1].Integer),
@@ -580,12 +578,16 @@ test "main: start application threaded via pipes" {
 }
 
 test "main: start application forked via pipes" {
-    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
-    defer testing.allocator.free(filename);
     if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
         defer app.deinit();
     }
 }
+
+// test "main: request client registration" {
+//     if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
+//         defer app.deinit();
+//     }
+// }
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
