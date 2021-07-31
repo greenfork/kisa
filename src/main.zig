@@ -186,15 +186,14 @@ pub const Client = struct {
         message.method = "exitNotify";
         // TODO: 1 should be changed to id or something.
         message.params = .{ .Integer = 1 };
-        try message.writeTo(self.server.writer());
-        try self.server.writeEndByte();
+        try self.server.send(message);
         try self.waitForResponse(message.id);
     }
 
     // TODO: better name
     pub fn acceptText(self: *Client) !void {
         var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
-        var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        var message_buf: [ClientServerRepresentation.max_message_size]u8 = undefined;
         const packet = try self.server.readPacket(&packet_buf);
         const message = try jsonrpc.SimpleRequest.parseAlloc(&message_buf, packet);
         if (mem.eql(u8, "draw", message.method)) {
@@ -231,16 +230,18 @@ pub const Client = struct {
     }
 
     pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
-        const response_packet = try self.server.readPacketAlloc(self.ally);
-        defer self.ally.free(response_packet);
-        const response = try jsonrpc.SimpleResponse.parseAlloc(self.ally, response_packet);
-        defer response.parseFree(self.ally);
-        if (response.result != null) {
-            if (!std.meta.eql(id, response.id)) {
-                return error.InvalidIdInResponse;
+        var message_buf: [ClientServerRepresentation.max_message_size]u8 = undefined;
+        const response = try self.server.recv(jsonrpc.SimpleResponse, &message_buf);
+        if (response) |res| {
+            if (res.result != null) {
+                if (!std.meta.eql(id, res.id)) {
+                    return error.InvalidIdInResponse;
+                }
+            } else {
+                return error.ErrorResponse;
             }
         } else {
-            return error.ErrorResponse;
+            return error.ClosedForReading;
         }
     }
 
@@ -335,10 +336,11 @@ pub const Server = struct {
         }
     }
 
+    /// Main loop of the server, listens for requests and sends responses.
     pub fn loop(self: *Self) !void {
         var packet_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
-        var method_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
-        var message_buf: [ClientServerRepresentation.max_packet_size]u8 = undefined;
+        var method_buf: [ClientServerRepresentation.max_method_size]u8 = undefined;
+        var message_buf: [ClientServerRepresentation.max_message_size]u8 = undefined;
         while (true) {
             if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
                 const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
@@ -351,8 +353,7 @@ pub const Server = struct {
                         exit_request_message.id,
                         .{ .Bool = true },
                     );
-                    try ack_response.writeTo(self.clients.items[0].writer());
-                    try self.clients.items[0].writeEndByte();
+                    try self.clients.items[0].send(ack_response);
                     self.deinit();
                     break;
                 } else {
@@ -416,6 +417,7 @@ pub const Transport = struct {
                 return ClientServerRepresentation{
                     .read_stream = self.client_reads,
                     .write_stream = self.client_writes,
+                    .transport_kind = self.kind,
                 };
             },
         }
@@ -428,6 +430,7 @@ pub const Transport = struct {
                 return ClientServerRepresentation{
                     .read_stream = self.server_reads,
                     .write_stream = self.server_writes,
+                    .transport_kind = self.kind,
                 };
             },
         }
@@ -451,37 +454,78 @@ pub const Transport = struct {
 pub const ClientServerRepresentation = struct {
     read_stream: os.fd_t,
     write_stream: os.fd_t,
+    transport_kind: Transport.Kind,
 
     const Self = @This();
     // TODO: use just the curly/square braces to determine the end of a message.
-    const end_of_message = '\x17';
+    const end_of_packet = '\x17';
     pub const max_packet_size: usize = 1024 * 16;
+    pub const max_method_size: usize = 1024;
+    pub const max_message_size: usize = max_packet_size;
 
     pub fn deinit(self: Self) void {
         os.close(self.read_stream);
         os.close(self.write_stream);
     }
 
+    pub fn send(self: Self, message: anytype) !void {
+        switch (self.transport_kind) {
+            .pipes => {
+                try message.writeTo(self.writer());
+                try self.writeEndByte();
+            },
+        }
+    }
+
+    pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
+        switch (self.transport_kind) {
+            .pipes => {
+                var packet_buf: [max_packet_size]u8 = undefined;
+                if (try self.readPacket(&packet_buf)) |packet| {
+                    return try Message.parse(out_buf, packet);
+                } else {
+                    return null;
+                }
+            },
+        }
+    }
+
     pub fn reader(self: Self) std.fs.File.Reader {
-        return pipeToFile(self.read_stream).reader();
+        switch (self.transport_kind) {
+            .pipes => {
+                return pipeToFile(self.read_stream).reader();
+            },
+        }
     }
 
     /// Returns the slice with the length of a received packet.
     pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
-        return try self.reader().readUntilDelimiterOrEof(buf, end_of_message);
+        switch (self.transport_kind) {
+            .pipes => {
+                return try self.reader().readUntilDelimiterOrEof(buf, end_of_packet);
+            },
+        }
     }
 
     /// Caller owns the memory.
     pub fn readPacketAlloc(self: Self, ally: *mem.Allocator) ![]u8 {
-        return try self.reader().readUntilDelimiterAlloc(ally, end_of_message, max_packet_size);
+        switch (self.transport_kind) {
+            .pipes => {
+                return try self.reader().readUntilDelimiterAlloc(ally, end_of_packet, max_packet_size);
+            },
+        }
     }
 
     pub fn writer(self: Self) std.fs.File.Writer {
-        return pipeToFile(self.write_stream).writer();
+        switch (self.transport_kind) {
+            .pipes => {
+                return pipeToFile(self.write_stream).writer();
+            },
+        }
     }
 
     pub fn writeEndByte(self: Self) !void {
-        try self.writer().writeByte(end_of_message);
+        try self.writer().writeByte(end_of_packet);
     }
 
     fn pipeToFile(fd: os.fd_t) std.fs.File {
@@ -495,6 +539,8 @@ pub const ClientServerRepresentation = struct {
 
 pub const Application = struct {
     client: Client,
+    /// In threaded mode we call `join` on `deinit`. In not threaded mode this field is `null`.
+    server_thread: ?std.Thread = null,
 
     const Self = @This();
 
@@ -545,12 +591,11 @@ pub const Application = struct {
                     startServerThread,
                     .{ ally, transport },
                 );
-                server_thread.detach();
 
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
                 var client = Client.init(ally, ui, transport.serverRepresentationForClient());
-                return Self{ .client = client };
+                return Self{ .client = client, .server_thread = server_thread };
             },
         }
         unreachable;
@@ -566,6 +611,9 @@ pub const Application = struct {
 
     pub fn deinit(self: *Self) void {
         self.client.deinit();
+        if (self.server_thread) |server_thread| {
+            server_thread.join();
+        }
     }
 };
 
