@@ -23,7 +23,6 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         const test_cases = b.addTest("src/main.zig");
-        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -31,6 +30,14 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         const test_cases = b.addTest("src/state.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/config.zig");
+        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
