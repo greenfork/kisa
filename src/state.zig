@@ -127,14 +127,15 @@ pub const Workspace = struct {
         var window_tab = try self.createWindowTab();
         errdefer self.destroyWindowTab(window_tab.data.id);
 
-        display_window.data.text_buffer_id = text_buffer.data.id;
-        window_pane.data.window_tab_id = window_tab.data.id;
-        display_window.data.window_pane_id = window_pane.data.id;
-        window_pane.data.display_window_id = display_window.data.id;
         try text_buffer.data.addDisplayWindowId(display_window.data.id);
         errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
         try window_tab.data.addWindowPaneId(window_pane.data.id);
         errdefer window_tab.data.removeWindowPaneId(window_pane.data.id);
+
+        display_window.data.text_buffer_id = text_buffer.data.id;
+        window_pane.data.window_tab_id = window_tab.data.id;
+        display_window.data.window_pane_id = window_pane.data.id;
+        window_pane.data.display_window_id = display_window.data.id;
 
         return ActiveDisplayState{
             .display_window_id = display_window.data.id,
@@ -169,12 +170,12 @@ pub const Workspace = struct {
         if (self.findTextBuffer(text_buffer_id)) |text_buffer| {
             var display_window = try self.createDisplayWindow();
             errdefer self.destroyDisplayWindow(display_window.data.id);
+            try text_buffer.data.addDisplayWindowId(display_window.data.id);
+            errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
             display_window.data.text_buffer_id = text_buffer.data.id;
             display_window.data.window_pane_id = active_display_state.window_pane_id;
             var window_pane = self.findWindowPane(active_display_state.window_pane_id).?;
             window_pane.data.display_window_id = display_window.data.id;
-            try text_buffer.data.addDisplayWindowId(display_window.data.id);
-            errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
             text_buffer.data.removeDisplayWindowId(active_display_state.display_window_id);
             self.destroyDisplayWindow(active_display_state.display_window_id);
             return ActiveDisplayState{
@@ -405,6 +406,8 @@ test "handle failing conditions" {
         old_active_display_state,
         workspace.text_buffers.last.?.data.id,
     ));
+
+    try checkLastStateItemsCongruence(workspace, old_active_display_state);
 }
 
 /// Manages the content of an opened file on a filesystem or of a virtual file
