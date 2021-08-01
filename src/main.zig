@@ -5,6 +5,11 @@ const io = std.io;
 const mem = std.mem;
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
+const known_folders = @import("known-folders");
+
+pub const known_folders_config = .{
+    .xdg_on_mac = true,
+};
 
 pub const MoveDirection = enum {
     up,
@@ -275,17 +280,16 @@ pub const Server = struct {
     ally: *mem.Allocator,
     clients: std.ArrayList(ClientServerRepresentation),
     config: Config,
+    transport: *Transport,
 
     const Self = @This();
 
-    pub fn init(ally: *mem.Allocator, client: ClientServerRepresentation) !Self {
-        var clients = std.ArrayList(ClientServerRepresentation).init(ally);
-        try clients.append(client);
-
+    pub fn init(ally: *mem.Allocator, transport: *Transport) !Self {
         return Self{
             .ally = ally,
-            .clients = clients,
+            .clients = std.ArrayList(ClientServerRepresentation).init(ally),
             .config = try readConfig(ally),
+            .transport = transport,
         };
     }
 
@@ -293,6 +297,21 @@ pub const Server = struct {
         for (self.clients.items) |*client| client.deinit();
         self.clients.deinit();
         self.config.deinit();
+    }
+
+    pub fn listen(self: *Self) !void {
+        switch (self.transport.state) {
+            .pipes => {
+                try self.clients.append(try self.transport.clientRepresentationForServer());
+            },
+            .unix_domain_seqpacket_socket => |*s| {
+                try os.listen(s.listen_socket, 10);
+                const accepted_socket = try os.accept(s.listen_socket, null, null, os.SOCK_CLOEXEC);
+                self.clients.append(ClientServerRepresentation{
+                    .socket = accepted_socket,
+                });
+            },
+        }
     }
 
     // TODO: text buffer
@@ -381,70 +400,210 @@ pub const Server = struct {
     }
 };
 
+pub const TransportKind = enum {
+    pipes,
+    unix_domain_seqpacket_socket,
+};
+
 pub const Transport = struct {
-    client_reads: os.fd_t,
-    client_writes: os.fd_t,
-    server_reads: os.fd_t,
-    server_writes: os.fd_t,
-    kind: Kind,
+    state: State,
 
     const Self = @This();
 
-    pub const Kind = enum {
-        pipes,
+    const State = union(TransportKind) {
+        pipes: struct {
+            client_reads: ?os.fd_t,
+            client_writes: ?os.fd_t,
+            server_reads: ?os.fd_t,
+            server_writes: ?os.fd_t,
+        },
+        unix_domain_seqpacket_socket: struct {
+            ally: *mem.Allocator,
+            listen_socket: os.socket_t,
+            sockaddr: *os.sockaddr,
+            addrlen: usize,
+        },
     };
 
-    pub fn init(kind: Kind) !Self {
+    pub fn init(kind: TransportKind, allocator: ?*mem.Allocator) !Self {
         switch (kind) {
             .pipes => {
                 const client_reads_server_writes = try os.pipe();
                 const server_reads_client_writes = try os.pipe();
                 return Self{
-                    .client_reads = client_reads_server_writes[0],
-                    .client_writes = server_reads_client_writes[1],
-                    .server_reads = server_reads_client_writes[0],
-                    .server_writes = client_reads_server_writes[1],
-                    .kind = kind,
+                    .state = .{
+                        .pipes = .{
+                            .client_reads = client_reads_server_writes[0],
+                            .client_writes = server_reads_client_writes[1],
+                            .server_reads = server_reads_client_writes[0],
+                            .server_writes = client_reads_server_writes[1],
+                        },
+                    },
+                };
+            },
+            .unix_domain_seqpacket_socket => {
+                const ally = allocator orelse return error.AllocatorRequired;
+
+                // Setup directory and file location.
+                const runtime_dir = (try known_folders.getPath(
+                    ally,
+                    .runtime,
+                )) orelse (try known_folders.getPath(
+                    ally,
+                    .app_menu,
+                )) orelse return error.NoRuntimeDirectory;
+                defer ally.free(runtime_dir);
+                const subpath = "/kisa";
+                var path_builder = std.ArrayList(u8).init(ally);
+                try path_builder.appendSlice(runtime_dir);
+                defer path_builder.deinit();
+                try path_builder.appendSlice(subpath);
+                std.fs.makeDirAbsolute(path_builder.items) catch |err| switch (err) {
+                    error.PathAlreadyExists => {},
+                    else => return err,
+                };
+                const filename = try std.fmt.allocPrint(ally, "{d}", .{os.linux.getpid()});
+                defer ally.free(filename);
+                try path_builder.append('/');
+                try path_builder.appendSlice(filename);
+                std.fs.deleteFileAbsolute(path_builder.items) catch |err| switch (err) {
+                    error.FileNotFound => {},
+                    else => return err,
+                };
+
+                // Setup socket data.
+                const socket = try os.socket(
+                    os.AF_UNIX,
+                    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
+                    os.PF_UNIX,
+                );
+                errdefer os.closeSocket(socket);
+                const addr = try ally.create(os.sockaddr_un);
+                errdefer ally.destroy(addr);
+                addr.* = os.sockaddr_un{ .path = undefined };
+                mem.copy(u8, &addr.path, path_builder.items);
+                addr.path[path_builder.items.len] = 0; // null-terminated string
+                const sockaddr = @ptrCast(*os.sockaddr, addr);
+                const addrlen = @sizeOf(@TypeOf(addr.*));
+
+                try os.bind(socket, sockaddr, addrlen);
+                return Self{
+                    .state = .{
+                        .unix_domain_seqpacket_socket = .{
+                            .ally = ally,
+                            .listen_socket = socket,
+                            .sockaddr = sockaddr,
+                            .addrlen = addrlen,
+                        },
+                    },
                 };
             },
         }
         unreachable;
     }
 
-    pub fn serverRepresentationForClient(self: Self) ClientServerRepresentation {
-        switch (self.kind) {
-            .pipes => {
-                return ClientServerRepresentation{
-                    .read_stream = self.client_reads,
-                    .write_stream = self.client_writes,
-                    .transport_kind = self.kind,
-                };
+    pub fn deinit(self: *Self) void {
+        switch (self.state) {
+            .pipes => |*s| {
+                if (s.client_reads) |client_reads| {
+                    os.close(client_reads);
+                    s.client_reads = null;
+                }
+                if (s.client_writes) |client_writes| {
+                    os.close(client_writes);
+                    s.client_writes = null;
+                }
+                if (s.server_reads) |server_reads| {
+                    os.close(server_reads);
+                    s.server_reads = null;
+                }
+                if (s.server_writes) |server_writes| {
+                    os.close(server_writes);
+                    s.server_writes = null;
+                }
+            },
+            .unix_domain_seqpacket_socket => |s| {
+                // const filename = mem.sliceTo(&sockaddr.path, 0);
+                // std.fs.deleteFileAbsolute(filename) catch {};
+                s.ally.destroy(s.sockaddr);
+                os.closeSocket(s.listen_socket);
             },
         }
         unreachable;
     }
 
-    pub fn clientRepresentationForServer(self: Self) ClientServerRepresentation {
-        switch (self.kind) {
-            .pipes => {
-                return ClientServerRepresentation{
-                    .read_stream = self.server_reads,
-                    .write_stream = self.server_writes,
-                    .transport_kind = self.kind,
+    /// Caller takes ownership of file descriptors, caller must call `os.close` on them.
+    pub fn serverRepresentationForClient(self: *Self) !ClientServerRepresentation {
+        switch (self.state) {
+            .pipes => |*s| {
+                const result = ClientServerRepresentation{
+                    .state = .{
+                        .pipes = .{
+                            .read_stream = s.client_reads orelse return error.ClientReadsAbsent,
+                            .write_stream = s.client_writes orelse return error.ClientWritesAbsent,
+                        },
+                    },
                 };
+                s.client_reads = null;
+                s.client_writes = null;
+                return result;
             },
         }
         unreachable;
     }
 
-    pub fn closeStreamsForServer(self: Self) void {
-        os.close(self.client_reads);
-        os.close(self.client_writes);
+    /// Caller takes ownership of file descriptors, caller must call `os.close` on them.
+    pub fn clientRepresentationForServer(self: *Self) !ClientServerRepresentation {
+        switch (self.state) {
+            .pipes => |*s| {
+                const result = ClientServerRepresentation{
+                    .state = .{
+                        .pipes = .{
+                            .read_stream = s.server_reads orelse return error.ServerReadsAbsent,
+                            .write_stream = s.server_writes orelse return error.ServerWritesAbsent,
+                        },
+                    },
+                };
+                s.server_reads = null;
+                s.server_writes = null;
+                return result;
+            },
+        }
+        unreachable;
     }
 
-    pub fn closeStreamsForClient(self: Self) void {
-        os.close(self.server_reads);
-        os.close(self.server_writes);
+    pub fn closeStreamsForServer(self: *Self) void {
+        switch (self.state) {
+            .pipes => |*s| {
+                if (s.client_reads) |client_reads| {
+                    os.close(client_reads);
+                    s.client_reads = null;
+                }
+                if (s.client_writes) |client_writes| {
+                    os.close(client_writes);
+                    s.client_writes = null;
+                }
+            },
+            .unix_domain_seqpacket_socket => {},
+        }
+        unreachable;
+    }
+
+    pub fn closeStreamsForClient(self: *Self) void {
+        switch (self.state) {
+            .pipes => |*s| {
+                if (s.server_reads) |server_reads| {
+                    os.close(server_reads);
+                    s.server_reads = null;
+                }
+                if (s.server_writes) |server_writes| {
+                    os.close(server_writes);
+                    s.server_writes = null;
+                }
+            },
+            .unix_domain_seqpacket_socket => {},
+        }
+        unreachable;
     }
 };
 
@@ -452,9 +611,20 @@ pub const Transport = struct {
 /// to memory since they can be in separate processes. Therefore they see each other as just
 /// some ways to send and receive information.
 pub const ClientServerRepresentation = struct {
-    read_stream: os.fd_t,
-    write_stream: os.fd_t,
-    transport_kind: Transport.Kind,
+    state: State,
+
+    const State = union(TransportKind) {
+        pipes: struct {
+            read_stream: os.fd_t,
+            write_stream: os.fd_t,
+        },
+        unix_domain_seqpacket_socket: struct {
+            socket: os.socket_t,
+            ally: ?*mem.Allocator = null,
+            addr: ?*os.sockaddr = null,
+            adrrlen: ?usize = null,
+        },
+    };
 
     const Self = @This();
     // TODO: use just the curly/square braces to determine the end of a message.
@@ -463,13 +633,25 @@ pub const ClientServerRepresentation = struct {
     pub const max_method_size: usize = 1024;
     pub const max_message_size: usize = max_packet_size;
 
-    pub fn deinit(self: Self) void {
-        os.close(self.read_stream);
-        os.close(self.write_stream);
+    pub fn deinit(self: *Self) void {
+        switch (self.state) {
+            .pipes => {
+                os.close(self.read_stream);
+                os.close(self.write_stream);
+            },
+            .unix_domain_seqpacket_socket => |*s| {
+                os.closeSocket(s.socket);
+                if (s.ally) |al| {
+                    if (addr) |ad| {
+                        al.destroy(ad);
+                    }
+                }
+            },
+        }
     }
 
     pub fn send(self: Self, message: anytype) !void {
-        switch (self.transport_kind) {
+        switch (self.state) {
             .pipes => {
                 try message.writeTo(self.writer());
                 try self.writeEndByte();
@@ -478,7 +660,7 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
-        switch (self.transport_kind) {
+        switch (self.state) {
             .pipes => {
                 var packet_buf: [max_packet_size]u8 = undefined;
                 if (try self.readPacket(&packet_buf)) |packet| {
@@ -491,16 +673,16 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn reader(self: Self) std.fs.File.Reader {
-        switch (self.transport_kind) {
-            .pipes => {
-                return pipeToFile(self.read_stream).reader();
+        switch (self.state) {
+            .pipes => |s| {
+                return pipeToFile(s.read_stream).reader();
             },
         }
     }
 
     /// Returns the slice with the length of a received packet.
     pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
-        switch (self.transport_kind) {
+        switch (self.state) {
             .pipes => {
                 return try self.reader().readUntilDelimiterOrEof(buf, end_of_packet);
             },
@@ -509,7 +691,7 @@ pub const ClientServerRepresentation = struct {
 
     /// Caller owns the memory.
     pub fn readPacketAlloc(self: Self, ally: *mem.Allocator) ![]u8 {
-        switch (self.transport_kind) {
+        switch (self.state) {
             .pipes => {
                 return try self.reader().readUntilDelimiterAlloc(ally, end_of_packet, max_packet_size);
             },
@@ -517,9 +699,9 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn writer(self: Self) std.fs.File.Writer {
-        switch (self.transport_kind) {
-            .pipes => {
-                return pipeToFile(self.write_stream).writer();
+        switch (self.state) {
+            .pipes => |s| {
+                return pipeToFile(s.write_stream).writer();
             },
         }
     }
@@ -556,21 +738,23 @@ pub const Application = struct {
     pub fn start(
         ally: *mem.Allocator,
         concurrency_model: ConcurrencyModel,
-        transport_kind: Transport.Kind,
+        transport_kind: TransportKind,
     ) !?Self {
         switch (concurrency_model) {
             .forked => {
-                var transport = try Transport.init(transport_kind);
+                var transport = try Transport.init(transport_kind, null);
+                errdefer transport.deinit();
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
                     // Server
 
                     // We only want to keep Client's streams open.
                     transport.closeStreamsForServer();
+                    // Close stdout and stdin on the server since we don't use them.
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    try startServerThread(ally, transport);
+                    try startServerThread(ally, &transport);
                     return null;
                 } else {
                     // Client
@@ -580,32 +764,32 @@ pub const Application = struct {
 
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
-                    var client = Client.init(ally, ui, transport.serverRepresentationForClient());
+                    var client = Client.init(ally, ui, try transport.serverRepresentationForClient());
                     return Self{ .client = client };
                 }
             },
             .threaded => {
-                const transport = try Transport.init(transport_kind);
+                var transport = try Transport.init(transport_kind, null);
+                errdefer transport.deinit();
                 const server_thread = try std.Thread.spawn(
                     .{},
                     startServerThread,
-                    .{ ally, transport },
+                    .{ ally, &transport },
                 );
 
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
-                var client = Client.init(ally, ui, transport.serverRepresentationForClient());
+                var client = Client.init(ally, ui, try transport.serverRepresentationForClient());
                 return Self{ .client = client, .server_thread = server_thread };
             },
         }
         unreachable;
     }
 
-    fn startServerThread(ally: *mem.Allocator, transport: Transport) !void {
-        var server = try Server.init(ally, transport.clientRepresentationForServer());
+    fn startServerThread(ally: *mem.Allocator, transport: *Transport) !void {
+        var server = try Server.init(ally, transport);
         errdefer server.deinit();
-        // try server.acceptOpenFileRequest();
-        // try server.sendText();
+        try server.listen();
         try server.loop();
     }
 
@@ -631,8 +815,16 @@ test "main: start application forked via pipes" {
     }
 }
 
-// test "main: request client registration" {
-//     if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
+// test "main: start application threaded via socket" {
+//     var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
+//     defer testing.allocator.free(filename);
+//     if (try Application.start(testing.allocator, .threaded, .unix_domain_seqpacket_socket)) |*app| {
+//         defer app.deinit();
+//     }
+// }
+
+// test "main: start application forked via socket" {
+//     if (try Application.start(testing.allocator, .forked, .unix_domain_seqpacket_socket)) |*app| {
 //         defer app.deinit();
 //     }
 // }

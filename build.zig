@@ -6,6 +6,7 @@ pub fn build(b: *std.build.Builder) void {
 
     const exe = b.addExecutable("kisa", "src/main.zig");
     exe.addPackagePath("zzz", "zzz/src/main.zig");
+    exe.addPackagePath("known-folders", "known-folders/known-folders.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
@@ -29,6 +30,7 @@ pub fn build(b: *std.build.Builder) void {
         var test_cases = b.addTest("src/main.zig");
         test_cases.setFilter("main:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -39,6 +41,7 @@ pub fn build(b: *std.build.Builder) void {
         const test_cases = b.addTest("src/state.zig");
         test_cases.setFilter("state:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -49,6 +52,7 @@ pub fn build(b: *std.build.Builder) void {
         const test_cases = b.addTest("src/config.zig");
         test_cases.setFilter("config:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
