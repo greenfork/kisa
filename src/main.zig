@@ -341,6 +341,7 @@ pub const Server = struct {
                 try os.listen(s.listen_socket.?, 10);
                 const accepted_socket = try os.accept(s.listen_socket.?, null, null, os.SOCK_CLOEXEC);
                 try self.clients.append(ClientServerRepresentation.initSocket(accepted_socket));
+                s.listen_socket = null;
             },
         }
     }
@@ -610,8 +611,8 @@ pub const Transport = struct {
                 s.client_writes = null;
                 return result;
             },
-            .unix_domain_seqpacket_socket => |s| {
-                return ClientServerRepresentation{
+            .unix_domain_seqpacket_socket => |*s| {
+                const result = ClientServerRepresentation{
                     .unix_domain_seqpacket_socket = .{
                         .socket = null,
                         .ally = s.ally.?,
@@ -619,6 +620,10 @@ pub const Transport = struct {
                         .addrlen = s.addrlen.?,
                     },
                 };
+                s.ally = null;
+                s.sockaddr = null;
+                s.addrlen = null;
+                return result;
             },
         }
         unreachable;
@@ -897,6 +902,7 @@ pub const Application = struct {
         self.client.deinit();
         if (self.server_thread) |server_thread| {
             server_thread.join();
+            self.server_thread = null;
         }
     }
 };
