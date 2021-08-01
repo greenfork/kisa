@@ -187,7 +187,7 @@ pub const Client = struct {
     }
 
     pub fn register(self: *Self) !void {
-        switch (self.server.state) {
+        switch (self.server) {
             .pipes => {},
             .unix_domain_seqpacket_socket => |*s| {
                 const sockaddr = s.addr orelse return error.SockaddrAbsent;
@@ -568,11 +568,9 @@ pub const Transport = struct {
         switch (self.state) {
             .pipes => |*s| {
                 const result = ClientServerRepresentation{
-                    .state = .{
-                        .pipes = .{
-                            .read_stream = s.client_reads orelse return error.ClientReadsAbsent,
-                            .write_stream = s.client_writes orelse return error.ClientWritesAbsent,
-                        },
+                    .pipes = .{
+                        .read_stream = s.client_reads orelse return error.ClientReadsAbsent,
+                        .write_stream = s.client_writes orelse return error.ClientWritesAbsent,
                     },
                 };
                 s.client_reads = null;
@@ -581,13 +579,11 @@ pub const Transport = struct {
             },
             .unix_domain_seqpacket_socket => |s| {
                 return ClientServerRepresentation{
-                    .state = .{
-                        .unix_domain_seqpacket_socket = .{
-                            .socket = null,
-                            .ally = s.ally,
-                            .addr = s.sockaddr,
-                            .addrlen = s.addrlen,
-                        },
+                    .unix_domain_seqpacket_socket = .{
+                        .socket = null,
+                        .ally = s.ally,
+                        .addr = s.sockaddr,
+                        .addrlen = s.addrlen,
                     },
                 };
             },
@@ -600,11 +596,9 @@ pub const Transport = struct {
         switch (self.state) {
             .pipes => |*s| {
                 const result = ClientServerRepresentation{
-                    .state = .{
-                        .pipes = .{
-                            .read_stream = s.server_reads orelse return error.ServerReadsAbsent,
-                            .write_stream = s.server_writes orelse return error.ServerWritesAbsent,
-                        },
+                    .pipes = .{
+                        .read_stream = s.server_reads orelse return error.ServerReadsAbsent,
+                        .write_stream = s.server_writes orelse return error.ServerWritesAbsent,
                     },
                 };
                 s.server_reads = null;
@@ -652,21 +646,17 @@ pub const Transport = struct {
 /// This is how Client sees a Server and how Server sees a Client. We can't use direct pointers
 /// to memory since they can be in separate processes. Therefore they see each other as just
 /// some ways to send and receive information.
-pub const ClientServerRepresentation = struct {
-    state: State,
-
-    const State = union(TransportKind) {
-        pipes: struct {
-            read_stream: os.fd_t,
-            write_stream: os.fd_t,
-        },
-        unix_domain_seqpacket_socket: struct {
-            socket: ?os.socket_t = null,
-            ally: ?*mem.Allocator = null,
-            addr: ?*os.sockaddr = null,
-            addrlen: ?usize = null,
-        },
-    };
+pub const ClientServerRepresentation = union(TransportKind) {
+    pipes: struct {
+        read_stream: os.fd_t,
+        write_stream: os.fd_t,
+    },
+    unix_domain_seqpacket_socket: struct {
+        socket: ?os.socket_t = null,
+        ally: ?*mem.Allocator = null,
+        addr: ?*os.sockaddr = null,
+        addrlen: ?usize = null,
+    },
 
     const Self = @This();
     // TODO: use just the curly/square braces to determine the end of a message.
@@ -676,11 +666,11 @@ pub const ClientServerRepresentation = struct {
     pub const max_message_size: usize = max_packet_size;
 
     pub fn initSocket(socket: os.socket_t) Self {
-        return Self{ .state = .{ .unix_domain_seqpacket_socket = .{ .socket = socket } } };
+        return Self{ .unix_domain_seqpacket_socket = .{ .socket = socket } };
     }
 
     pub fn deinit(self: *Self) void {
-        switch (self.state) {
+        switch (self.*) {
             .pipes => |s| {
                 os.close(s.read_stream);
                 os.close(s.write_stream);
@@ -696,6 +686,9 @@ pub const ClientServerRepresentation = struct {
                         const filename = mem.sliceTo(&sockaddr_un.path, 0);
                         std.fs.deleteFileAbsolute(filename) catch {};
                         al.destroy(sockaddr_un);
+                        s.ally = null;
+                        s.addr = null;
+                        s.addrlen = null;
                     }
                 }
             },
@@ -703,7 +696,7 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn send(self: Self, message: anytype) !void {
-        switch (self.state) {
+        switch (self) {
             .pipes => {
                 try message.writeTo(self.writer());
                 try self.writeEndByte();
@@ -728,7 +721,7 @@ pub const ClientServerRepresentation = struct {
 
     /// Returns the slice with the length of a received packet.
     pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
-        switch (self.state) {
+        switch (self) {
             .pipes => {
                 return try self.reader().readUntilDelimiterOrEof(buf, end_of_packet);
             },
@@ -742,7 +735,7 @@ pub const ClientServerRepresentation = struct {
 
     /// Caller owns the memory.
     pub fn readPacketAlloc(self: Self, ally: *mem.Allocator) ![]u8 {
-        switch (self.state) {
+        switch (self) {
             .pipes => {
                 return try self.reader().readUntilDelimiterAlloc(ally, end_of_packet, max_packet_size);
             },
@@ -751,7 +744,7 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn reader(self: Self) std.fs.File.Reader {
-        switch (self.state) {
+        switch (self) {
             .pipes => |s| {
                 return pipeToFile(s.read_stream).reader();
             },
@@ -760,7 +753,7 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn writer(self: Self) std.fs.File.Writer {
-        switch (self.state) {
+        switch (self) {
             .pipes => |s| {
                 return pipeToFile(s.write_stream).writer();
             },
@@ -769,7 +762,7 @@ pub const ClientServerRepresentation = struct {
     }
 
     pub fn writeEndByte(self: Self) !void {
-        switch (self.state) {
+        switch (self) {
             .pipes => {
                 try self.writer().writeByte(end_of_packet);
             },
@@ -887,8 +880,6 @@ pub const Application = struct {
 // }
 
 test "main: start application threaded via socket" {
-    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
-    defer testing.allocator.free(filename);
     if (try Application.start(testing.allocator, .threaded, .unix_domain_seqpacket_socket)) |*app| {
         defer app.deinit();
     }
