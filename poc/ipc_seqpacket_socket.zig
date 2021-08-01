@@ -43,7 +43,6 @@ test "communication between Client and Server via dgram connection-less unix dom
     const pid = try os.fork();
     if (pid == 0) {
         // Client
-        std.time.sleep(std.time.ns_per_ms * 200);
         const client_socket = try os.socket(
             os.AF_UNIX,
             os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
@@ -52,7 +51,21 @@ test "communication between Client and Server via dgram connection-less unix dom
         defer os.closeSocket(client_socket);
         const message = try std.fmt.allocPrint(testing.allocator, "hello from client!", .{});
         defer testing.allocator.free(message);
-        try os.connect(client_socket, sockaddr, addrlen);
+        var client_connected = false;
+        var connect_attempts: u8 = 25;
+        while (!client_connected) {
+            os.connect(client_socket, sockaddr, addrlen) catch |err| switch (err) {
+                error.ConnectionRefused => {
+                    // If server is not yet listening, wait a bit.
+                    if (connect_attempts == 0) return err;
+                    std.time.sleep(std.time.ns_per_ms * 10);
+                    connect_attempts -= 1;
+                    continue;
+                },
+                else => return err,
+            };
+            client_connected = true;
+        }
         var bytes_sent = try os.send(client_socket, message, 0);
         assert(message.len == bytes_sent);
         bytes_sent = try os.send(client_socket, message, 0);
@@ -62,6 +75,7 @@ test "communication between Client and Server via dgram connection-less unix dom
         std.debug.print("\nreceived on client: {s}\n", .{buf[0..bytes_read]});
     } else {
         // Server
+        std.time.sleep(std.time.ns_per_ms * 200);
         try os.listen(socket, 10);
         const accepted_socket = try os.accept(socket, null, null, os.SOCK_CLOEXEC);
         defer os.closeSocket(accepted_socket);
