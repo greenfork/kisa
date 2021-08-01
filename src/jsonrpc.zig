@@ -104,10 +104,15 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Caller owns the memory.
-        pub fn generate(self: Self, allocator: *std.mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
             try self.writeTo(result.writer());
             return result.toOwnedSlice();
+        }
+
+        pub fn generate(self: Self, buf: []u8) ![]u8 {
+            var fba = std.heap.FixedBufferAllocator.init(buf);
+            return try self.generateAlloc(&fba.allocator);
         }
 
         pub fn writeTo(self: Self, stream: anytype) !void {
@@ -215,10 +220,15 @@ pub fn Response(comptime ResultShape: type) type {
         }
 
         /// Caller owns the memory.
-        pub fn generate(self: Self, allocator: *std.mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
             try self.writeTo(result.writer());
             return result.toOwnedSlice();
+        }
+
+        pub fn generate(self: Self, buf: []u8) ![]u8 {
+            var fba = std.heap.FixedBufferAllocator.init(buf);
+            return try self.generateAlloc(&fba.allocator);
         }
 
         pub fn writeTo(self: Self, stream: anytype) !void {
@@ -500,6 +510,23 @@ test "jsonrpc: parse complex request" {
     parsed.parseFree(testing.allocator);
 }
 
+test "jsonrpc: generate alloc request" {
+    const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
+    const params_array = .{ .Array = std.mem.span(&params) };
+    const request = SimpleRequest{
+        .jsonrpc = jsonrpc_version,
+        .method = "startParty",
+        .params = params_array,
+        .id = .{ .Integer = 63 },
+    };
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
+    ;
+    const generated = try request.generateAlloc(testing.allocator);
+    try testing.expectEqualStrings(jsonrpc_string, generated);
+    testing.allocator.free(generated);
+}
+
 test "jsonrpc: generate request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
     const params_array = .{ .Array = std.mem.span(&params) };
@@ -512,9 +539,9 @@ test "jsonrpc: generate request" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
     ;
-    const generated = try request.generate(testing.allocator);
+    var buf: [256]u8 = undefined;
+    const generated = try request.generate(&buf);
     try testing.expectEqualStrings(jsonrpc_string, generated);
-    testing.allocator.free(generated);
 }
 
 test "jsonrpc: generate notification without ID" {
@@ -529,7 +556,7 @@ test "jsonrpc: generate notification without ID" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10]}
     ;
-    const generated = try request.generate(testing.allocator);
+    const generated = try request.generateAlloc(testing.allocator);
     try testing.expectEqualStrings(jsonrpc_string, generated);
     testing.allocator.free(generated);
 }
@@ -667,7 +694,7 @@ test "jsonrpc: generate complex request" {
         \\  ]
         \\}
     ;
-    const generated = try request.generate(testing.allocator);
+    const generated = try request.generateAlloc(testing.allocator);
     const stripped_jsonrpc_string = try removeSpaces(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(stripped_jsonrpc_string, generated);
     testing.allocator.free(generated);
@@ -895,6 +922,21 @@ test "jsonrpc: parse complex response" {
     parsed.parseFree(testing.allocator);
 }
 
+test "jsonrpc: generate alloc success response" {
+    const data = Value{ .Integer = 42 };
+    const response = SimpleResponse{
+        .jsonrpc = jsonrpc_version,
+        .result = data,
+        .id = .{ .Integer = 63 },
+    };
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","id":63,"result":42}
+    ;
+    const generated = try response.generateAlloc(testing.allocator);
+    try testing.expectEqualStrings(jsonrpc_string, generated);
+    testing.allocator.free(generated);
+}
+
 test "jsonrpc: generate success response" {
     const data = Value{ .Integer = 42 };
     const response = SimpleResponse{
@@ -905,9 +947,9 @@ test "jsonrpc: generate success response" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"result":42}
     ;
-    const generated = try response.generate(testing.allocator);
+    var buf: [256]u8 = undefined;
+    const generated = try response.generate(&buf);
     try testing.expectEqualStrings(jsonrpc_string, generated);
-    testing.allocator.free(generated);
 }
 
 test "jsonrpc: generate error response" {
@@ -920,7 +962,7 @@ test "jsonrpc: generate error response" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message"}}
     ;
-    const generated = try response.generate(testing.allocator);
+    const generated = try response.generateAlloc(testing.allocator);
     defer testing.allocator.free(generated);
     try testing.expectEqualStrings(jsonrpc_string, generated);
 }
@@ -1056,7 +1098,7 @@ test "jsonrpc: generate complex response" {
         \\  ]
         \\}
     ;
-    const generated = try response.generate(testing.allocator);
+    const generated = try response.generateAlloc(testing.allocator);
     const stripped_jsonrpc_string = try removeSpaces(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(stripped_jsonrpc_string, generated);
     testing.allocator.free(generated);

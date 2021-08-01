@@ -170,18 +170,51 @@ pub const Client = struct {
     last_message_id: u32 = 0,
 
     const Self = @This();
+    const max_connect_retries = 50;
+    const connect_retry_delay = std.time.ns_per_ms * 5;
 
-    pub fn init(ally: *mem.Allocator, ui: UI, server: ClientServerRepresentation) Self {
+    pub fn init(ally: *mem.Allocator, ui: UI, transport: *Transport) !Self {
         return Self{
             .ally = ally,
-            .server = server,
             .ui = ui,
+            .server = try transport.serverRepresentationForClient(),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.sendExitNotify() catch unreachable;
+        self.sendExitNotify() catch {};
         self.server.deinit();
+    }
+
+    pub fn register(self: *Self) !void {
+        switch (self.server.state) {
+            .pipes => {},
+            .unix_domain_seqpacket_socket => |*s| {
+                const sockaddr = s.addr orelse return error.SockaddrAbsent;
+                const addrlen = s.addrlen orelse return error.SockaddrAbsent;
+                const client_socket = try os.socket(
+                    os.AF_UNIX,
+                    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
+                    os.PF_UNIX,
+                );
+                var client_connected = false;
+                var connect_retries: u8 = max_connect_retries;
+                while (!client_connected) {
+                    os.connect(client_socket, sockaddr, @intCast(u32, addrlen)) catch |err| switch (err) {
+                        error.ConnectionRefused => {
+                            // If server is not yet listening, wait a bit.
+                            if (connect_retries == 0) return err;
+                            std.time.sleep(connect_retry_delay);
+                            connect_retries -= 1;
+                            continue;
+                        },
+                        else => return err,
+                    };
+                    client_connected = true;
+                }
+                s.socket = client_socket;
+            },
+        }
     }
 
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
@@ -307,9 +340,7 @@ pub const Server = struct {
             .unix_domain_seqpacket_socket => |*s| {
                 try os.listen(s.listen_socket, 10);
                 const accepted_socket = try os.accept(s.listen_socket, null, null, os.SOCK_CLOEXEC);
-                self.clients.append(ClientServerRepresentation{
-                    .socket = accepted_socket,
-                });
+                try self.clients.append(ClientServerRepresentation.initSocket(accepted_socket));
             },
         }
     }
@@ -418,8 +449,8 @@ pub const Transport = struct {
             server_writes: ?os.fd_t,
         },
         unix_domain_seqpacket_socket: struct {
-            ally: *mem.Allocator,
             listen_socket: os.socket_t,
+            ally: *mem.Allocator,
             sockaddr: *os.sockaddr,
             addrlen: usize,
         },
@@ -523,16 +554,16 @@ pub const Transport = struct {
                 }
             },
             .unix_domain_seqpacket_socket => |s| {
-                // const filename = mem.sliceTo(&sockaddr.path, 0);
-                // std.fs.deleteFileAbsolute(filename) catch {};
-                s.ally.destroy(s.sockaddr);
+                const sockaddr_un = @ptrCast(*os.sockaddr_un, s.sockaddr);
+                const filename = mem.sliceTo(&sockaddr_un.path, 0);
+                std.fs.deleteFileAbsolute(filename) catch {};
+                s.ally.destroy(sockaddr_un);
                 os.closeSocket(s.listen_socket);
             },
         }
-        unreachable;
     }
 
-    /// Caller takes ownership of file descriptors, caller must call `os.close` on them.
+    /// Caller takes ownership, must call `deinit()`.
     pub fn serverRepresentationForClient(self: *Self) !ClientServerRepresentation {
         switch (self.state) {
             .pipes => |*s| {
@@ -548,11 +579,23 @@ pub const Transport = struct {
                 s.client_writes = null;
                 return result;
             },
+            .unix_domain_seqpacket_socket => |s| {
+                return ClientServerRepresentation{
+                    .state = .{
+                        .unix_domain_seqpacket_socket = .{
+                            .socket = null,
+                            .ally = s.ally,
+                            .addr = s.sockaddr,
+                            .addrlen = s.addrlen,
+                        },
+                    },
+                };
+            },
         }
         unreachable;
     }
 
-    /// Caller takes ownership of file descriptors, caller must call `os.close` on them.
+    /// Caller takes ownership, must call `deinit()`.
     pub fn clientRepresentationForServer(self: *Self) !ClientServerRepresentation {
         switch (self.state) {
             .pipes => |*s| {
@@ -568,6 +611,7 @@ pub const Transport = struct {
                 s.server_writes = null;
                 return result;
             },
+            .unix_domain_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
         }
         unreachable;
     }
@@ -586,7 +630,6 @@ pub const Transport = struct {
             },
             .unix_domain_seqpacket_socket => {},
         }
-        unreachable;
     }
 
     pub fn closeStreamsForClient(self: *Self) void {
@@ -603,7 +646,6 @@ pub const Transport = struct {
             },
             .unix_domain_seqpacket_socket => {},
         }
-        unreachable;
     }
 };
 
@@ -619,10 +661,10 @@ pub const ClientServerRepresentation = struct {
             write_stream: os.fd_t,
         },
         unix_domain_seqpacket_socket: struct {
-            socket: os.socket_t,
+            socket: ?os.socket_t = null,
             ally: ?*mem.Allocator = null,
             addr: ?*os.sockaddr = null,
-            adrrlen: ?usize = null,
+            addrlen: ?usize = null,
         },
     };
 
@@ -633,17 +675,27 @@ pub const ClientServerRepresentation = struct {
     pub const max_method_size: usize = 1024;
     pub const max_message_size: usize = max_packet_size;
 
+    pub fn initSocket(socket: os.socket_t) Self {
+        return Self{ .state = .{ .unix_domain_seqpacket_socket = .{ .socket = socket } } };
+    }
+
     pub fn deinit(self: *Self) void {
         switch (self.state) {
-            .pipes => {
-                os.close(self.read_stream);
-                os.close(self.write_stream);
+            .pipes => |s| {
+                os.close(s.read_stream);
+                os.close(s.write_stream);
             },
             .unix_domain_seqpacket_socket => |*s| {
-                os.closeSocket(s.socket);
+                if (s.socket) |socket| {
+                    os.closeSocket(socket);
+                    s.socket = null;
+                }
                 if (s.ally) |al| {
-                    if (addr) |ad| {
-                        al.destroy(ad);
+                    if (s.addr) |ad| {
+                        const sockaddr_un = @ptrCast(*os.sockaddr_un, ad);
+                        const filename = mem.sliceTo(&sockaddr_un.path, 0);
+                        std.fs.deleteFileAbsolute(filename) catch {};
+                        al.destroy(sockaddr_un);
                     }
                 }
             },
@@ -656,27 +708,21 @@ pub const ClientServerRepresentation = struct {
                 try message.writeTo(self.writer());
                 try self.writeEndByte();
             },
+            .unix_domain_seqpacket_socket => |s| {
+                var packet_buf: [max_packet_size]u8 = undefined;
+                const packet = try message.generate(&packet_buf);
+                const bytes_sent = try os.send(s.socket.?, packet, 0);
+                std.debug.assert(packet.len == bytes_sent);
+            },
         }
     }
 
     pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
-        switch (self.state) {
-            .pipes => {
-                var packet_buf: [max_packet_size]u8 = undefined;
-                if (try self.readPacket(&packet_buf)) |packet| {
-                    return try Message.parse(out_buf, packet);
-                } else {
-                    return null;
-                }
-            },
-        }
-    }
-
-    pub fn reader(self: Self) std.fs.File.Reader {
-        switch (self.state) {
-            .pipes => |s| {
-                return pipeToFile(s.read_stream).reader();
-            },
+        var packet_buf: [max_packet_size]u8 = undefined;
+        if (try self.readPacket(&packet_buf)) |packet| {
+            return try Message.parse(out_buf, packet);
+        } else {
+            return null;
         }
     }
 
@@ -685,6 +731,11 @@ pub const ClientServerRepresentation = struct {
         switch (self.state) {
             .pipes => {
                 return try self.reader().readUntilDelimiterOrEof(buf, end_of_packet);
+            },
+            .unix_domain_seqpacket_socket => |s| {
+                const bytes_read = try os.recv(s.socket.?, buf, 0);
+                if (buf.len == bytes_read) return error.MessageTooBig;
+                return buf[0..bytes_read];
             },
         }
     }
@@ -695,6 +746,16 @@ pub const ClientServerRepresentation = struct {
             .pipes => {
                 return try self.reader().readUntilDelimiterAlloc(ally, end_of_packet, max_packet_size);
             },
+            .unix_domain_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
+        }
+    }
+
+    pub fn reader(self: Self) std.fs.File.Reader {
+        switch (self.state) {
+            .pipes => |s| {
+                return pipeToFile(s.read_stream).reader();
+            },
+            .unix_domain_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
         }
     }
 
@@ -703,11 +764,17 @@ pub const ClientServerRepresentation = struct {
             .pipes => |s| {
                 return pipeToFile(s.write_stream).writer();
             },
+            .unix_domain_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
         }
     }
 
     pub fn writeEndByte(self: Self) !void {
-        try self.writer().writeByte(end_of_packet);
+        switch (self.state) {
+            .pipes => {
+                try self.writer().writeByte(end_of_packet);
+            },
+            .unix_domain_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
+        }
     }
 
     fn pipeToFile(fd: os.fd_t) std.fs.File {
@@ -742,7 +809,8 @@ pub const Application = struct {
     ) !?Self {
         switch (concurrency_model) {
             .forked => {
-                var transport = try Transport.init(transport_kind, null);
+                const transport_ally = if (transport_kind == .pipes) null else ally;
+                var transport = try Transport.init(transport_kind, transport_ally);
                 errdefer transport.deinit();
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
@@ -764,12 +832,14 @@ pub const Application = struct {
 
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
-                    var client = Client.init(ally, ui, try transport.serverRepresentationForClient());
+                    var client = try Client.init(ally, ui, &transport);
+                    try client.register();
                     return Self{ .client = client };
                 }
             },
             .threaded => {
-                var transport = try Transport.init(transport_kind, null);
+                const transport_ally = if (transport_kind == .pipes) null else ally;
+                var transport = try Transport.init(transport_kind, transport_ally);
                 errdefer transport.deinit();
                 const server_thread = try std.Thread.spawn(
                     .{},
@@ -779,7 +849,8 @@ pub const Application = struct {
 
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
-                var client = Client.init(ally, ui, try transport.serverRepresentationForClient());
+                var client = try Client.init(ally, ui, &transport);
+                try client.register();
                 return Self{ .client = client, .server_thread = server_thread };
             },
         }
@@ -801,28 +872,29 @@ pub const Application = struct {
     }
 };
 
-test "main: start application threaded via pipes" {
-    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
-    defer testing.allocator.free(filename);
-    if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
-        defer app.deinit();
-    }
-}
-
-test "main: start application forked via pipes" {
-    if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
-        defer app.deinit();
-    }
-}
-
-// test "main: start application threaded via socket" {
+// test "main: start application threaded via pipes" {
 //     var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
 //     defer testing.allocator.free(filename);
-//     if (try Application.start(testing.allocator, .threaded, .unix_domain_seqpacket_socket)) |*app| {
+//     if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
 //         defer app.deinit();
 //     }
 // }
 
+// test "main: start application forked via pipes" {
+//     if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
+//         defer app.deinit();
+//     }
+// }
+
+test "main: start application threaded via socket" {
+    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
+    defer testing.allocator.free(filename);
+    if (try Application.start(testing.allocator, .threaded, .unix_domain_seqpacket_socket)) |*app| {
+        defer app.deinit();
+    }
+}
+
+// This fails with memory leak.
 // test "main: start application forked via socket" {
 //     if (try Application.start(testing.allocator, .forked, .unix_domain_seqpacket_socket)) |*app| {
 //         defer app.deinit();
