@@ -38,6 +38,30 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     {
+        // Forked tests must be run 1 at a time, otherwise they interfere with other tests.
+        var test_cases = b.addTest("src/main.zig");
+        test_cases.setFilter("fork_pipes:");
+        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+        test_main.dependOn(&test_cases.step);
+    }
+
+    {
+        // Forked tests must be run 1 at a time, otherwise they interfere with other tests.
+        var test_cases = b.addTest("src/main.zig");
+        test_cases.setFilter("fork_socket:");
+        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+        test_main.dependOn(&test_cases.step);
+    }
+
+    {
         const test_cases = b.addTest("src/state.zig");
         test_cases.setFilter("state:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");

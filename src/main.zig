@@ -201,7 +201,7 @@ pub const Client = struct {
                 var connect_retries: u8 = max_connect_retries;
                 while (!client_connected) {
                     os.connect(client_socket, sockaddr, @intCast(u32, addrlen)) catch |err| switch (err) {
-                        error.ConnectionRefused => {
+                        error.ConnectionRefused, error.FileNotFound => {
                             // If server is not yet listening, wait a bit.
                             if (connect_retries == 0) return err;
                             std.time.sleep(connect_retry_delay);
@@ -338,8 +338,8 @@ pub const Server = struct {
                 try self.clients.append(try self.transport.clientRepresentationForServer());
             },
             .unix_domain_seqpacket_socket => |*s| {
-                try os.listen(s.listen_socket, 10);
-                const accepted_socket = try os.accept(s.listen_socket, null, null, os.SOCK_CLOEXEC);
+                try os.listen(s.listen_socket.?, 10);
+                const accepted_socket = try os.accept(s.listen_socket.?, null, null, os.SOCK_CLOEXEC);
                 try self.clients.append(ClientServerRepresentation.initSocket(accepted_socket));
             },
         }
@@ -449,10 +449,11 @@ pub const Transport = struct {
             server_writes: ?os.fd_t,
         },
         unix_domain_seqpacket_socket: struct {
-            listen_socket: os.socket_t,
-            ally: *mem.Allocator,
-            sockaddr: *os.sockaddr,
-            addrlen: usize,
+            listen_socket: ?os.socket_t,
+            ally: ?*mem.Allocator,
+            // TODO: use `net.Address`
+            sockaddr: ?*os.sockaddr,
+            addrlen: ?usize,
         },
     };
 
@@ -533,6 +534,8 @@ pub const Transport = struct {
         unreachable;
     }
 
+    /// Mainly used in `errdefer` since client and server take ownership of separate parts and
+    /// free these parts themselves.
     pub fn deinit(self: *Self) void {
         switch (self.state) {
             .pipes => |*s| {
@@ -554,12 +557,42 @@ pub const Transport = struct {
                 }
             },
             .unix_domain_seqpacket_socket => |s| {
-                const sockaddr_un = @ptrCast(*os.sockaddr_un, s.sockaddr);
-                const filename = mem.sliceTo(&sockaddr_un.path, 0);
-                std.fs.deleteFileAbsolute(filename) catch {};
-                s.ally.destroy(sockaddr_un);
-                os.closeSocket(s.listen_socket);
+                if (s.sockaddr) |ad| {
+                    const filename = mem.sliceTo(&@ptrCast(*os.sockaddr_un, ad).path, 0);
+                    std.fs.deleteFileAbsolute(filename) catch {};
+                }
+                self.deinitSocket();
+                self.deinitMemory();
             },
+        }
+    }
+
+    fn deinitSocket(self: *Self) void {
+        switch (self.state) {
+            .unix_domain_seqpacket_socket => |*s| {
+                if (s.listen_socket) |socket| {
+                    os.closeSocket(socket);
+                    s.listen_socket = null;
+                }
+            },
+            .pipes => @panic("Not implemented for pipes"),
+        }
+    }
+
+    fn deinitMemory(self: *Self) void {
+        switch (self.state) {
+            .unix_domain_seqpacket_socket => |*s| {
+                if (s.ally) |al| {
+                    if (s.sockaddr) |ad| {
+                        const sockaddr_un = @ptrCast(*os.sockaddr_un, ad);
+                        al.destroy(sockaddr_un);
+                        s.ally = null;
+                        s.sockaddr = null;
+                        s.addrlen = null;
+                    }
+                }
+            },
+            .pipes => @panic("Not implemented for pipes"),
         }
     }
 
@@ -581,9 +614,9 @@ pub const Transport = struct {
                 return ClientServerRepresentation{
                     .unix_domain_seqpacket_socket = .{
                         .socket = null,
-                        .ally = s.ally,
-                        .addr = s.sockaddr,
-                        .addrlen = s.addrlen,
+                        .ally = s.ally.?,
+                        .addr = s.sockaddr.?,
+                        .addrlen = s.addrlen.?,
                     },
                 };
             },
@@ -610,9 +643,11 @@ pub const Transport = struct {
         unreachable;
     }
 
-    pub fn closeStreamsForServer(self: *Self) void {
+    /// Used only for `forked` concurrency model since resources are copied between processes.
+    pub fn releaseResourcesForServer(self: *Self) void {
         switch (self.state) {
             .pipes => |*s| {
+                // Client file descriptors are copied when forking, close them.
                 if (s.client_reads) |client_reads| {
                     os.close(client_reads);
                     s.client_reads = null;
@@ -622,13 +657,18 @@ pub const Transport = struct {
                     s.client_writes = null;
                 }
             },
-            .unix_domain_seqpacket_socket => {},
+            .unix_domain_seqpacket_socket => {
+                // Address memory is copied when forking, we don't need it on the server.
+                self.deinitMemory();
+            },
         }
     }
 
-    pub fn closeStreamsForClient(self: *Self) void {
+    /// Used only for `forked` concurrency model since resources are copied between processes.
+    pub fn releaseResourcesForClient(self: *Self) void {
         switch (self.state) {
             .pipes => |*s| {
+                // Server file descriptors are copied when forking, close them.
                 if (s.server_reads) |server_reads| {
                     os.close(server_reads);
                     s.server_reads = null;
@@ -638,7 +678,10 @@ pub const Transport = struct {
                     s.server_writes = null;
                 }
             },
-            .unix_domain_seqpacket_socket => {},
+            .unix_domain_seqpacket_socket => {
+                // Listen socket is copied when forking, we don't need it on the client.
+                self.deinitSocket();
+            },
         }
     }
 };
@@ -654,6 +697,7 @@ pub const ClientServerRepresentation = union(TransportKind) {
     unix_domain_seqpacket_socket: struct {
         socket: ?os.socket_t = null,
         ally: ?*mem.Allocator = null,
+        // TODO: use `net.Address`
         addr: ?*os.sockaddr = null,
         addrlen: ?usize = null,
     },
@@ -800,28 +844,25 @@ pub const Application = struct {
         concurrency_model: ConcurrencyModel,
         transport_kind: TransportKind,
     ) !?Self {
+        const transport_ally = if (transport_kind == .pipes) null else ally;
         switch (concurrency_model) {
             .forked => {
-                const transport_ally = if (transport_kind == .pipes) null else ally;
                 var transport = try Transport.init(transport_kind, transport_ally);
                 errdefer transport.deinit();
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
                     // Server
+                    transport.releaseResourcesForServer();
 
-                    // We only want to keep Client's streams open.
-                    transport.closeStreamsForServer();
                     // Close stdout and stdin on the server since we don't use them.
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    try startServerThread(ally, &transport);
+                    try startServer(ally, &transport);
                     return null;
                 } else {
                     // Client
-
-                    // We only want to keep Server's streams open.
-                    transport.closeStreamsForClient();
+                    transport.releaseResourcesForClient();
 
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
@@ -831,14 +872,9 @@ pub const Application = struct {
                 }
             },
             .threaded => {
-                const transport_ally = if (transport_kind == .pipes) null else ally;
                 var transport = try Transport.init(transport_kind, transport_ally);
                 errdefer transport.deinit();
-                const server_thread = try std.Thread.spawn(
-                    .{},
-                    startServerThread,
-                    .{ ally, &transport },
-                );
+                const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, &transport });
 
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
@@ -850,7 +886,7 @@ pub const Application = struct {
         unreachable;
     }
 
-    fn startServerThread(ally: *mem.Allocator, transport: *Transport) !void {
+    fn startServer(ally: *mem.Allocator, transport: *Transport) !void {
         var server = try Server.init(ally, transport);
         errdefer server.deinit();
         try server.listen();
@@ -865,19 +901,13 @@ pub const Application = struct {
     }
 };
 
-// test "main: start application threaded via pipes" {
-//     var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
-//     defer testing.allocator.free(filename);
-//     if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
-//         defer app.deinit();
-//     }
-// }
-
-// test "main: start application forked via pipes" {
-//     if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
-//         defer app.deinit();
-//     }
-// }
+test "main: start application threaded via pipes" {
+    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
+    defer testing.allocator.free(filename);
+    if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
+        defer app.deinit();
+    }
+}
 
 test "main: start application threaded via socket" {
     if (try Application.start(testing.allocator, .threaded, .unix_domain_seqpacket_socket)) |*app| {
@@ -885,12 +915,17 @@ test "main: start application threaded via socket" {
     }
 }
 
-// This fails with memory leak.
-// test "main: start application forked via socket" {
-//     if (try Application.start(testing.allocator, .forked, .unix_domain_seqpacket_socket)) |*app| {
-//         defer app.deinit();
-//     }
-// }
+test "fork_pipes: start application forked via pipes" {
+    if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
+        defer app.deinit();
+    }
+}
+
+test "fork_socket: start application forked via socket" {
+    if (try Application.start(testing.allocator, .forked, .unix_domain_seqpacket_socket)) |*app| {
+        defer app.deinit();
+    }
+}
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
