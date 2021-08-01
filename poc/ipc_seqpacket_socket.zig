@@ -66,9 +66,9 @@ test "communication between Client and Server via dgram connection-less unix dom
             };
             client_connected = true;
         }
-        var bytes_sent = try os.send(client_socket, message, 0);
+        var bytes_sent = try os.send(client_socket, message, os.MSG_EOR);
         assert(message.len == bytes_sent);
-        bytes_sent = try os.send(client_socket, message, 0);
+        bytes_sent = try os.send(client_socket, message, os.MSG_EOR);
         assert(message.len == bytes_sent);
         var buf: [256]u8 = undefined;
         var bytes_read = try os.recv(client_socket, &buf, 0);
@@ -88,7 +88,7 @@ test "communication between Client and Server via dgram connection-less unix dom
         }
         const message = try std.fmt.allocPrint(testing.allocator, "hello from server!", .{});
         defer testing.allocator.free(message);
-        var bytes_sent = try os.send(accepted_socket, message, 0);
+        var bytes_sent = try os.send(accepted_socket, message, os.MSG_EOR);
         assert(message.len == bytes_sent);
     }
 }
