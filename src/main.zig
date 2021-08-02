@@ -401,11 +401,9 @@ pub const Transport = struct {
         },
     };
 
-    pub fn init(kind: TransportKind, allocator: ?*mem.Allocator) !Self {
+    pub fn init(kind: TransportKind, ally: *mem.Allocator) !Self {
         switch (kind) {
             .un_seqpacket_socket => {
-                const ally = allocator orelse return error.AllocatorRequired;
-
                 // Setup directory and file location.
                 const runtime_dir = (try known_folders.getPath(
                     ally,
@@ -593,11 +591,11 @@ pub const ServerRepresentationForClient = struct {
 fn ClientServerRepresentationMixin(comptime ClientServer: type) type {
     return struct {
         const Self = ClientServer;
-        const end_of_packet = '\x17';
         pub const max_packet_size: usize = 1024 * 16;
         pub const max_method_size: usize = 1024;
         pub const max_message_size: usize = max_packet_size;
 
+        /// Sends a message.
         pub fn send(self: Self, message: anytype) !void {
             switch (self.comms) {
                 .un_seqpacket_socket => |s| {
@@ -609,6 +607,7 @@ fn ClientServerRepresentationMixin(comptime ClientServer: type) type {
             }
         }
 
+        /// Reads a message of type `Message` into `out_buf`.
         pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
             var packet_buf: [max_packet_size]u8 = undefined;
             if (try self.readPacket(&packet_buf)) |packet| {
@@ -703,7 +702,6 @@ pub const Application = struct {
     pub fn deinit(self: *Self) void {
         self.client.deinit();
         if (self.server_thread) |server_thread| {
-            // TODO: change places
             server_thread.join();
             self.server_thread = null;
         }
