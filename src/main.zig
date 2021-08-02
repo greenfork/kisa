@@ -180,7 +180,6 @@ pub const Client = struct {
             .ui = ui,
             .server = blk: {
                 switch (transport.state) {
-                    .pipes => break :blk try transport.takePipesForClient(),
                     .un_seqpacket_socket => {
                         break :blk ServerRepresentationForClient{
                             .comms = undefined,
@@ -199,7 +198,6 @@ pub const Client = struct {
 
     pub fn register(self: *Self) !void {
         switch (self.server.comms) {
-            .pipes => {},
             .un_seqpacket_socket => |*s| {
                 const client_socket = try os.socket(
                     os.AF_UNIX,
@@ -319,7 +317,6 @@ pub const Server = struct {
             .config = try readConfig(ally),
             .transport = transport,
             .listen_socket = switch (transport.state) {
-                .pipes => undefined,
                 .un_seqpacket_socket => try transport.takeListenSocket(),
             },
         };
@@ -333,9 +330,6 @@ pub const Server = struct {
 
     pub fn listen(self: *Self) !void {
         switch (self.transport.state) {
-            .pipes => {
-                try self.clients.append(try self.transport.takePipesForServer());
-            },
             .un_seqpacket_socket => |*s| {
                 const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
                 try self.clients.append(ClientRepresentationForServer{
@@ -392,7 +386,6 @@ pub const Server = struct {
 };
 
 pub const TransportKind = enum {
-    pipes,
     un_seqpacket_socket,
 };
 
@@ -402,12 +395,6 @@ pub const Transport = struct {
     const Self = @This();
 
     const State = union(TransportKind) {
-        pipes: struct {
-            client_reads: ?os.fd_t,
-            client_writes: ?os.fd_t,
-            server_reads: ?os.fd_t,
-            server_writes: ?os.fd_t,
-        },
         un_seqpacket_socket: struct {
             listen_socket: ?os.socket_t,
             address: ?*net.Address,
@@ -416,20 +403,6 @@ pub const Transport = struct {
 
     pub fn init(kind: TransportKind, allocator: ?*mem.Allocator) !Self {
         switch (kind) {
-            .pipes => {
-                const client_reads_server_writes = try os.pipe();
-                const server_reads_client_writes = try os.pipe();
-                return Self{
-                    .state = .{
-                        .pipes = .{
-                            .client_reads = client_reads_server_writes[0],
-                            .client_writes = server_reads_client_writes[1],
-                            .server_reads = server_reads_client_writes[0],
-                            .server_writes = client_reads_server_writes[1],
-                        },
-                    },
-                };
-            },
             .un_seqpacket_socket => {
                 const ally = allocator orelse return error.AllocatorRequired;
 
@@ -491,24 +464,6 @@ pub const Transport = struct {
     /// free these parts themselves.
     pub fn deinit(self: *Self, ally: *mem.Allocator) void {
         switch (self.state) {
-            .pipes => |*s| {
-                if (s.client_reads) |client_reads| {
-                    os.close(client_reads);
-                    s.client_reads = null;
-                }
-                if (s.client_writes) |client_writes| {
-                    os.close(client_writes);
-                    s.client_writes = null;
-                }
-                if (s.server_reads) |server_reads| {
-                    os.close(server_reads);
-                    s.server_reads = null;
-                }
-                if (s.server_writes) |server_writes| {
-                    os.close(server_writes);
-                    s.server_writes = null;
-                }
-            },
             .un_seqpacket_socket => |s| {
                 if (s.address) |addr| {
                     const filename = mem.sliceTo(&@ptrCast(*os.sockaddr_un, addr).path, 0);
@@ -528,7 +483,6 @@ pub const Transport = struct {
                     s.listen_socket = null;
                 }
             },
-            .pipes => @panic("Not implemented for pipes"),
         }
     }
 
@@ -540,53 +494,12 @@ pub const Transport = struct {
                     s.address = null;
                 }
             },
-            .pipes => @panic("Not implemented for pipes"),
         }
-    }
-
-    /// Caller takes ownership, must call file descriptors.
-    pub fn takePipesForClient(self: *Self) !ServerRepresentationForClient {
-        switch (self.state) {
-            .pipes => |*s| {
-                const result = ServerRepresentationForClient{
-                    .comms = CommunicationResources.initPipes(
-                        s.client_reads orelse return error.ClientReadsAbsent,
-                        s.client_writes orelse return error.ClientWritesAbsent,
-                    ),
-                    .address = undefined,
-                };
-                s.client_reads = null;
-                s.client_writes = null;
-                return result;
-            },
-            .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-        }
-        unreachable;
-    }
-
-    /// Caller takes ownership, must call close file descriptors.
-    pub fn takePipesForServer(self: *Self) !ClientRepresentationForServer {
-        switch (self.state) {
-            .pipes => |*s| {
-                const result = ClientRepresentationForServer{
-                    .comms = CommunicationResources.initPipes(
-                        s.server_reads orelse return error.ServerReadsAbsent,
-                        s.server_writes orelse return error.ServerWritesAbsent,
-                    ),
-                };
-                s.server_reads = null;
-                s.server_writes = null;
-                return result;
-            },
-            .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-        }
-        unreachable;
     }
 
     /// Caller take ownership, must free memory.
     pub fn takeAddress(self: *Self) !*net.Address {
         switch (self.state) {
-            .pipes => @panic("Not implemented for pipes"),
             .un_seqpacket_socket => |*s| {
                 const result = s.address orelse return error.AddressAbsent;
                 s.address = null;
@@ -599,7 +512,6 @@ pub const Transport = struct {
     /// Caller take ownership, must close socket.
     pub fn takeListenSocket(self: *Self) !os.socket_t {
         switch (self.state) {
-            .pipes => @panic("Not implemented for pipes"),
             .un_seqpacket_socket => |*s| {
                 const result = s.listen_socket orelse return error.ListenSocketAbsent;
                 s.listen_socket = null;
@@ -612,17 +524,6 @@ pub const Transport = struct {
     /// Used only for `forked` concurrency model since resources are copied between processes.
     pub fn releaseResourcesForServer(self: *Self, ally: *mem.Allocator) void {
         switch (self.state) {
-            .pipes => |*s| {
-                // Client file descriptors are copied when forking, close them.
-                if (s.client_reads) |client_reads| {
-                    os.close(client_reads);
-                    s.client_reads = null;
-                }
-                if (s.client_writes) |client_writes| {
-                    os.close(client_writes);
-                    s.client_writes = null;
-                }
-            },
             .un_seqpacket_socket => {
                 // Address memory is copied when forking, we don't need it on the server.
                 self.deinitMemory(ally);
@@ -633,17 +534,6 @@ pub const Transport = struct {
     /// Used only for `forked` concurrency model since resources are copied between processes.
     pub fn releaseResourcesForClient(self: *Self) void {
         switch (self.state) {
-            .pipes => |*s| {
-                // Server file descriptors are copied when forking, close them.
-                if (s.server_reads) |server_reads| {
-                    os.close(server_reads);
-                    s.server_reads = null;
-                }
-                if (s.server_writes) |server_writes| {
-                    os.close(server_writes);
-                    s.server_writes = null;
-                }
-            },
             .un_seqpacket_socket => {
                 // Listen socket is copied when forking, we don't need it on the client.
                 self.deinitSocket();
@@ -653,10 +543,6 @@ pub const Transport = struct {
 };
 
 const CommunicationResources = union(TransportKind) {
-    pipes: struct {
-        read_stream: os.fd_t,
-        write_stream: os.fd_t,
-    },
     un_seqpacket_socket: struct {
         socket: os.socket_t,
     },
@@ -667,16 +553,8 @@ const CommunicationResources = union(TransportKind) {
         return Self{ .un_seqpacket_socket = .{ .socket = socket } };
     }
 
-    pub fn initPipes(read_stream: os.fd_t, write_stream: os.fd_t) Self {
-        return Self{ .pipes = .{ .read_stream = read_stream, .write_stream = write_stream } };
-    }
-
     pub fn deinit(self: Self) void {
         switch (self) {
-            .pipes => |s| {
-                os.close(s.read_stream);
-                os.close(s.write_stream);
-            },
             .un_seqpacket_socket => |s| {
                 os.closeSocket(s.socket);
             },
@@ -722,10 +600,6 @@ fn ClientServerRepresentationMixin(comptime ClientServer: type) type {
 
         pub fn send(self: Self, message: anytype) !void {
             switch (self.comms) {
-                .pipes => {
-                    try message.writeTo(self.writer());
-                    try self.writeEndByte();
-                },
                 .un_seqpacket_socket => |s| {
                     var packet_buf: [max_packet_size]u8 = undefined;
                     const packet = try message.generate(&packet_buf);
@@ -747,60 +621,12 @@ fn ClientServerRepresentationMixin(comptime ClientServer: type) type {
         /// Returns the slice with the length of a received packet.
         pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
             switch (self.comms) {
-                .pipes => {
-                    return try self.reader().readUntilDelimiterOrEof(buf, end_of_packet);
-                },
                 .un_seqpacket_socket => |s| {
                     const bytes_read = try os.recv(s.socket, buf, 0);
                     if (buf.len == bytes_read) return error.MessageTooBig;
                     return buf[0..bytes_read];
                 },
             }
-        }
-
-        /// Caller owns the memory.
-        pub fn readPacketAlloc(self: Self, ally: *mem.Allocator) ![]u8 {
-            switch (self.comms) {
-                .pipes => {
-                    return try self.reader().readUntilDelimiterAlloc(ally, end_of_packet, max_packet_size);
-                },
-                .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-            }
-        }
-
-        pub fn reader(self: Self) std.fs.File.Reader {
-            switch (self.comms) {
-                .pipes => |s| {
-                    return pipeToFile(s.read_stream).reader();
-                },
-                .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-            }
-        }
-
-        pub fn writer(self: Self) std.fs.File.Writer {
-            switch (self.comms) {
-                .pipes => |s| {
-                    return pipeToFile(s.write_stream).writer();
-                },
-                .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-            }
-        }
-
-        pub fn writeEndByte(self: Self) !void {
-            switch (self.comms) {
-                .pipes => {
-                    try self.writer().writeByte(end_of_packet);
-                },
-                .un_seqpacket_socket => @panic("Not implemented for unix domain seqpacket socket"),
-            }
-        }
-
-        fn pipeToFile(fd: os.fd_t) std.fs.File {
-            return std.fs.File{
-                .handle = fd,
-                .capable_io_mode = .blocking,
-                .intended_io_mode = .blocking,
-            };
         }
     };
 }
@@ -826,10 +652,9 @@ pub const Application = struct {
         concurrency_model: ConcurrencyModel,
         transport_kind: TransportKind,
     ) !?Self {
-        const transport_ally = if (transport_kind == .pipes) null else ally;
         switch (concurrency_model) {
             .forked => {
-                var transport = try Transport.init(transport_kind, transport_ally);
+                var transport = try Transport.init(transport_kind, ally);
                 errdefer transport.deinit(ally);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
@@ -854,7 +679,7 @@ pub const Application = struct {
                 }
             },
             .threaded => {
-                var transport = try Transport.init(transport_kind, transport_ally);
+                var transport = try Transport.init(transport_kind, ally);
                 errdefer transport.deinit(ally);
                 const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, &transport });
 
@@ -885,22 +710,8 @@ pub const Application = struct {
     }
 };
 
-test "main: start application threaded via pipes" {
-    var filename = try std.fs.cwd().realpathAlloc(testing.allocator, "tests/longlines.txt");
-    defer testing.allocator.free(filename);
-    if (try Application.start(testing.allocator, .threaded, .pipes)) |*app| {
-        defer app.deinit();
-    }
-}
-
 test "main: start application threaded via socket" {
     if (try Application.start(testing.allocator, .threaded, .un_seqpacket_socket)) |*app| {
-        defer app.deinit();
-    }
-}
-
-test "fork/pipes: start application forked via pipes" {
-    if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
         defer app.deinit();
     }
 }
@@ -925,7 +736,7 @@ pub fn main() anyerror!void {
         }
     };
 
-    if (try Application.start(ally, .threaded, .pipes)) |app| {
+    if (try Application.start(ally, .threaded, .un_seqpacket_socket)) |app| {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
