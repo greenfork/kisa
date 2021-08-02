@@ -22,6 +22,7 @@ pub fn build(b: *std.build.Builder) void {
 
     const test_step = b.step("test", "Run tests");
     const test_main = b.step("test-main", "Run tests in main");
+    const test_main_nofork = b.step("test-main-nofork", "Run tests in main");
     const test_state = b.step("test-state", "Run tests in main");
     const test_config = b.step("test-config", "Run tests in main");
     const test_jsonrpc = b.step("test-jsonrpc", "Run tests in main");
@@ -35,12 +36,13 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
         test_main.dependOn(&test_cases.step);
+        test_main_nofork.dependOn(&test_cases.step);
     }
 
     {
         // Forked tests must be run 1 at a time, otherwise they interfere with other tests.
         var test_cases = b.addTest("src/main.zig");
-        test_cases.setFilter("fork_pipes:");
+        test_cases.setFilter("fork/pipes:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");
         test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);
@@ -52,7 +54,7 @@ pub fn build(b: *std.build.Builder) void {
     {
         // Forked tests must be run 1 at a time, otherwise they interfere with other tests.
         var test_cases = b.addTest("src/main.zig");
-        test_cases.setFilter("fork_socket:");
+        test_cases.setFilter("fork/socket:");
         test_cases.addPackagePath("zzz", "zzz/src/main.zig");
         test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);

@@ -921,13 +921,13 @@ test "main: start application threaded via socket" {
     }
 }
 
-test "fork_pipes: start application forked via pipes" {
+test "fork/pipes: start application forked via pipes" {
     if (try Application.start(testing.allocator, .forked, .pipes)) |*app| {
         defer app.deinit();
     }
 }
 
-test "fork_socket: start application forked via socket" {
+test "fork/socket: start application forked via socket" {
     if (try Application.start(testing.allocator, .forked, .unix_domain_seqpacket_socket)) |*app| {
         defer app.deinit();
     }
