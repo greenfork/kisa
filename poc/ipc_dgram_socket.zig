@@ -4,7 +4,7 @@ const mem = std.mem;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-test "communication between Client and Server via dgram connection-less unix domain socket" {
+test "communication via dgram connection-less unix domain socket" {
     const socket = try os.socket(
         os.AF_UNIX,
         os.SOCK_DGRAM | os.SOCK_CLOEXEC,
