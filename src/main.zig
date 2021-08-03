@@ -148,21 +148,6 @@ pub const Commands = struct {
     }
 };
 
-// More possible modes:
-// * searching inside a file
-// * typing in a command to execute
-// * moving inside a file
-// * ...
-//
-// More generally we can have these patterns for modes:
-// * Type a full string and press Enter, e.g. type a named command to be executed
-// * Type a string and we get an incremental changing of the result, e.g. search window
-//   continuously displays different result based on the search term
-// * Type a second key to complete the command, e.g. gj moves to the bottom and gk moves to the top
-//   of a file, as a mnemocis "goto" and a direction with hjkl keys
-// * Variation of the previous mode but it is "sticky", meaning it allows for several presses of
-//   a key with a changed meaning, examples are "insert" mode and a "scrolling" mode
-
 pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
@@ -171,61 +156,25 @@ pub const Client = struct {
     last_message_id: u32 = 0,
 
     const Self = @This();
-    const max_connect_retries = 50;
-    const connect_retry_delay = std.time.ns_per_ms * 5;
 
-    pub fn init(ally: *mem.Allocator, ui: UI, transport: *Transport) !Self {
+    pub fn init(ally: *mem.Allocator, ui: UI) !Self {
         return Self{
             .ally = ally,
             .ui = ui,
-            .server = blk: {
-                switch (transport.state) {
-                    .un_seqpacket_socket => {
-                        break :blk ServerRepresentationForClient{
-                            .comms = undefined,
-                            .address = try transport.takeAddress(),
-                        };
-                    },
-                }
-            },
+            .server = undefined,
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.sendExitNotify() catch {};
-        self.server.deinit(self.ally);
+        self.server.deinit();
     }
 
-    pub fn register(self: *Self) !void {
-        switch (self.server.comms) {
-            .un_seqpacket_socket => |*s| {
-                const client_socket = try os.socket(
-                    os.AF_UNIX,
-                    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-                    os.PF_UNIX,
-                );
-                var client_connected = false;
-                var connect_retries: u8 = max_connect_retries;
-                while (!client_connected) {
-                    os.connect(
-                        client_socket,
-                        @ptrCast(*os.sockaddr, &self.server.address.un),
-                        @sizeOf(@TypeOf(self.server.address.un)),
-                    ) catch |err| switch (err) {
-                        error.ConnectionRefused, error.FileNotFound => {
-                            // If server is not yet listening, wait a bit.
-                            if (connect_retries == 0) return err;
-                            std.time.sleep(connect_retry_delay);
-                            connect_retries -= 1;
-                            continue;
-                        },
-                        else => return err,
-                    };
-                    client_connected = true;
-                }
-                s.socket = client_socket;
-            },
-        }
+    pub fn register(self: *Self, address: *net.Address) !void {
+        defer self.ally.destroy(address);
+        self.server = ServerRepresentationForClient{
+            .comms = CommunicationResources.initSocket(try Transport.connectToUnixSocket(address)),
+        };
     }
 
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
@@ -305,20 +254,17 @@ pub const Server = struct {
     ally: *mem.Allocator,
     clients: std.ArrayList(ClientRepresentationForServer),
     config: Config,
-    transport: *Transport,
     listen_socket: os.socket_t,
 
     const Self = @This();
 
-    pub fn init(ally: *mem.Allocator, transport: *Transport) !Self {
+    pub fn init(ally: *mem.Allocator, address: *net.Address) !Self {
+        defer ally.destroy(address);
         return Self{
             .ally = ally,
             .clients = std.ArrayList(ClientRepresentationForServer).init(ally),
             .config = try readConfig(ally),
-            .transport = transport,
-            .listen_socket = switch (transport.state) {
-                .un_seqpacket_socket => try transport.takeListenSocket(),
-            },
+            .listen_socket = try Transport.bindUnixSocket(address),
         };
     }
 
@@ -328,16 +274,11 @@ pub const Server = struct {
         self.config.deinit();
     }
 
-    pub fn listen(self: *Self) !void {
-        switch (self.transport.state) {
-            .un_seqpacket_socket => |*s| {
-                const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
-                try self.clients.append(ClientRepresentationForServer{
-                    .comms = CommunicationResources.initSocket(accepted_socket),
-                });
-                s.listen_socket = null;
-            },
-        }
+    pub fn acceptClient(self: *Self) !void {
+        const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
+        try self.clients.append(ClientRepresentationForServer{
+            .comms = CommunicationResources.initSocket(accepted_socket),
+        });
     }
 
     /// Main loop of the server, listens for requests and sends responses.
@@ -390,153 +331,84 @@ pub const TransportKind = enum {
 };
 
 pub const Transport = struct {
-    state: State,
+    const max_connect_retries = 50;
+    const connect_retry_delay = std.time.ns_per_ms * 5;
 
-    const Self = @This();
-
-    const State = union(TransportKind) {
-        un_seqpacket_socket: struct {
-            listen_socket: ?os.socket_t,
-            address: ?*net.Address,
-        },
-    };
-
-    pub fn init(kind: TransportKind, ally: *mem.Allocator) !Self {
-        switch (kind) {
-            .un_seqpacket_socket => {
-                // Setup directory and file location.
-                const runtime_dir = (try known_folders.getPath(
-                    ally,
-                    .runtime,
-                )) orelse (try known_folders.getPath(
-                    ally,
-                    .app_menu,
-                )) orelse return error.NoRuntimeDirectory;
-                defer ally.free(runtime_dir);
-                const subpath = "/kisa";
-                var path_builder = std.ArrayList(u8).init(ally);
-                defer path_builder.deinit();
-                try path_builder.appendSlice(runtime_dir);
-                try path_builder.appendSlice(subpath);
-                std.fs.makeDirAbsolute(path_builder.items) catch |err| switch (err) {
-                    error.PathAlreadyExists => {},
-                    else => return err,
-                };
-                const filename = try std.fmt.allocPrint(ally, "{d}", .{os.linux.getpid()});
-                defer ally.free(filename);
-                try path_builder.append('/');
-                try path_builder.appendSlice(filename);
-                std.fs.deleteFileAbsolute(path_builder.items) catch |err| switch (err) {
-                    error.FileNotFound => {},
-                    else => return err,
-                };
-
-                // Setup socket data.
-                const socket = try os.socket(
-                    os.AF_UNIX,
-                    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-                    os.PF_UNIX,
-                );
-                errdefer os.closeSocket(socket);
-                const address = try ally.create(net.Address);
-                errdefer ally.destroy(address);
-                address.* = try net.Address.initUnix(path_builder.items);
-
-                try os.bind(socket, @ptrCast(*os.sockaddr, &address.un), @sizeOf(@TypeOf(address.un)));
-                try os.listen(socket, 10);
-
-                return Self{
-                    .state = .{
-                        .un_seqpacket_socket = .{
-                            .listen_socket = socket,
-                            .address = address,
-                        },
-                    },
-                };
-            },
-        }
-        unreachable;
+    pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
+        const socket = try os.socket(
+            os.AF_UNIX,
+            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
+            os.PF_UNIX,
+        );
+        errdefer os.closeSocket(socket);
+        try os.bind(socket, @ptrCast(*os.sockaddr, &address.un), @sizeOf(@TypeOf(address.un)));
+        try os.listen(socket, 10);
+        return socket;
     }
 
-    /// Mainly used in `errdefer` since client and server take ownership of separate parts and
-    /// free these parts themselves.
-    pub fn deinit(self: *Self, ally: *mem.Allocator) void {
-        switch (self.state) {
-            .un_seqpacket_socket => |s| {
-                if (s.address) |addr| {
-                    const filename = mem.sliceTo(&@ptrCast(*os.sockaddr_un, addr).path, 0);
-                    std.fs.deleteFileAbsolute(filename) catch {};
-                }
-                self.deinitSocket();
-                self.deinitMemory(ally);
-            },
+    pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
+        const socket = try os.socket(
+            os.AF_UNIX,
+            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
+            os.PF_UNIX,
+        );
+        errdefer os.closeSocket(socket);
+        var connect_retries: u8 = max_connect_retries;
+        while (true) {
+            os.connect(
+                socket,
+                @ptrCast(*os.sockaddr, &address.un),
+                @sizeOf(@TypeOf(address.un)),
+            ) catch |err| switch (err) {
+                error.ConnectionRefused, error.FileNotFound => {
+                    // If the server is not yet listening, wait a bit.
+                    if (connect_retries == 0) return err;
+                    std.time.sleep(connect_retry_delay);
+                    connect_retries -= 1;
+                    continue;
+                },
+                else => return err,
+            };
+            break;
         }
+        return socket;
     }
 
-    fn deinitSocket(self: *Self) void {
-        switch (self.state) {
-            .un_seqpacket_socket => |*s| {
-                if (s.listen_socket) |socket| {
-                    os.closeSocket(socket);
-                    s.listen_socket = null;
-                }
-            },
-        }
+    /// Caller owns the memory.
+    pub fn pathForUnixSocket(ally: *mem.Allocator) ![]u8 {
+        const runtime_dir = (try known_folders.getPath(
+            ally,
+            .runtime,
+        )) orelse (try known_folders.getPath(
+            ally,
+            .app_menu,
+        )) orelse return error.NoRuntimeDirectory;
+        defer ally.free(runtime_dir);
+        const subpath = "/kisa";
+        var path_builder = std.ArrayList(u8).init(ally);
+        try path_builder.appendSlice(runtime_dir);
+        try path_builder.appendSlice(subpath);
+        std.fs.makeDirAbsolute(path_builder.items) catch |err| switch (err) {
+            error.PathAlreadyExists => {},
+            else => return err,
+        };
+        const filename = try std.fmt.allocPrint(ally, "{d}", .{os.linux.getpid()});
+        defer ally.free(filename);
+        try path_builder.append('/');
+        try path_builder.appendSlice(filename);
+        std.fs.deleteFileAbsolute(path_builder.items) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => return err,
+        };
+        return path_builder.toOwnedSlice();
     }
 
-    fn deinitMemory(self: *Self, ally: *mem.Allocator) void {
-        switch (self.state) {
-            .un_seqpacket_socket => |*s| {
-                if (s.address) |addr| {
-                    ally.destroy(addr);
-                    s.address = null;
-                }
-            },
-        }
-    }
-
-    /// Caller take ownership, must free memory.
-    pub fn takeAddress(self: *Self) !*net.Address {
-        switch (self.state) {
-            .un_seqpacket_socket => |*s| {
-                const result = s.address orelse return error.AddressAbsent;
-                s.address = null;
-                return result;
-            },
-        }
-        unreachable;
-    }
-
-    /// Caller take ownership, must close socket.
-    pub fn takeListenSocket(self: *Self) !os.socket_t {
-        switch (self.state) {
-            .un_seqpacket_socket => |*s| {
-                const result = s.listen_socket orelse return error.ListenSocketAbsent;
-                s.listen_socket = null;
-                return result;
-            },
-        }
-        unreachable;
-    }
-
-    /// Used only for `forked` concurrency model since resources are copied between processes.
-    pub fn releaseResourcesForServer(self: *Self, ally: *mem.Allocator) void {
-        switch (self.state) {
-            .un_seqpacket_socket => {
-                // Address memory is copied when forking, we don't need it on the server.
-                self.deinitMemory(ally);
-            },
-        }
-    }
-
-    /// Used only for `forked` concurrency model since resources are copied between processes.
-    pub fn releaseResourcesForClient(self: *Self) void {
-        switch (self.state) {
-            .un_seqpacket_socket => {
-                // Listen socket is copied when forking, we don't need it on the client.
-                self.deinitSocket();
-            },
-        }
+    /// Caller owns the memory.
+    pub fn addressForUnixSocket(ally: *mem.Allocator, path: []const u8) !*net.Address {
+        const address = try ally.create(net.Address);
+        errdefer ally.destroy(address);
+        address.* = try net.Address.initUnix(path);
+        return address;
     }
 };
 
@@ -570,25 +442,23 @@ pub const ClientRepresentationForServer = struct {
         self.comms.deinit();
     }
 
-    pub usingnamespace ClientServerRepresentationMixin(Self);
+    pub usingnamespace CommunicationMixin(Self);
 };
 
 /// How Client sees a Server.
 pub const ServerRepresentationForClient = struct {
     comms: CommunicationResources,
-    address: *net.Address,
 
     const Self = @This();
 
-    pub fn deinit(self: Self, ally: *mem.Allocator) void {
+    pub fn deinit(self: Self) void {
         self.comms.deinit();
-        ally.destroy(self.address);
     }
 
-    pub usingnamespace ClientServerRepresentationMixin(Self);
+    pub usingnamespace CommunicationMixin(Self);
 };
 
-fn ClientServerRepresentationMixin(comptime ClientServer: type) type {
+fn CommunicationMixin(comptime ClientServer: type) type {
     return struct {
         const Self = ClientServer;
         pub const max_packet_size: usize = 1024 * 16;
@@ -649,53 +519,50 @@ pub const Application = struct {
     pub fn start(
         ally: *mem.Allocator,
         concurrency_model: ConcurrencyModel,
-        transport_kind: TransportKind,
     ) !?Self {
+        const unix_socket_path = try Transport.pathForUnixSocket(ally);
+        defer ally.free(unix_socket_path);
+        const address = try Transport.addressForUnixSocket(ally, unix_socket_path);
+
         switch (concurrency_model) {
             .forked => {
-                var transport = try Transport.init(transport_kind, ally);
-                errdefer transport.deinit(ally);
                 const child_pid = try os.fork();
                 if (child_pid == 0) {
                     // Server
-                    transport.releaseResourcesForServer(ally);
 
                     // Close stdout and stdin on the server since we don't use them.
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    try startServer(ally, &transport);
+                    try startServer(ally, address);
                     return null;
                 } else {
                     // Client
-                    transport.releaseResourcesForClient();
-
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
-                    var client = try Client.init(ally, ui, &transport);
-                    try client.register();
+                    var client = try Client.init(ally, ui);
+                    try client.register(address);
                     return Self{ .client = client };
                 }
             },
             .threaded => {
-                var transport = try Transport.init(transport_kind, ally);
-                errdefer transport.deinit(ally);
-                const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, &transport });
-
+                const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
-                var client = try Client.init(ally, ui, &transport);
-                try client.register();
+                var client = try Client.init(ally, ui);
+                const address_for_client = try ally.create(net.Address);
+                address_for_client.* = address.*;
+                try client.register(address_for_client);
                 return Self{ .client = client, .server_thread = server_thread };
             },
         }
         unreachable;
     }
 
-    fn startServer(ally: *mem.Allocator, transport: *Transport) !void {
-        var server = try Server.init(ally, transport);
+    fn startServer(ally: *mem.Allocator, address: *net.Address) !void {
+        var server = try Server.init(ally, address);
         errdefer server.deinit();
-        try server.listen();
+        try server.acceptClient();
         try server.loop();
     }
 
@@ -709,13 +576,13 @@ pub const Application = struct {
 };
 
 test "main: start application threaded via socket" {
-    if (try Application.start(testing.allocator, .threaded, .un_seqpacket_socket)) |*app| {
+    if (try Application.start(testing.allocator, .threaded)) |*app| {
         defer app.deinit();
     }
 }
 
 test "fork/socket: start application forked via socket" {
-    if (try Application.start(testing.allocator, .forked, .un_seqpacket_socket)) |*app| {
+    if (try Application.start(testing.allocator, .forked)) |*app| {
         defer app.deinit();
     }
 }

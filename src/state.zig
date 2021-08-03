@@ -12,6 +12,21 @@ pub const ActiveDisplayState = struct {
     window_tab_id: Workspace.Id,
 };
 
+// More possible modes:
+// * searching inside a file
+// * typing in a command to execute
+// * moving inside a file
+// * ...
+//
+// More generally we can have these patterns for modes:
+// * Type a full string and press Enter, e.g. type a named command to be executed
+// * Type a string and we get an incremental changing of the result, e.g. search window
+//   continuously displays different result based on the search term
+// * Type a second key to complete the command, e.g. gj moves to the bottom and gk moves to the top
+//   of a file, as a mnemocis "goto" and a direction with hjkl keys
+// * Variation of the previous mode but it is "sticky", meaning it allows for several presses of
+//   a key with a changed meaning, examples are "insert" mode and a "scrolling" mode
+
 /// Modes are different states of an editor which allow to interpret same key presses differently.
 pub const EditorMode = enum {
     normal,
