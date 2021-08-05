@@ -6,7 +6,41 @@ const testing = std.testing;
 const assert = std.debug.assert;
 
 // For testing slow and fast clients.
-const delay_time = std.time.ns_per_ms * 0;
+const delay_time = std.time.ns_per_ms * 100;
+const clients_count = 40;
+// 1. Connect
+// 2. Write
+// 3. Disconnect
+const how_many_events_expected = clients_count * 3;
+
+fn startClient(address: *net.Address) !void {
+    const message = try std.fmt.allocPrint(testing.allocator, "hello from client!", .{});
+    defer testing.allocator.free(message);
+    var buf: [256]u8 = undefined;
+
+    std.time.sleep(delay_time);
+    const client_socket = try os.socket(
+        os.AF_UNIX,
+        os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
+        os.PF_UNIX,
+    );
+    defer os.closeSocket(client_socket);
+    try os.connect(
+        client_socket,
+        @ptrCast(*os.sockaddr, &address.un),
+        @sizeOf(@TypeOf(address.un)),
+    );
+
+    std.time.sleep(delay_time);
+    const bytes_sent = try os.send(client_socket, message, os.MSG_EOR);
+    std.debug.print("client bytes sent: {d}\n", .{bytes_sent});
+    assert(message.len == bytes_sent);
+    const bytes_read = try os.recv(client_socket, &buf, 0);
+    std.debug.print(
+        "received on client: {s}, {d} bytes\n",
+        .{ buf[0..bytes_read], bytes_read },
+    );
+}
 
 test "poll socket for listening and for reading" {
     const socket_path = try std.fmt.allocPrint(testing.allocator, "/tmp/poll.socket", .{});
@@ -22,69 +56,18 @@ test "poll socket for listening and for reading" {
     const pid = try os.fork();
     if (pid == 0) {
         // Client
-        const message = try std.fmt.allocPrint(testing.allocator, "hello from client!", .{});
-        defer testing.allocator.free(message);
-        var buf: [256]u8 = undefined;
-
-        // Connect first client
-        std.time.sleep(delay_time);
-        const client_socket1 = try os.socket(
-            os.AF_UNIX,
-            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-            os.PF_UNIX,
-        );
-        defer os.closeSocket(client_socket1);
-        try os.connect(
-            client_socket1,
-            @ptrCast(*os.sockaddr, &address.un),
-            @sizeOf(@TypeOf(address.un)),
-        );
-
-        // Write to first client and receive response
-        {
-            std.time.sleep(delay_time);
-            const bytes_sent = try os.send(client_socket1, message, os.MSG_EOR);
-            std.debug.print("client bytes sent: {d}\n", .{bytes_sent});
-            assert(message.len == bytes_sent);
-            const bytes_read = try os.recv(client_socket1, &buf, 0);
-            std.debug.print(
-                "received on client: {s}, {d} bytes\n",
-                .{ buf[0..bytes_read], bytes_read },
-            );
+        var threads: [clients_count]std.Thread = undefined;
+        for (threads) |*thr| {
+            thr.* = try std.Thread.spawn(.{}, startClient, .{address});
         }
-
-        // Connect second client
-        std.time.sleep(delay_time);
-        const client_socket2 = try os.socket(
-            os.AF_UNIX,
-            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-            os.PF_UNIX,
-        );
-        defer os.closeSocket(client_socket2);
-        try os.connect(
-            client_socket2,
-            @ptrCast(*os.sockaddr, &address.un),
-            @sizeOf(@TypeOf(address.un)),
-        );
-
-        // Write to second client and receive response
-        {
-            std.time.sleep(delay_time);
-            const bytes_sent = try os.send(client_socket2, message, os.MSG_EOR);
-            std.debug.print("client bytes sent: {d}\n", .{bytes_sent});
-            assert(message.len == bytes_sent);
-            const bytes_read = try os.recv(client_socket2, &buf, 0);
-            std.debug.print(
-                "received on client: {s}, {d} bytes\n",
-                .{ buf[0..bytes_read], bytes_read },
-            );
+        for (threads) |thr| {
+            std.Thread.join(thr);
         }
     } else {
         // Server
         var buf: [256]u8 = undefined;
         const message = try std.fmt.allocPrint(testing.allocator, "hello from server!", .{});
         defer testing.allocator.free(message);
-        const how_many_events_expected = 4;
 
         const socket = try os.socket(
             os.AF_UNIX,
@@ -123,9 +106,14 @@ test "poll socket for listening and for reading" {
                 var processed_events_count: u8 = 0;
                 while (current_event < fds.items.len) : (current_event += 1) {
                     if (fds.items[current_event].revents > 0) {
-                        fds.items[current_event].revents = 0;
                         processed_events_count += 1;
                         event_counter += 1;
+                        if (fds.items[current_event].revents & os.POLLHUP != 0) {
+                            _ = fds.swapRemove(current_event);
+                            _ = fd_types.swapRemove(current_event);
+                            continue;
+                        }
+                        fds.items[current_event].revents = 0;
 
                         switch (fd_types.items[current_event]) {
                             .listen => {
@@ -161,5 +149,7 @@ test "poll socket for listening and for reading" {
             }
             if (event_counter == how_many_events_expected) break;
         }
+        std.debug.print("\n", .{});
+        std.debug.print("total events: {d}\n", .{event_counter});
     }
 }
