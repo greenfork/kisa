@@ -492,6 +492,7 @@ fn CommunicationMixin(comptime ClientServer: type) type {
             switch (self.comms) {
                 .un_seqpacket_socket => |s| {
                     const bytes_read = try os.recv(s.socket, buf, 0);
+                    if (bytes_read == 0) return null;
                     if (buf.len == bytes_read) return error.MessageTooBig;
                     return buf[0..bytes_read];
                 },
