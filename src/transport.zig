@@ -9,7 +9,7 @@ pub const known_folders_config = .{
 };
 
 pub const TransportKind = enum {
-    un_seqpacket_socket,
+    un_socket,
 };
 
 const max_connect_retries = 50;
@@ -95,7 +95,7 @@ pub fn addressForUnixSocket(ally: *std.mem.Allocator, path: []const u8) !*net.Ad
 }
 
 pub const CommunicationResources = union(TransportKind) {
-    un_seqpacket_socket: struct {
+    un_socket: struct {
         socket: os.socket_t,
     },
 };
@@ -109,15 +109,15 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
         pub const max_method_size: usize = 1024;
         pub const max_message_size: usize = max_packet_size;
 
-        pub fn initWithComms(socket: os.socket_t) Self {
+        pub fn initWithUnixSocket(socket: os.socket_t) Self {
             return Self{
-                .comms = CommunicationResources{ .un_seqpacket_socket = .{ .socket = socket } },
+                .comms = CommunicationResources{ .un_socket = .{ .socket = socket } },
             };
         }
 
         pub fn deinitComms(self: Self) void {
             switch (self.comms) {
-                .un_seqpacket_socket => |s| {
+                .un_socket => |s| {
                     os.closeSocket(s.socket);
                 },
             }
@@ -127,7 +127,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
         /// []u8 content into it.
         pub fn send(self: Self, message: anytype) !void {
             switch (self.comms) {
-                .un_seqpacket_socket => |s| {
+                .un_socket => |s| {
                     var packet_buf: [max_packet_size]u8 = undefined;
                     const packet = try message.generate(&packet_buf);
                     const bytes_sent = try os.send(s.socket, packet, 0);
@@ -150,7 +150,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
         /// Returns the slice with the length of a received packet.
         pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
             switch (self.comms) {
-                .un_seqpacket_socket => |s| {
+                .un_socket => |s| {
                     const bytes_read = try os.recv(s.socket, buf, 0);
                     if (bytes_read == 0) return null;
                     if (buf.len == bytes_read) return error.MessageTooBig;
@@ -184,7 +184,7 @@ const MyMessage = struct {
     }
 };
 
-test "transport: communication via un_seqpacket_socket" {
+test "transport: communication via un_socket" {
     const path = try pathForUnixSocket(testing.allocator);
     defer testing.allocator.free(path);
     const address = try addressForUnixSocket(testing.allocator, path);
@@ -194,12 +194,12 @@ test "transport: communication via un_seqpacket_socket" {
     if (pid == 0) {
         const listen_socket = try bindUnixSocket(address);
         const accepted_socket = try os.accept(listen_socket, null, null, 0);
-        const server = MyContainer.initWithComms(accepted_socket);
+        const server = MyContainer.initWithUnixSocket(accepted_socket);
         var buf: [256]u8 = undefined;
         const message = try server.recv(MyMessage, &buf);
         std.debug.assert(message != null);
     } else {
-        const client = MyContainer.initWithComms(try connectToUnixSocket(address));
+        const client = MyContainer.initWithUnixSocket(try connectToUnixSocket(address));
         const message = MyMessage{ .content = undefined };
         try client.send(message);
     }

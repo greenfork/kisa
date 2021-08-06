@@ -168,7 +168,7 @@ pub const Client = struct {
 
     pub fn register(self: *Self, address: *net.Address) !void {
         defer self.ally.destroy(address);
-        self.server = ServerRepresentationForClient.initWithComms(
+        self.server = ServerRepresentationForClient.initWithUnixSocket(
             try transport.connectToUnixSocket(address),
         );
     }
@@ -272,7 +272,7 @@ pub const Server = struct {
 
     pub fn acceptClient(self: *Self) !void {
         const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
-        try self.clients.append(ClientRepresentationForServer.initWithComms(accepted_socket));
+        try self.clients.append(ClientRepresentationForServer.initWithUnixSocket(accepted_socket));
     }
 
     /// Main loop of the server, listens for requests and sends responses.
@@ -435,7 +435,7 @@ pub fn main() anyerror!void {
         }
     };
 
-    if (try Application.start(ally, .threaded, .un_seqpacket_socket)) |app| {
+    if (try Application.start(ally, .threaded)) |app| {
         var client = app.client;
         try client.ui.setup();
         defer client.ui.teardown();
