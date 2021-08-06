@@ -174,7 +174,11 @@ pub const WatcherFd = struct {
 pub const Watcher = struct {
     ally: *std.mem.Allocator,
     fds: std.MultiArrayList(WatcherFd) = std.MultiArrayList(WatcherFd){},
-    pending_events: usize = 0,
+    /// `poll` call can return several events at a time, this is their total count per call.
+    pending_events_count: usize = 0,
+    /// When `poll` returns several events, this cursor is used for subsequent searches
+    /// inside `pollfd` array.
+    pending_events_cursor: usize = 0,
 
     const Self = @This();
     const PollResult = struct { fd: WatcherFd, index: usize };
@@ -204,26 +208,22 @@ pub const Watcher = struct {
         self.fds.swapRemove(index);
     }
 
-    pub fn resetRevents(self: *Self, index: usize) void {
-        std.debug.assert(index < self.fds.len);
-        var new_value = self.fds.get(index);
-        new_value.pollfd.revents = 0;
-        self.fds.set(index, new_value);
-    }
-
     pub fn poll(self: *Self) !PollResult {
-        if (self.pending_events == 0) {
-            self.pending_events = try os.poll(self.fds.items(.pollfd), -1);
-            std.debug.assert(self.pending_events > 0);
+        if (self.pending_events_count == 0) {
+            self.pending_events_count = try os.poll(self.fds.items(.pollfd), -1);
+            std.debug.assert(self.pending_events_count > 0);
+            self.pending_events_cursor = 0;
         }
-        for (self.fds.items(.pollfd)) |pollfd, idx| {
-            // TODO: how to erase `revents` or should we even do it?
-            // One idea is to keep the cursor when there are several events returned, so `poll`
-            // will clear all the remaining events on the next call, while cursor is used when
-            // `poll` returns several events at a time.
-            if (pollfd.revents != 0) {
-                self.pending_events -= 1;
-                return PollResult{ .fd = self.fds.get(idx), .index = idx };
+        const pollfd_array = self.fds.items(.pollfd);
+        while (self.pending_events_cursor < pollfd_array.len) : (self.pending_events_cursor += 1) {
+            if (pollfd_array[self.pending_events_cursor].revents != 0) {
+                const result = PollResult{
+                    .fd = self.fds.get(self.pending_events_cursor),
+                    .index = self.pending_events_cursor,
+                };
+                self.pending_events_count -= 1;
+                self.pending_events_cursor += 1;
+                return result;
             }
         }
         unreachable;
@@ -293,7 +293,6 @@ test "transport/fork2: polling with watcher" {
             switch (polled_data.fd.ty) {
                 .listen_socket => {
                     if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
-                        watcher.resetRevents(polled_data.index);
                         const accepted_socket = try os.accept(polled_data.fd.pollfd.fd, null, null, 0);
                         try watcher.addFd(accepted_socket, os.POLLIN, .connection_socket);
                     } else {
@@ -302,7 +301,6 @@ test "transport/fork2: polling with watcher" {
                 },
                 .connection_socket => {
                     if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
-                        watcher.resetRevents(polled_data.index);
                         var buf: [256]u8 = undefined;
                         const bytes_read = try os.recv(polled_data.fd.pollfd.fd, &buf, 0);
                         if (bytes_read != 0) {
