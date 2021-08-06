@@ -85,7 +85,17 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         const test_cases = b.addTest("src/transport.zig");
-        test_cases.setFilter("transport:");
+        test_cases.setFilter("transport/fork1:");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+        test_transport.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/transport.zig");
+        test_cases.setFilter("transport/fork2:");
         test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);

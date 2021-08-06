@@ -161,6 +161,75 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
     };
 }
 
+pub const FdType = enum {
+    listen_socket,
+    connection_socket,
+};
+
+pub const WatcherFd = struct {
+    pollfd: os.pollfd,
+    ty: FdType,
+};
+
+pub const Watcher = struct {
+    ally: *std.mem.Allocator,
+    fds: std.MultiArrayList(WatcherFd) = std.MultiArrayList(WatcherFd){},
+    pending_events: usize = 0,
+
+    const Self = @This();
+    const PollResult = struct { fd: WatcherFd, index: usize };
+
+    pub fn init(ally: *std.mem.Allocator) Self {
+        return Self{ .ally = ally };
+    }
+
+    pub fn deinit(self: *Self) void {
+        for (self.fds.items(.pollfd)) |pollfd| os.close(pollfd.fd);
+        self.fds.deinit(self.ally);
+    }
+
+    pub fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType) !void {
+        try self.fds.append(self.ally, .{
+            .pollfd = os.pollfd{
+                .fd = fd,
+                .events = events,
+                .revents = 0,
+            },
+            .ty = ty,
+        });
+    }
+
+    pub fn removeFd(self: *Self, index: usize) void {
+        std.debug.assert(index < self.fds.len);
+        self.fds.swapRemove(index);
+    }
+
+    pub fn resetRevents(self: *Self, index: usize) void {
+        std.debug.assert(index < self.fds.len);
+        var new_value = self.fds.get(index);
+        new_value.pollfd.revents = 0;
+        self.fds.set(index, new_value);
+    }
+
+    pub fn poll(self: *Self) !PollResult {
+        if (self.pending_events == 0) {
+            self.pending_events = try os.poll(self.fds.items(.pollfd), -1);
+            std.debug.assert(self.pending_events > 0);
+        }
+        for (self.fds.items(.pollfd)) |pollfd, idx| {
+            // TODO: how to erase `revents` or should we even do it?
+            // One idea is to keep the cursor when there are several events returned, so `poll`
+            // will clear all the remaining events on the next call, while cursor is used when
+            // `poll` returns several events at a time.
+            if (pollfd.revents != 0) {
+                self.pending_events -= 1;
+                return PollResult{ .fd = self.fds.get(idx), .index = idx };
+            }
+        }
+        unreachable;
+    }
+};
+
 const MyContainer = struct {
     comms: CommunicationResources,
     usingnamespace CommunicationMixin(@This());
@@ -184,7 +253,7 @@ const MyMessage = struct {
     }
 };
 
-test "transport: communication via un_socket" {
+test "transport/fork1: communication via un_socket" {
     const path = try pathForUnixSocket(testing.allocator);
     defer testing.allocator.free(path);
     const address = try addressForUnixSocket(testing.allocator, path);
@@ -202,5 +271,57 @@ test "transport: communication via un_socket" {
         const client = MyContainer.initWithUnixSocket(try connectToUnixSocket(address));
         const message = MyMessage{ .content = undefined };
         try client.send(message);
+    }
+}
+
+test "transport/fork2: polling with watcher" {
+    const path = try pathForUnixSocket(testing.allocator);
+    defer testing.allocator.free(path);
+    const address = try addressForUnixSocket(testing.allocator, path);
+    defer testing.allocator.destroy(address);
+    const client_message = "hello from client";
+
+    const pid = try os.fork();
+    if (pid == 0) {
+        var watcher = Watcher.init(testing.allocator);
+        defer watcher.deinit();
+        const listen_socket = try bindUnixSocket(address);
+        try watcher.addFd(listen_socket, os.POLLIN, .listen_socket);
+        var cnt: u8 = 3;
+        while (cnt > 0) : (cnt -= 1) {
+            const polled_data = try watcher.poll();
+            switch (polled_data.fd.ty) {
+                .listen_socket => {
+                    if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
+                        watcher.resetRevents(polled_data.index);
+                        const accepted_socket = try os.accept(polled_data.fd.pollfd.fd, null, null, 0);
+                        try watcher.addFd(accepted_socket, os.POLLIN, .connection_socket);
+                    } else {
+                        unreachable;
+                    }
+                },
+                .connection_socket => {
+                    if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
+                        watcher.resetRevents(polled_data.index);
+                        var buf: [256]u8 = undefined;
+                        const bytes_read = try os.recv(polled_data.fd.pollfd.fd, &buf, 0);
+                        if (bytes_read != 0) {
+                            try testing.expectEqualStrings(client_message, buf[0..bytes_read]);
+                        } else {
+                            watcher.removeFd(polled_data.index);
+                        }
+                    } else {
+                        // watcher.removeFd(polled_data.index);
+                        unreachable;
+                    }
+                },
+            }
+        }
+    } else {
+        const message = try std.fmt.allocPrint(testing.allocator, client_message, .{});
+        defer testing.allocator.free(message);
+        const socket = try connectToUnixSocket(address);
+        defer os.closeSocket(socket);
+        _ = try os.send(socket, message, 0);
     }
 }
