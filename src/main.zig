@@ -6,11 +6,7 @@ const mem = std.mem;
 const net = std.net;
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
-const known_folders = @import("known-folders");
-
-pub const known_folders_config = .{
-    .xdg_on_mac = true,
-};
+const transport = @import("transport.zig");
 
 pub const MoveDirection = enum {
     up,
@@ -167,14 +163,14 @@ pub const Client = struct {
 
     pub fn deinit(self: *Self) void {
         self.sendExitNotify() catch {};
-        self.server.deinit();
+        self.server.deinitComms();
     }
 
     pub fn register(self: *Self, address: *net.Address) !void {
         defer self.ally.destroy(address);
-        self.server = ServerRepresentationForClient{
-            .comms = CommunicationResources.initSocket(try Transport.connectToUnixSocket(address)),
-        };
+        self.server = ServerRepresentationForClient.initWithComms(
+            try transport.connectToUnixSocket(address),
+        );
     }
 
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
@@ -264,21 +260,19 @@ pub const Server = struct {
             .ally = ally,
             .clients = std.ArrayList(ClientRepresentationForServer).init(ally),
             .config = try readConfig(ally),
-            .listen_socket = try Transport.bindUnixSocket(address),
+            .listen_socket = try transport.bindUnixSocket(address),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.clients.items) |*client| client.deinit();
+        for (self.clients.items) |*client| client.deinitComms();
         self.clients.deinit();
         self.config.deinit();
     }
 
     pub fn acceptClient(self: *Self) !void {
         const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
-        try self.clients.append(ClientRepresentationForServer{
-            .comms = CommunicationResources.initSocket(accepted_socket),
-        });
+        try self.clients.append(ClientRepresentationForServer.initWithComms(accepted_socket));
     }
 
     /// Main loop of the server, listens for requests and sends responses.
@@ -326,180 +320,19 @@ pub const Server = struct {
     }
 };
 
-pub const TransportKind = enum {
-    un_seqpacket_socket,
-};
-
-pub const Transport = struct {
-    const max_connect_retries = 50;
-    const connect_retry_delay = std.time.ns_per_ms * 5;
-
-    pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
-        const socket = try os.socket(
-            os.AF_UNIX,
-            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-            os.PF_UNIX,
-        );
-        errdefer os.closeSocket(socket);
-        try os.bind(socket, @ptrCast(*os.sockaddr, &address.un), @sizeOf(@TypeOf(address.un)));
-        try os.listen(socket, 10);
-        return socket;
-    }
-
-    pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
-        const socket = try os.socket(
-            os.AF_UNIX,
-            os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-            os.PF_UNIX,
-        );
-        errdefer os.closeSocket(socket);
-        var connect_retries: u8 = max_connect_retries;
-        while (true) {
-            os.connect(
-                socket,
-                @ptrCast(*os.sockaddr, &address.un),
-                @sizeOf(@TypeOf(address.un)),
-            ) catch |err| switch (err) {
-                error.ConnectionRefused, error.FileNotFound => {
-                    // If the server is not yet listening, wait a bit.
-                    if (connect_retries == 0) return err;
-                    std.time.sleep(connect_retry_delay);
-                    connect_retries -= 1;
-                    continue;
-                },
-                else => return err,
-            };
-            break;
-        }
-        return socket;
-    }
-
-    /// Caller owns the memory.
-    pub fn pathForUnixSocket(ally: *mem.Allocator) ![]u8 {
-        const runtime_dir = (try known_folders.getPath(
-            ally,
-            .runtime,
-        )) orelse (try known_folders.getPath(
-            ally,
-            .app_menu,
-        )) orelse return error.NoRuntimeDirectory;
-        defer ally.free(runtime_dir);
-        const subpath = "/kisa";
-        var path_builder = std.ArrayList(u8).init(ally);
-        try path_builder.appendSlice(runtime_dir);
-        try path_builder.appendSlice(subpath);
-        std.fs.makeDirAbsolute(path_builder.items) catch |err| switch (err) {
-            error.PathAlreadyExists => {},
-            else => return err,
-        };
-        const filename = try std.fmt.allocPrint(ally, "{d}", .{os.linux.getpid()});
-        defer ally.free(filename);
-        try path_builder.append('/');
-        try path_builder.appendSlice(filename);
-        std.fs.deleteFileAbsolute(path_builder.items) catch |err| switch (err) {
-            error.FileNotFound => {},
-            else => return err,
-        };
-        return path_builder.toOwnedSlice();
-    }
-
-    /// Caller owns the memory.
-    pub fn addressForUnixSocket(ally: *mem.Allocator, path: []const u8) !*net.Address {
-        const address = try ally.create(net.Address);
-        errdefer ally.destroy(address);
-        address.* = try net.Address.initUnix(path);
-        return address;
-    }
-};
-
-const CommunicationResources = union(TransportKind) {
-    un_seqpacket_socket: struct {
-        socket: os.socket_t,
-    },
-
-    const Self = @This();
-
-    pub fn initSocket(socket: os.socket_t) Self {
-        return Self{ .un_seqpacket_socket = .{ .socket = socket } };
-    }
-
-    pub fn deinit(self: Self) void {
-        switch (self) {
-            .un_seqpacket_socket => |s| {
-                os.closeSocket(s.socket);
-            },
-        }
-    }
-};
-
 /// How Server sees a Client.
 pub const ClientRepresentationForServer = struct {
-    comms: CommunicationResources,
+    comms: transport.CommunicationResources,
 
-    const Self = @This();
-
-    pub fn deinit(self: Self) void {
-        self.comms.deinit();
-    }
-
-    pub usingnamespace CommunicationMixin(Self);
+    pub usingnamespace transport.CommunicationMixin(@This());
 };
 
 /// How Client sees a Server.
 pub const ServerRepresentationForClient = struct {
-    comms: CommunicationResources,
+    comms: transport.CommunicationResources,
 
-    const Self = @This();
-
-    pub fn deinit(self: Self) void {
-        self.comms.deinit();
-    }
-
-    pub usingnamespace CommunicationMixin(Self);
+    pub usingnamespace transport.CommunicationMixin(@This());
 };
-
-fn CommunicationMixin(comptime ClientServer: type) type {
-    return struct {
-        const Self = ClientServer;
-        pub const max_packet_size: usize = 1024 * 16;
-        pub const max_method_size: usize = 1024;
-        pub const max_message_size: usize = max_packet_size;
-
-        /// Sends a message.
-        pub fn send(self: Self, message: anytype) !void {
-            switch (self.comms) {
-                .un_seqpacket_socket => |s| {
-                    var packet_buf: [max_packet_size]u8 = undefined;
-                    const packet = try message.generate(&packet_buf);
-                    const bytes_sent = try os.send(s.socket, packet, 0);
-                    std.debug.assert(packet.len == bytes_sent);
-                },
-            }
-        }
-
-        /// Reads a message of type `Message` into `out_buf`.
-        pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
-            var packet_buf: [max_packet_size]u8 = undefined;
-            if (try self.readPacket(&packet_buf)) |packet| {
-                return try Message.parse(out_buf, packet);
-            } else {
-                return null;
-            }
-        }
-
-        /// Returns the slice with the length of a received packet.
-        pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
-            switch (self.comms) {
-                .un_seqpacket_socket => |s| {
-                    const bytes_read = try os.recv(s.socket, buf, 0);
-                    if (bytes_read == 0) return null;
-                    if (buf.len == bytes_read) return error.MessageTooBig;
-                    return buf[0..bytes_read];
-                },
-            }
-        }
-    };
-}
 
 pub const Application = struct {
     client: Client,
@@ -521,9 +354,9 @@ pub const Application = struct {
         ally: *mem.Allocator,
         concurrency_model: ConcurrencyModel,
     ) !?Self {
-        const unix_socket_path = try Transport.pathForUnixSocket(ally);
+        const unix_socket_path = try transport.pathForUnixSocket(ally);
         defer ally.free(unix_socket_path);
-        const address = try Transport.addressForUnixSocket(ally, unix_socket_path);
+        const address = try transport.addressForUnixSocket(ally, unix_socket_path);
 
         switch (concurrency_model) {
             .forked => {

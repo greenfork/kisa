@@ -22,10 +22,11 @@ pub fn build(b: *std.build.Builder) void {
 
     const test_step = b.step("test", "Run tests");
     const test_main = b.step("test-main", "Run tests in main");
-    const test_main_nofork = b.step("test-main-nofork", "Run tests in main");
-    const test_state = b.step("test-state", "Run tests in main");
-    const test_config = b.step("test-config", "Run tests in main");
-    const test_jsonrpc = b.step("test-jsonrpc", "Run tests in main");
+    const test_main_nofork = b.step("test-main-nofork", "Run tests in main without forking");
+    const test_state = b.step("test-state", "Run tests in state");
+    const test_config = b.step("test-config", "Run tests in config");
+    const test_jsonrpc = b.step("test-jsonrpc", "Run tests in jsonrpc");
+    const test_transport = b.step("test-transport", "Run tests in transport");
 
     {
         var test_cases = b.addTest("src/main.zig");
@@ -80,5 +81,15 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
         test_jsonrpc.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/transport.zig");
+        test_cases.setFilter("transport:");
+        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_step.dependOn(&test_cases.step);
+        test_transport.dependOn(&test_cases.step);
     }
 }
