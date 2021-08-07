@@ -164,8 +164,12 @@ pub const FdType = enum {
 };
 
 pub const WatcherFd = struct {
+    /// Native to the OS structure which is used for polling.
     pollfd: os.pollfd,
+    /// Metadata for identifying the type of a file descriptor.
     ty: FdType,
+    /// External identifier which is interpreted by the user of this API.
+    id: u32,
 };
 
 pub const Watcher = struct {
@@ -178,7 +182,10 @@ pub const Watcher = struct {
     pending_events_cursor: usize = 0,
 
     const Self = @This();
-    const PollResult = struct { fd: WatcherFd, index: usize };
+    const PollResult = union(enum) {
+        success: struct { fd: os.fd_t, id: u32, ty: FdType, fd_index: usize },
+        err: struct { id: u32 },
+    };
 
     pub fn init(ally: *std.mem.Allocator) Self {
         return Self{ .ally = ally };
@@ -189,7 +196,8 @@ pub const Watcher = struct {
         self.fds.deinit(self.ally);
     }
 
-    pub fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType) !void {
+    pub fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType, id: u32) !void {
+        std.debug.assert(events == os.POLLIN);
         try self.fds.append(self.ally, .{
             .pollfd = os.pollfd{
                 .fd = fd,
@@ -197,33 +205,59 @@ pub const Watcher = struct {
                 .revents = 0,
             },
             .ty = ty,
+            .id = id,
         });
     }
 
     pub fn removeFd(self: *Self, index: usize) void {
         std.debug.assert(index < self.fds.len);
+        os.close(self.fds.items(.pollfd)[index].fd);
         self.fds.swapRemove(index);
     }
 
-    pub fn poll(self: *Self) !PollResult {
+    /// Returns a readable file descriptor. Assumes that we don't have any other descriptors
+    /// other than readable and that this will block if no readable file descriptors are
+    /// available.
+    pub fn pollReadable(self: *Self) !PollResult {
+        try self.poll();
+
+        const pollfds = self.fds.items(.pollfd);
+        const ids = self.fds.items(.id);
+        const tys = self.fds.items(.ty);
+        while (self.pending_events_cursor < pollfds.len) : (self.pending_events_cursor += 1) {
+            const revents = pollfds[self.pending_events_cursor].revents;
+            if (revents != 0) {
+                self.pending_events_count -= 1;
+                if (revents & (os.POLLERR | os.POLLHUP | os.POLLNVAL) != 0) {
+                    // `pollfd` is removed by swapping current one with the last one, so the cursor
+                    // stays the same.
+                    const result = PollResult{ .err = .{
+                        .id = ids[self.pending_events_cursor],
+                    } };
+                    self.removeFd(self.pending_events_cursor);
+                    return result;
+                } else if (revents & os.POLLIN != 0) {
+                    const result = PollResult{ .success = .{
+                        .fd = pollfds[self.pending_events_cursor].fd,
+                        .id = ids[self.pending_events_cursor],
+                        .ty = tys[self.pending_events_cursor],
+                        .fd_index = self.pending_events_cursor,
+                    } };
+                    self.pending_events_cursor += 1;
+                    return result;
+                }
+            }
+        }
+        unreachable;
+    }
+
+    /// Fills current `fds` array with result events which can be inspected.
+    fn poll(self: *Self) !void {
         if (self.pending_events_count == 0) {
             self.pending_events_count = try os.poll(self.fds.items(.pollfd), -1);
             std.debug.assert(self.pending_events_count > 0);
             self.pending_events_cursor = 0;
         }
-        const pollfds = self.fds.items(.pollfd);
-        while (self.pending_events_cursor < pollfds.len) : (self.pending_events_cursor += 1) {
-            if (pollfds[self.pending_events_cursor].revents != 0) {
-                const result = PollResult{
-                    .fd = self.fds.get(self.pending_events_cursor),
-                    .index = self.pending_events_cursor,
-                };
-                self.pending_events_count -= 1;
-                self.pending_events_cursor += 1;
-                return result;
-            }
-        }
-        unreachable;
     }
 };
 
@@ -283,33 +317,29 @@ test "transport/fork2: polling with watcher" {
         var watcher = Watcher.init(testing.allocator);
         defer watcher.deinit();
         const listen_socket = try bindUnixSocket(address);
-        try watcher.addFd(listen_socket, os.POLLIN, .listen_socket);
+        try watcher.addFd(listen_socket, os.POLLIN, .listen_socket, 0);
         var cnt: u8 = 3;
         while (cnt > 0) : (cnt -= 1) {
-            const polled_data = try watcher.poll();
-            switch (polled_data.fd.ty) {
-                .listen_socket => {
-                    if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
-                        const accepted_socket = try os.accept(polled_data.fd.pollfd.fd, null, null, 0);
-                        try watcher.addFd(accepted_socket, os.POLLIN, .connection_socket);
-                    } else {
-                        unreachable;
+            switch (try watcher.pollReadable()) {
+                .success => |polled_data| {
+                    switch (polled_data.ty) {
+                        .listen_socket => {
+                            const accepted_socket = try os.accept(polled_data.fd, null, null, 0);
+                            try watcher.addFd(accepted_socket, os.POLLIN, .connection_socket, 0);
+                        },
+                        .connection_socket => {
+                            var buf: [256]u8 = undefined;
+                            const bytes_read = try os.recv(polled_data.fd, &buf, 0);
+                            if (bytes_read != 0) {
+                                try testing.expectEqualStrings(client_message, buf[0..bytes_read]);
+                            } else {
+                                // This should have been handled by POLLHUP event.
+                                unreachable;
+                            }
+                        },
                     }
                 },
-                .connection_socket => {
-                    if (polled_data.fd.pollfd.revents & os.POLLIN != 0) {
-                        var buf: [256]u8 = undefined;
-                        const bytes_read = try os.recv(polled_data.fd.pollfd.fd, &buf, 0);
-                        if (bytes_read != 0) {
-                            try testing.expectEqualStrings(client_message, buf[0..bytes_read]);
-                        } else {
-                            watcher.removeFd(polled_data.index);
-                        }
-                    } else {
-                        // watcher.removeFd(polled_data.index);
-                        unreachable;
-                    }
-                },
+                .err => {},
             }
         }
     } else {
