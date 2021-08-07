@@ -14,6 +14,7 @@ pub const TransportKind = enum {
 
 const max_connect_retries = 50;
 const connect_retry_delay = std.time.ns_per_ms * 5;
+const listen_socket_backlog = 10;
 
 pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
     const socket = try os.socket(
@@ -22,8 +23,8 @@ pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
         os.PF_UNIX,
     );
     errdefer os.closeSocket(socket);
-    try os.bind(socket, @ptrCast(*os.sockaddr, &address.un), @sizeOf(@TypeOf(address.un)));
-    try os.listen(socket, 10);
+    try os.bind(socket, &address.any, address.getOsSockLen());
+    try os.listen(socket, listen_socket_backlog);
     return socket;
 }
 
@@ -36,11 +37,7 @@ pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
     errdefer os.closeSocket(socket);
     var connect_retries: u8 = max_connect_retries;
     while (true) {
-        os.connect(
-            socket,
-            @ptrCast(*os.sockaddr, &address.un),
-            @sizeOf(@TypeOf(address.un)),
-        ) catch |err| switch (err) {
+        os.connect(socket, &address.any, address.getOsSockLen()) catch |err| switch (err) {
             error.ConnectionRefused, error.FileNotFound => {
                 // If the server is not yet listening, wait a bit.
                 if (connect_retries == 0) return err;
@@ -214,9 +211,9 @@ pub const Watcher = struct {
             std.debug.assert(self.pending_events_count > 0);
             self.pending_events_cursor = 0;
         }
-        const pollfd_array = self.fds.items(.pollfd);
-        while (self.pending_events_cursor < pollfd_array.len) : (self.pending_events_cursor += 1) {
-            if (pollfd_array[self.pending_events_cursor].revents != 0) {
+        const pollfds = self.fds.items(.pollfd);
+        while (self.pending_events_cursor < pollfds.len) : (self.pending_events_cursor += 1) {
+            if (pollfds[self.pending_events_cursor].revents != 0) {
                 const result = PollResult{
                     .fd = self.fds.get(self.pending_events_cursor),
                     .index = self.pending_events_cursor,
