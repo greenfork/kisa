@@ -2,6 +2,7 @@ const std = @import("std");
 const os = std.os;
 const net = std.net;
 const testing = std.testing;
+const assert = std.debug.assert;
 const known_folders = @import("known-folders");
 
 pub const known_folders_config = .{
@@ -128,7 +129,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
                     var packet_buf: [max_packet_size]u8 = undefined;
                     const packet = try message.generate(&packet_buf);
                     const bytes_sent = try os.send(s.socket, packet, 0);
-                    std.debug.assert(packet.len == bytes_sent);
+                    assert(packet.len == bytes_sent);
                 },
             }
         }
@@ -159,7 +160,9 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
 }
 
 pub const FdType = enum {
+    /// Listens for incoming client connections to the server.
     listen_socket,
+    /// Used for communication between client and server.
     connection_socket,
 };
 
@@ -174,6 +177,7 @@ pub const WatcherFd = struct {
 
 pub const Watcher = struct {
     ally: *std.mem.Allocator,
+    /// Array of file descriptor data. Must not be modified directly, only with provided API.
     fds: std.MultiArrayList(WatcherFd) = std.MultiArrayList(WatcherFd){},
     /// `poll` call can return several events at a time, this is their total count per call.
     pending_events_count: usize = 0,
@@ -196,8 +200,34 @@ pub const Watcher = struct {
         self.fds.deinit(self.ally);
     }
 
-    pub fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType, id: u32) !void {
-        std.debug.assert(events == os.POLLIN);
+    /// Adds listen socket which is used for listening for other sockets' connections.
+    pub fn addListenSocket(self: *Self, fd: os.fd_t, id: u32) !void {
+        try self.addFd(fd, os.POLLIN, .listen_socket, id);
+    }
+
+    /// Adds connection socket which is used for communication between server and client.
+    pub fn addConnectionSocket(self: *Self, fd: os.fd_t, id: u32) !void {
+        try self.addFd(fd, os.POLLIN, .connection_socket, id);
+    }
+
+    /// Removes any file descriptor with `id`, `id` must exist in the current
+    /// array of ids.
+    pub fn removeFileDescriptor(self: *Self, id: u32) void {
+        for (self.fds.items(.id)) |fds_id, idx| {
+            if (fds_id == id) {
+                self.removeFd(idx);
+                return;
+            }
+        }
+        unreachable;
+    }
+
+    fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType, id: u32) !void {
+        // Only add ready-for-reading notifications with current assumptions of `pollReadable`.
+        assert(events == os.POLLIN);
+        // Ensure the `id` is unique across all elements.
+        for (self.fds.items(.id)) |existing_id| assert(id != existing_id);
+
         try self.fds.append(self.ally, .{
             .pollfd = os.pollfd{
                 .fd = fd,
@@ -209,8 +239,7 @@ pub const Watcher = struct {
         });
     }
 
-    pub fn removeFd(self: *Self, index: usize) void {
-        std.debug.assert(index < self.fds.len);
+    fn removeFd(self: *Self, index: usize) void {
         os.close(self.fds.items(.pollfd)[index].fd);
         self.fds.swapRemove(index);
     }
@@ -255,7 +284,7 @@ pub const Watcher = struct {
     fn poll(self: *Self) !void {
         if (self.pending_events_count == 0) {
             self.pending_events_count = try os.poll(self.fds.items(.pollfd), -1);
-            std.debug.assert(self.pending_events_count > 0);
+            assert(self.pending_events_count > 0);
             self.pending_events_cursor = 0;
         }
     }
@@ -305,7 +334,7 @@ test "transport/fork1: communication via un_socket" {
     }
 }
 
-test "transport/fork2: polling with watcher" {
+test "transport/fork2: client and server both poll events with watcher" {
     const path = try pathForUnixSocket(testing.allocator);
     defer testing.allocator.free(path);
     const address = try addressForUnixSocket(testing.allocator, path);
@@ -314,10 +343,11 @@ test "transport/fork2: polling with watcher" {
 
     const pid = try os.fork();
     if (pid == 0) {
+        // Server
+        const listen_socket = try bindUnixSocket(address);
         var watcher = Watcher.init(testing.allocator);
         defer watcher.deinit();
-        const listen_socket = try bindUnixSocket(address);
-        try watcher.addFd(listen_socket, os.POLLIN, .listen_socket, 0);
+        try watcher.addListenSocket(listen_socket, 0);
         var cnt: u8 = 3;
         while (cnt > 0) : (cnt -= 1) {
             switch (try watcher.pollReadable()) {
@@ -325,7 +355,9 @@ test "transport/fork2: polling with watcher" {
                     switch (polled_data.ty) {
                         .listen_socket => {
                             const accepted_socket = try os.accept(polled_data.fd, null, null, 0);
-                            try watcher.addFd(accepted_socket, os.POLLIN, .connection_socket, 0);
+                            try watcher.addConnectionSocket(accepted_socket, 1);
+                            const bytes_sent = try os.send(accepted_socket, "1", 0);
+                            try testing.expectEqual(@as(usize, 1), bytes_sent);
                         },
                         .connection_socket => {
                             var buf: [256]u8 = undefined;
@@ -333,7 +365,7 @@ test "transport/fork2: polling with watcher" {
                             if (bytes_read != 0) {
                                 try testing.expectEqualStrings(client_message, buf[0..bytes_read]);
                             } else {
-                                // This should have been handled by POLLHUP event.
+                                // This should have been handled by POLLHUP event and union is `err`.
                                 unreachable;
                             }
                         },
@@ -343,10 +375,22 @@ test "transport/fork2: polling with watcher" {
             }
         }
     } else {
+        // Client
         const message = try std.fmt.allocPrint(testing.allocator, client_message, .{});
         defer testing.allocator.free(message);
         const socket = try connectToUnixSocket(address);
-        defer os.closeSocket(socket);
-        _ = try os.send(socket, message, 0);
+        var watcher = Watcher.init(testing.allocator);
+        defer watcher.deinit();
+        try watcher.addConnectionSocket(socket, 0);
+        switch (try watcher.pollReadable()) {
+            .success => |polled_data| {
+                var buf: [256]u8 = undefined;
+                const bytes_read = try os.recv(polled_data.fd, &buf, 0);
+                try testing.expectEqualStrings("1", buf[0..bytes_read]);
+            },
+            .err => unreachable,
+        }
+        const bytes_sent = try os.send(socket, message, 0);
+        try testing.expectEqual(message.len, bytes_sent);
     }
 }
