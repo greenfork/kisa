@@ -279,7 +279,7 @@ choices:
 
 This section is volatile and may change frequently.
 
-![Architecture diagram](docs/architecture.png)
+![Architecture diagram](docs/assets/architecture.png)
 
 Examples of a Generic Plugin:
 - Language Server Protocol

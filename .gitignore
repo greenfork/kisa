@@ -3,3 +3,6 @@ zig-cache/
 
 /tests/manylines.txt
 /todo/
+
+/docs/app.html
+/docs/app.js
