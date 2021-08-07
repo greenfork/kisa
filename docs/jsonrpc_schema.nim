@@ -1,5 +1,4 @@
 import strformat
-from karax/kbase import kstring
 
 # Partial JSON-RPC specification in types.
 type
@@ -11,15 +10,15 @@ type
     of pkBool: bVal*: bool
     of pkInteger: iVal*: int
     of pkFloat: fVal*: float
-    of pkString: sVal*: kstring
+    of pkString: sVal*: string
     of pkArray: aVal*: seq[Parameter]
   Request* = object
-    `method`*: kstring
+    `method`*: string
     params*: Parameter
     notification*: bool ## notifications in json-rpc don't have an `id` element
   ErrorObj* = object
     code*: int
-    message*: kstring
+    message*: string
   ResponseKind* = enum
     rkResult, rkError
   Response* = object
@@ -32,7 +31,7 @@ type
   TargetKind* = enum
     tkClient, tkServer
   Step* = object
-    description*: kstring
+    description*: string
     case kind*: StepKind
     of skRequest:
       request*: Request
@@ -41,23 +40,21 @@ type
       response*: Response
       `from`*: TargetKind
     of skOther:
-      other*: kstring
+      other*: string
   Interaction* = object
-    title*: kstring
-    description*: kstring
+    title*: string
+    description*: string
     steps*: seq[Step]
 
-func quoteString(str: kstring): kstring =
-  var rs = ""
+func quoteString(str: string): string =
   for ch in str:
     if ch == '"':
-      rs.add '\\'
-      rs.add '"'
+      result.add '\\'
+      result.add '"'
     else:
-      rs.add ch
-  result = rs.kstring
+      result.add ch
 
-func toCode(p: Parameter): kstring =
+func toCode(p: Parameter): string =
   case p.kind
   of pkVoid: assert false
   of pkBool: result = $p.bVal
@@ -71,10 +68,10 @@ func toCode(p: Parameter): kstring =
       result &= ", "
     result &= "]"
 
-func toCode(e: ErrorObj): kstring =
+func toCode(e: ErrorObj): string =
   fmt"""{{"code": {e.code}, "message": "{e.message}"}}"""
 
-func toCode*(r: Request): kstring =
+func toCode*(r: Request): string =
   result = fmt"""{{"jsonrpc": "2.0", "method": "{r.`method`}""""
   if r.params.kind != pkVoid:
     result &= fmt""", "params": {r.params.toCode}"""
@@ -82,7 +79,7 @@ func toCode*(r: Request): kstring =
     result &= """, "id": 1"""
   result &= "}"
 
-func toCode*(r: Response): kstring =
+func toCode*(r: Response): string =
   result = """{"jsonrpc": "2.0""""
   case r.kind
   of rkResult:
@@ -97,8 +94,10 @@ var interactions*: seq[Interaction] = @[]
 
 interactions.add(
   Interaction(
-    title: "Client initialization",
-    description: "The first thing the client should do is to connect to the server.",
+    title: "Initialize a client",
+    description: """
+The first thing the client should do is to connect to the server and receive and ID.
+""",
     steps: @[
       Step(
         kind: skOther,

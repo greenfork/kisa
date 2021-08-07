@@ -1,5 +1,6 @@
 include karax/prelude
 import ./jsonrpc_schema
+from ./poormanmarkdown import markdown
 
 proc createDom(): VNode =
   buildHtml(tdiv):
@@ -9,12 +10,12 @@ proc createDom(): VNode =
       h2:
         text interaction.title
       p:
-        text interaction.description
+        verbatim markdown(interaction.description).kstring
       ol:
         for step in interaction.steps:
           li:
             p:
-              text step.description
+              verbatim markdown(step.description).kstring
             pre:
               text(
                 case step.kind
