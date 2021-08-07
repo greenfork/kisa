@@ -7,8 +7,6 @@ import strformat
 
 const linkDefinitionRe = re"(?m)^(\[.+?\]): (.+)$"
 
-var links: Table[string, string]
-
 func quoteString(str: string): string =
   for ch in str:
     if ch == '"':
@@ -29,7 +27,9 @@ func inlineCodeReplacementGroups(str: string): seq[(string, string)] =
   for m in findAll(str, inlineCodeRe):
     result.add (str[m.boundaries], "<code>" & m.groupFirstCapture(0, str) & "</code>")
 
-proc markdown*(str: string): string =
+## `links` must be initialized and passed on every parse call. It is modified
+## inside a proc and same `links` can be passed to further `markdown` calls.
+func markdown*(str: string, links: var Table[string, string]): string =
   for m in findAll(str, linkDefinitionRe):
     links[m.groupFirstCapture(0, str)] = m.groupFirstCapture(1, str)
   result = str.replace(linkDefinitionRe, "")

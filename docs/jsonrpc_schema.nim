@@ -1,4 +1,6 @@
 import strformat
+import tables
+from ./poormanmarkdown import markdown
 
 # Partial JSON-RPC specification in types.
 type
@@ -6,7 +8,7 @@ type
     pkVoid, pkBool, pkInteger, pkFloat, pkString, pkArray
   Parameter* = object
     case kind*: ParamKind
-    of pkVoid: vVal*: void
+    of pkVoid: vVal*: bool
     of pkBool: bVal*: bool
     of pkInteger: iVal*: int
     of pkFloat: fVal*: float
@@ -90,18 +92,19 @@ func toCode*(r: Response): string =
     result &= fmt""", "id": 1"""
   result &= "}"
 
-var interactions*: seq[Interaction] = @[]
+const interactions* = block:
+  var interactions: seq[Interaction]
 
-interactions.add(
-  Interaction(
-    title: "Initialize a client",
-    description: """
+  interactions.add(
+    Interaction(
+      title: "Initialize a client",
+      description: """
 The first thing the client should do is to connect to the server and receive and ID.
 """,
-    steps: @[
-      Step(
-        kind: skOther,
-        description: """
+      steps: @[
+        Step(
+          kind: skOther,
+          description: """
 The first thing to do is to send a connection request to unix domain socket which
 is located at user runtime directory inside `kisa` directory with an <ID> of a
 currently running session (by convention it is the process ID of the server).
@@ -111,7 +114,7 @@ Below is an example for a Zig language, see documentation of
 [socket(2)]: https://linux.die.net/man/2/socket
 [connect(2)]: https://linux.die.net/man/2/connect
 """,
-        other: """
+          other: """
 const std = @import("std");
 const os = std.os;
 const allocator = ...;
@@ -124,42 +127,50 @@ const socket = try os.socket(
 );
 os.connect(socket, &address.any, address.getOsSockLen());
 """
-      ),
-      Step(
-        kind: skRequest,
-        description: """
+        ),
+        Step(
+          kind: skRequest,
+          description: """
 After that the server notifies the client that the connection was accepted
 and sends a notification saying that the client must ask for its ID.
 """,
-        to: tkClient,
-        request: Request(
-          `method`: "shouldAskId",
-          params: Parameter(kind: pkVoid),
-          notification: true
-        )
-      ),
-      Step(
-        kind: skRequest,
-        description: """
+          to: tkClient,
+          request: Request(
+            `method`: "shouldAskId",
+            params: Parameter(kind: pkVoid),
+            notification: true
+          )
+        ),
+        Step(
+          kind: skRequest,
+          description: """
 After receiving a notification, the client asks for an ID.
 """,
-        to: tkServer,
-        request: Request(
-          `method`: "askId",
-          params: Parameter(kind: pkVoid)
-        )
-      ),
-      Step(
-        kind: skResponse,
-        description: """
+          to: tkServer,
+          request: Request(
+            `method`: "askId",
+            params: Parameter(kind: pkVoid)
+          )
+        ),
+        Step(
+          kind: skResponse,
+          description: """
 Server sends an ID which it assigned to the client.
 """,
-        `from`: tkServer,
-        response: Response(
-          kind: rkResult,
-          result: Parameter(kind: pkBool, bVal: true)
+          `from`: tkServer,
+          response: Response(
+            kind: rkResult,
+            result: Parameter(kind: pkBool, bVal: true)
+          )
         )
-      )
-    ]
+      ]
+    )
   )
-)
+
+  var links: Table[string, string]
+  for interaction in interactions.mitems:
+    interaction.description = markdown(interaction.description, links)
+    for step in interaction.steps.mitems:
+      step.description = markdown(step.description, links)
+
+  interactions
