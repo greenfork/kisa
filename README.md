@@ -214,6 +214,10 @@ some dedication to create such a grammar file.
 
 ## Implementation details
 
+### API documentation
+
+https://greenfork.github.io/kisa/
+
 ### Terminal display and input library
 
 Editors written in other than C languages such as Go ([micro], [qedit])
