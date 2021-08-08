@@ -12,17 +12,17 @@ type
     Array
     Object
     ObjectKey
+  TokenKind = enum
+    tkBoundary = "boundary"
+    tkString = "string"
+    tkValue = "value"
+    tkComma = "comma"
+    tkObjectKey = "object-key"
 
-const boundaryColor = colSlateGray
-const stringColor = colGreen
-const keyColor = colSienna
-const valueColor = colCrimson
-const commaColor = colSienna
-
-func spanStart(color: Color): string = fmt"""<span style="color: {color}">"""
+func spanStart(class: TokenKind): string = fmt"""<span class="tok tok-{$class}">"""
 func spanEnd(): string = "</span>"
-func span(str: string, color: Color): string = spanStart(color) & str & spanEnd()
-func span(ch: char, color: Color): string = ($ch).span(color)
+func span(str: string, class: TokenKind): string = spanStart(class) & str & spanEnd()
+func span(ch: char, class: TokenKind): string = ($ch).span(class)
 
 func logError(args: varargs[string, `$`]) =
   when not defined(release):
@@ -54,33 +54,33 @@ func colorizeJson*(str: string): string =
     case states[^1]:
     of Value:
       if str[cnt] == ',':
-        result &= span(',', commaColor)
+        result &= span(',', tkComma)
         discard states.pop()
       elif str[cnt] in [']', '}']:
         cnt.dec
         discard states.pop()
       elif str[cnt] == '{':
-        result &= span(str[cnt], boundaryColor)
+        result &= span(str[cnt], tkBoundary)
         states.add Object
       elif str[cnt] == '[':
-        result &= span(str[cnt], boundaryColor)
+        result &= span(str[cnt], tkBoundary)
         states.add Array
       elif str[cnt] == '"':
-        result &= spanStart(stringColor)
+        result &= spanStart(tkString)
         result.add '"'
         states.add String
       elif str[cnt] == 't':
         expectNext("rue")
-        result &= span("true", valueColor)
+        result &= span("true", tkValue)
       elif str[cnt] == 'f':
         expectNext("alse")
-        result &= span("false", valueColor)
+        result &= span("false", tkValue)
       elif str[cnt] == 'n':
         expectNext("ull")
-        result &= span("null", valueColor)
+        result &= span("null", tkValue)
       elif str[cnt].isDigit():
         cnt.dec
-        result &= spanStart(valueColor)
+        result &= spanStart(tkValue)
         states.add Number
       else:
         logError "unexpected Value character: ", str[cnt].repr
@@ -101,7 +101,7 @@ func colorizeJson*(str: string): string =
         discard states.pop()
     of Array:
       if str[cnt] == ']':
-        result &= span(']', boundaryColor)
+        result &= span(']', tkBoundary)
         discard states.pop()
       else:
         cnt.dec
@@ -109,10 +109,10 @@ func colorizeJson*(str: string): string =
     of Object:
       if str[cnt] == '}':
         result &= spanEnd()
-        result &= span('}', boundaryColor)
+        result &= span('}', tkBoundary)
         discard states.pop()
       elif str[cnt] == '"':
-        result &= spanStart(keyColor)
+        result &= spanStart(tkObjectKey)
         result.add '"'
         states.add ObjectKey
       else:
@@ -123,7 +123,7 @@ func colorizeJson*(str: string): string =
         result.add '"'
         result &= spanEnd()
         expectNext(':')
-        result &= span(':', boundaryColor)
+        result &= span(':', tkBoundary)
         discard states.pop()
         states.add Value
       else:

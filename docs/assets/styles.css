@@ -1,3 +1,5 @@
-body {
-  background-color: red;
-}
+.tok-boundary { color: slategray }
+.tok-string { color: green }
+.tok-object-key { color: sienna }
+.tok-value { color: crimson }
+.tok-comma { color: sienna }
