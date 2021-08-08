@@ -17,3 +17,5 @@ requires "regex"
 task release, "build site in release mode for most space efficiency":
   exec "nim r increase_assets_version.nim"
   exec "nim js -d:release -d:danger index.nim"
+  # yarn global install uglify-js
+  exec "uglifyjs index.js -m -c -o index.js"
