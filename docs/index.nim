@@ -24,12 +24,12 @@ proc createDom(): VNode =
                   var str = case step.to
                   of tkServer: "  To Server --> "
                   of tkClient: "  To Client --> "
-                  str & step.request.toCode(pretty = true, indentationLevel = 1)
+                  str & step.request.toCode(pretty = step.pretty, indentationLevel = 1)
                 of skResponse:
                   var str = case step.`from`
                   of tkServer: "From Server <-- "
                   of tkClient: "From Client <-- "
-                  str & step.response.toCode(pretty = true, indentationLevel = 1)
+                  str & step.response.toCode(pretty = step.pretty, indentationLevel = 1)
               )
 
 setRenderer createDom

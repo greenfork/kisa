@@ -9,10 +9,7 @@ const linkDefinitionRe = re"(?m)^(\[.+?\]): (.+)$"
 
 func quoteString(str: string): string =
   for ch in str:
-    if ch == '"':
-      result.add '\\'
-      result.add '"'
-    else:
+    if ch != '"':
       result.add ch
 
 func htmlLink(text: string, url: string): string =

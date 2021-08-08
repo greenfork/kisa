@@ -13,3 +13,6 @@ backend = "js"
 requires "nim >= 1.4.8"
 requires "karax#head"
 requires "regex"
+
+task release, "build site in release mode for most space efficiency":
+  exec "nim js -d:release -d:danger index.nim"

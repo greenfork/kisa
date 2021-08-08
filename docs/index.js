@@ -2,17 +2,18 @@
 var framePtr = null;
 var excHandler = 0;
 var lastJSError = null;
-var NTI17485055 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
-var NTI17426052 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
-var NTI17426051 = {size: 0,kind: 24,base: null,node: null,finalizer: null};
-var NTI17426049 = {size: 0,kind: 24,base: null,node: null,finalizer: null};
-var NTI1188005 = {size: 0,kind: 36,base: null,node: null,finalizer: null};
-var NTI17426015 = {size: 0, kind: 14, base: null, node: null, finalizer: null};
-var NTI17426017 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
+var NTI17550053 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
 var NTI1194621 = {size: 0, kind: 17, base: null, node: null, finalizer: null};
 var NTI1194643 = {size: 0, kind: 17, base: null, node: null, finalizer: null};
 var NTI5635232 = {size: 0,kind: 31,base: null,node: null,finalizer: null};
 var NTI5890011 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
+var NTI17545202 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
+var NTI17431054 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
+var NTI17431053 = {size: 0,kind: 24,base: null,node: null,finalizer: null};
+var NTI17431051 = {size: 0,kind: 24,base: null,node: null,finalizer: null};
+var NTI1188005 = {size: 0,kind: 36,base: null,node: null,finalizer: null};
+var NTI17431015 = {size: 0, kind: 14, base: null, node: null, finalizer: null};
+var NTI17431017 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
 var NTI1194651 = {size: 0, kind: 17, base: null, node: null, finalizer: null};
 var NTI10897211 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
 var NTI10416096 = {size: 0, kind: 18, base: null, node: null, finalizer: null};
@@ -971,6 +972,32 @@ NTI10897211.node = NNI10897211;
 var NNI1194651 = {kind: 2, len: 0, offset: 0, typ: null, name: null, sons: []};
 NTI1194651.node = NNI1194651;
 NTI1194651.base = NTI1194619;
+var NNI17431015 = {kind: 2, offset: 0, typ: null, name: null, len: 8, sons: {"0": {kind: 1, offset: 0, typ: NTI17431015, name: "pkVoid", len: 0, sons: null}, 
+"1": {kind: 1, offset: 1, typ: NTI17431015, name: "pkNull", len: 0, sons: null}, 
+"2": {kind: 1, offset: 2, typ: NTI17431015, name: "pkBool", len: 0, sons: null}, 
+"3": {kind: 1, offset: 3, typ: NTI17431015, name: "pkInteger", len: 0, sons: null}, 
+"4": {kind: 1, offset: 4, typ: NTI17431015, name: "pkFloat", len: 0, sons: null}, 
+"5": {kind: 1, offset: 5, typ: NTI17431015, name: "pkString", len: 0, sons: null}, 
+"6": {kind: 1, offset: 6, typ: NTI17431015, name: "pkArray", len: 0, sons: null}, 
+"7": {kind: 1, offset: 7, typ: NTI17431015, name: "pkObject", len: 0, sons: null}}};
+NTI17431015.node = NNI17431015;
+NTI17431051.base = NTI17431017;
+var NNI17431054 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "Field0", len: 0, typ: NTI1188013, name: "Field0", sons: null}, 
+{kind: 1, offset: "Field1", len: 0, typ: NTI17431017, name: "Field1", sons: null}]};
+NTI17431054.node = NNI17431054;
+NTI17431053.base = NTI17431054;
+var NNI17431017 = {kind: 3, offset: "kind", len: 8, typ: NTI17431015, name: "kind", sons: [[setConstr(0), {kind: 1, offset: "vVal", len: 0, typ: NTI1188064, name: "vVal", sons: null}], 
+[setConstr(1), {kind: 1, offset: "nVal", len: 0, typ: NTI1188064, name: "nVal", sons: null}], 
+[setConstr(2), {kind: 1, offset: "bVal", len: 0, typ: NTI1188064, name: "bVal", sons: null}], 
+[setConstr(3), {kind: 1, offset: "iVal", len: 0, typ: NTI1188044, name: "iVal", sons: null}], 
+[setConstr(4), {kind: 1, offset: "fVal", len: 0, typ: NTI1188005, name: "fVal", sons: null}], 
+[setConstr(5), {kind: 1, offset: "sVal", len: 0, typ: NTI1188013, name: "sVal", sons: null}], 
+[setConstr(6), {kind: 1, offset: "aVal", len: 0, typ: NTI17431051, name: "aVal", sons: null}], 
+[setConstr(7), {kind: 1, offset: "oVal", len: 0, typ: NTI17431053, name: "oVal", sons: null}]]};
+NTI17431017.node = NNI17431017;
+var NNI17545202 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "Field0", len: 0, typ: NTI1188013, name: "Field0", sons: null}, 
+{kind: 1, offset: "Field1", len: 0, typ: NTI17431017, name: "Field1", sons: null}]};
+NTI17545202.node = NNI17545202;
 var NNI5890011 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "a", len: 0, typ: NTI5635232, name: "a", sons: null}, 
 {kind: 1, offset: "b", len: 0, typ: NTI1188044, name: "b", sons: null}]};
 NTI5890011.node = NNI5890011;
@@ -980,32 +1007,9 @@ var NNI1194621 = {kind: 2, len: 0, offset: 0, typ: null, name: null, sons: []};
 NTI1194621.node = NNI1194621;
 NTI1194621.base = NTI1194617;
 NTI1194643.base = NTI1194621;
-var NNI17426015 = {kind: 2, offset: 0, typ: null, name: null, len: 8, sons: {"0": {kind: 1, offset: 0, typ: NTI17426015, name: "pkVoid", len: 0, sons: null}, 
-"1": {kind: 1, offset: 1, typ: NTI17426015, name: "pkNull", len: 0, sons: null}, 
-"2": {kind: 1, offset: 2, typ: NTI17426015, name: "pkBool", len: 0, sons: null}, 
-"3": {kind: 1, offset: 3, typ: NTI17426015, name: "pkInteger", len: 0, sons: null}, 
-"4": {kind: 1, offset: 4, typ: NTI17426015, name: "pkFloat", len: 0, sons: null}, 
-"5": {kind: 1, offset: 5, typ: NTI17426015, name: "pkString", len: 0, sons: null}, 
-"6": {kind: 1, offset: 6, typ: NTI17426015, name: "pkArray", len: 0, sons: null}, 
-"7": {kind: 1, offset: 7, typ: NTI17426015, name: "pkObject", len: 0, sons: null}}};
-NTI17426015.node = NNI17426015;
-NTI17426049.base = NTI17426017;
-var NNI17426052 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "Field0", len: 0, typ: NTI1188013, name: "Field0", sons: null}, 
-{kind: 1, offset: "Field1", len: 0, typ: NTI17426017, name: "Field1", sons: null}]};
-NTI17426052.node = NNI17426052;
-NTI17426051.base = NTI17426052;
-var NNI17426017 = {kind: 3, offset: "kind", len: 8, typ: NTI17426015, name: "kind", sons: [[setConstr(0), {kind: 1, offset: "vVal", len: 0, typ: NTI1188064, name: "vVal", sons: null}], 
-[setConstr(1), {kind: 1, offset: "nVal", len: 0, typ: NTI1188064, name: "nVal", sons: null}], 
-[setConstr(2), {kind: 1, offset: "bVal", len: 0, typ: NTI1188064, name: "bVal", sons: null}], 
-[setConstr(3), {kind: 1, offset: "iVal", len: 0, typ: NTI1188044, name: "iVal", sons: null}], 
-[setConstr(4), {kind: 1, offset: "fVal", len: 0, typ: NTI1188005, name: "fVal", sons: null}], 
-[setConstr(5), {kind: 1, offset: "sVal", len: 0, typ: NTI1188013, name: "sVal", sons: null}], 
-[setConstr(6), {kind: 1, offset: "aVal", len: 0, typ: NTI17426049, name: "aVal", sons: null}], 
-[setConstr(7), {kind: 1, offset: "oVal", len: 0, typ: NTI17426051, name: "oVal", sons: null}]]};
-NTI17426017.node = NNI17426017;
-var NNI17485055 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "Field0", len: 0, typ: NTI1188013, name: "Field0", sons: null}, 
-{kind: 1, offset: "Field1", len: 0, typ: NTI17426017, name: "Field1", sons: null}]};
-NTI17485055.node = NNI17485055;
+var NNI17550053 = {kind: 2, len: 2, offset: 0, typ: null, name: null, sons: [{kind: 1, offset: "Field0", len: 0, typ: NTI1188013, name: "Field0", sons: null}, 
+{kind: 1, offset: "Field1", len: 0, typ: NTI17431017, name: "Field1", sons: null}]};
+NTI17550053.node = NNI17550053;
 function cstrToNimstr(c_1455079) {
       var ln = c_1455079.length;
   var result = new Array(ln);
@@ -1248,7 +1252,7 @@ function nimMin(a_1460803, b_1460804) {
   return result_1460805;
 
 }
-            var interactions_17535693 = [{title: makeNimstrLit("Initialize a client"), description: makeNimstrLit("The first thing the client should do is to connect to the server and receive and ID.\x0A"), steps: [{description: makeNimstrLit("The first thing to do is to send a connection request to unix domain socket which\x0Ais located at user runtime directory inside <code>kisa</code> directory with an &lt;ID&gt; of a\x0Acurrently running session (by convention it is the process ID of the server).\x0ABelow is an example for a Zig language, see documentation of\x0A<a href=\"https://linux.die.net/man/2/socket\">socket(2)</a> and <a href=\"https://linux.die.net/man/2/connect\">connect(2)</a> for more information.\x0A\x0A\x0A\x0A"), kind: 2, request: {method: [], params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: makeNimstrLit("const std = @import(\"std\");\x0Aconst os = std.os;\x0Aconst allocator = ...;\x0Aconst address = allocator.create(std.net.Address);\x0Aaddress.* = try std.net.Address.initUnix(\"/var/run/user/1000/kisa/<ID>\");\x0Aconst socket = try os.socket(\x0A    os.AF_UNIX,\x0A    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,\x0A    os.PF_UNIX,\x0A);\x0Aos.connect(socket, &address.any, address.getOsSockLen());\x0A")}, {description: makeNimstrLit("After that the server notifies the client that the connection was accepted\x0Aand sends a notification saying that the client must ask for its ID.\x0A"), kind: 0, request: {method: makeNimstrLit("shouldAskId"), params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: true}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}, {description: makeNimstrLit("After receiving a notification, the client asks for an ID.\x0A"), kind: 0, request: {method: makeNimstrLit("askId"), params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 1, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}, {description: makeNimstrLit("Server sends an ID which it assigned to the client.\x0A"), kind: 1, request: {method: [], params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 2, vVal: false, nVal: false, bVal: true, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 1, other: []}]}, {title: makeNimstrLit("Receive the data to draw"), description: makeNimstrLit("On many occasions the client will receive the data that should be drawn on the\x0Ascreen. It is documented here and will be referenced further in other parts\x0Aof this documentation as \"data to draw\".\x0A"), steps: [{description: makeNimstrLit("For now it copies what Kakoune does and will be changed in future."), kind: 0, request: {method: makeNimstrLit("draw"), params: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" 1 "), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fcfcfc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fedcdc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("reverse"), aVal: [], oVal: []}, {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("bold"), aVal: [], oVal: []}], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("my first string"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" and more"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("red"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("black"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("italic"), aVal: [], oVal: []}], oVal: []}}]}}]}], oVal: []}, {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" 2 "), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fcfcfc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fedcdc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("reverse"), aVal: [], oVal: []}, {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("bold"), aVal: [], oVal: []}], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("next line"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("red"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("black"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("italic"), aVal: [], oVal: []}], oVal: []}}]}}]}], oVal: []}], oVal: []}, {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}}]}], oVal: []}], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}]}];
+            var interactions_17570673 = [{title: makeNimstrLit("Initialize a client"), description: makeNimstrLit("The first thing the client should do is to connect to the server and receive and ID.\x0A"), steps: [{description: makeNimstrLit("The first thing to do is to send a connection request to unix domain socket which\x0Ais located at user runtime directory inside <code>kisa</code> directory with an &lt;ID&gt; of a\x0Acurrently running session (by convention it is the process ID of the server).\x0ABelow is an example for a Zig language, see documentation of\x0A<a href=\"https://linux.die.net/man/2/socket\">socket(2)</a> and <a href=\"https://linux.die.net/man/2/connect\">connect(2)</a> for more information.\x0A\x0A\x0A\x0A"), pretty: false, kind: 2, request: {method: [], params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: makeNimstrLit("const std = @import(\"std\");\x0Aconst os = std.os;\x0Aconst allocator = ...;\x0Aconst address = allocator.create(std.net.Address);\x0Aaddress.* = try std.net.Address.initUnix(\"/var/run/user/1000/kisa/<ID>\");\x0Aconst socket = try os.socket(\x0A    os.AF_UNIX,\x0A    os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,\x0A    os.PF_UNIX,\x0A);\x0Aos.connect(socket, &address.any, address.getOsSockLen());\x0A")}, {description: makeNimstrLit("After that the server notifies the client that the connection was accepted\x0Aand sends a notification saying that the client must ask for its ID.\x0A"), pretty: false, kind: 0, request: {method: makeNimstrLit("shouldAskId"), params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: true}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}, {description: makeNimstrLit("After receiving a notification, the client asks for an ID.\x0A"), pretty: false, kind: 0, request: {method: makeNimstrLit("askId"), params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 1, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}, {description: makeNimstrLit("Server sends an ID which it assigned to the client.\x0A"), pretty: false, kind: 1, request: {method: [], params: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 2, vVal: false, nVal: false, bVal: true, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 1, other: []}]}, {title: makeNimstrLit("Receive the data to draw"), description: makeNimstrLit("On many occasions the client will receive the data that should be drawn on the\x0Ascreen. It is documented here and will be referenced further in other parts\x0Aof this documentation as \"data to draw\".\x0A"), steps: [{description: makeNimstrLit("For now it copies what Kakoune does and will be changed in future."), pretty: true, kind: 0, request: {method: makeNimstrLit("draw"), params: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" 1 "), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fcfcfc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fedcdc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("reverse"), aVal: [], oVal: []}, {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("bold"), aVal: [], oVal: []}], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("my first string"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" and more"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("red"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("black"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("italic"), aVal: [], oVal: []}], oVal: []}}]}}]}], oVal: []}, {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit(" 2 "), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fcfcfc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("#fedcdc"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("reverse"), aVal: [], oVal: []}, {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("bold"), aVal: [], oVal: []}], oVal: []}}]}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("contents"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("next line"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("face"), Field1: {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("red"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("black"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("italic"), aVal: [], oVal: []}], oVal: []}}]}}]}], oVal: []}], oVal: []}, {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [{kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("default"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}}]}, {kind: 7, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: [{Field0: makeNimstrLit("fg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("blue"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("bg"), Field1: {kind: 5, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: makeNimstrLit("black"), aVal: [], oVal: []}}, {Field0: makeNimstrLit("attributes"), Field1: {kind: 6, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}}]}], oVal: []}], oVal: []}, notification: false}, to: 0, response: {notification: false, kind: 0, result: {kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []}, error: {code: 0, message: []}}, from: 0, other: []}]}];
 var ConstSet2 = setConstr(2);
 function raiseFieldError(f_1450047) {
     raiseException({message: nimCopy(null, f_1450047, NTI1188013), parent: null, m_type: NTI1194651, name: null, trace: [], up: null}, "FieldDefect");
@@ -1256,19 +1260,9 @@ function raiseFieldError(f_1450047) {
   
 }
 var ConstSet3 = setConstr(0);
-function mnewString(len_1460044) {
-        return new Array(len_1460044);
-  
-
-  
-}
-var ConstSet4 = setConstr(60, 62, 94);
-var ConstSet5 = setConstr(60, 62, 94);
-var ConstSet6 = setConstr(45, 43, 32);
-var ConstSet7 = setConstr([48, 57]);
-var ConstSet8 = setConstr([48, 57]);
-var ConstSet9 = setConstr([48, 57]);
-var ConstSet10 = setConstr([65, 90], [97, 122]);
+var ConstSet4 = setConstr(7);
+var ConstSet5 = setConstr(7);
+var ConstSet6 = setConstr(7);
 function nimBoolToStr(x_1375657) {
   var result_1375658 = [];
 
@@ -1283,9 +1277,9 @@ function nimBoolToStr(x_1375657) {
   return result_1375658;
 
 }
-var ConstSet11 = setConstr(2);
-var ConstSet12 = setConstr(3);
-var ConstSet13 = setConstr(4);
+var ConstSet7 = setConstr(2);
+var ConstSet8 = setConstr(3);
+var ConstSet9 = setConstr(4);
 function nimFloatToString(a_1460649) {
   var result_1460650 = null;
 
@@ -1304,21 +1298,39 @@ function nimFloatToString(a_1460649) {
   return result_1460650;
 
 }
+function mnewString(len_1460044) {
+        return new Array(len_1460044);
+  
+
+  
+}
+var ConstSet10 = setConstr(60, 62, 94);
+var ConstSet11 = setConstr(60, 62, 94);
+var ConstSet12 = setConstr(45, 43, 32);
+var ConstSet13 = setConstr([48, 57]);
+var ConstSet14 = setConstr([48, 57]);
+var ConstSet15 = setConstr([48, 57]);
+var ConstSet16 = setConstr([65, 90], [97, 122]);
 function addChar(x_1505031, c_1505032) {
     x_1505031.push(c_1505032);
 
   
 }
-var ConstSet14 = setConstr(5);
-var ConstSet15 = setConstr(6);
-var ConstSet16 = setConstr(6);
-var ConstSet17 = setConstr(7);
-var ConstSet18 = setConstr(7);
-var ConstSet19 = setConstr(0);
-var ConstSet20 = setConstr(1);
-var ConstSet21 = setConstr(0);
-var ConstSet22 = setConstr(1);
+var ConstSet17 = setConstr(5);
+var ConstSet18 = setConstr(6);
+var ConstSet19 = setConstr(6);
+var ConstSet20 = setConstr(7);
+var ConstSet21 = setConstr(7);
+var ConstSet22 = setConstr(0);
 var ConstSet23 = setConstr(1);
+var ConstSet24 = setConstr(7);
+var ConstSet25 = setConstr(7);
+var ConstSet26 = setConstr(0);
+var ConstSet27 = setConstr(7);
+var ConstSet28 = setConstr(1);
+var ConstSet29 = setConstr(7);
+var ConstSet30 = setConstr(1);
+var ConstSet31 = setConstr(1);
 if (!Math.trunc) {
   Math.trunc = function(v) {
     v = +v;
@@ -1526,15 +1538,15 @@ function applyEvents_11010073(n_11010075) {
     var dest_11010076 = n_11010075.dom;
     L1: do {
       var i_11010089 = 0;
-      var colontmp__17560367 = 0;
-      colontmp__17560367 = (n_11010075.events).length;
-      var i_17560368 = 0;
+      var colontmp__17595367 = 0;
+      colontmp__17595367 = (n_11010075.events).length;
+      var i_17595368 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560368 < colontmp__17560367)) break L3;
-            i_11010089 = i_17560368;
+          if (!(i_17595368 < colontmp__17595367)) break L3;
+            i_11010089 = i_17595368;
             n_11010075.events[i_11010089]["Field2"] = wrapEvent_10900097(dest_11010076, n_11010075, n_11010075.events[i_11010089]["Field0"], n_11010075.events[i_11010089]["Field1"]);
-            i_17560368 += 1;
+            i_17595368 += 1;
           }
       } while(false);
     } while(false);
@@ -1545,15 +1557,15 @@ function applyStyle_10455628(n_10455630, s_10455631) {
     n_10455630.style = {};
     L1: do {
       var i_10455664 = 0;
-      var colontmp__17560378 = 0;
-      colontmp__17560378 = (s_10455631.length - 1);
-      var res_17560379 = 0;
+      var colontmp__17595378 = 0;
+      colontmp__17595378 = (s_10455631.length - 1);
+      var res_17595379 = 0;
       L2: do {
           L3: while (true) {
-          if (!(res_17560379 <= colontmp__17560378)) break L3;
-            i_10455664 = res_17560379;
+          if (!(res_17595379 <= colontmp__17595378)) break L3;
+            i_10455664 = res_17595379;
             n_10455630.style[s_10455631[i_10455664]] = s_10455631[(i_10455664 + 1)];
-            res_17560379 += 2;
+            res_17595379 += 2;
           }
       } while(false);
     } while(false);
@@ -1648,17 +1660,17 @@ function toDom_11010154(n_11010156, useAttachedNode_11010157, kxi_11010158) {
       L1: do {
         var k_11135016 = null;
         L2: do {
-          var i_17560347 = 0;
-          var colontmp__17560348 = 0;
-          colontmp__17560348 = (n_11010156.kids).length;
-          var i_17560349 = 0;
+          var i_17595347 = 0;
+          var colontmp__17595348 = 0;
+          colontmp__17595348 = (n_11010156.kids).length;
+          var i_17595349 = 0;
           L3: do {
               L4: while (true) {
-              if (!(i_17560349 < colontmp__17560348)) break L4;
-                i_17560347 = i_17560349;
-                k_11135016 = n_11010156.kids[i_17560347];
+              if (!(i_17595349 < colontmp__17595348)) break L4;
+                i_17595347 = i_17595349;
+                k_11135016 = n_11010156.kids[i_17595347];
                 result_11010159.appendChild(toDom_11010154(k_11135016, useAttachedNode_11010157, kxi_11010158));
-                i_17560349 += 1;
+                i_17595349 += 1;
               }
           } while(false);
         } while(false);
@@ -1681,21 +1693,21 @@ function toDom_11010154(n_11010156, useAttachedNode_11010157, kxi_11010158) {
       var k_11150001 = null;
       var v_11150002 = null;
       L6: do {
-        var i_17560360 = 0;
-        var colontmp__17560361 = 0;
-        colontmp__17560361 = ((n_11010156.attrs).length - 2);
-        var res_17560362 = 0;
+        var i_17595360 = 0;
+        var colontmp__17595361 = 0;
+        colontmp__17595361 = ((n_11010156.attrs).length - 2);
+        var res_17595362 = 0;
         L7: do {
             L8: while (true) {
-            if (!(res_17560362 <= colontmp__17560361)) break L8;
-              i_17560360 = res_17560362;
-              k_11150001 = n_11010156.attrs[i_17560360];
-              v_11150002 = n_11010156.attrs[(i_17560360 + 1)];
+            if (!(res_17595362 <= colontmp__17595361)) break L8;
+              i_17595360 = res_17595362;
+              k_11150001 = n_11010156.attrs[i_17595360];
+              v_11150002 = n_11010156.attrs[(i_17595360 + 1)];
               if (!((v_11150002 == null))) {
               result_11010159.setAttribute(k_11150001, v_11150002);
               }
               
-              res_17560362 += 2;
+              res_17595362 += 2;
             }
         } while(false);
       } while(false);
@@ -1771,19 +1783,19 @@ function same_11160072(n_11160074, e_11160075, nesting_11160076) {
     
     L3: do {
       var i_11175208 = 0;
-      var colontmp__17560385 = 0;
-      colontmp__17560385 = len_10550014(n_11160074);
-      var i_17560386 = 0;
+      var colontmp__17595385 = 0;
+      colontmp__17595385 = len_10550014(n_11160074);
+      var i_17595386 = 0;
       L4: do {
           L5: while (true) {
-          if (!(i_17560386 < colontmp__17560385)) break L5;
-            i_11175208 = i_17560386;
+          if (!(i_17595386 < colontmp__17595385)) break L5;
+            i_11175208 = i_17595386;
             if (!(same_11160072(HEX5BHEX5D_10550036(n_11160074, i_11175208), e_11160075.childNodes[i_11175208], (nesting_11160076 + 1)))) {
             result_11160078 = false;
             break BeforeRet;
             }
             
-            i_17560386 += 1;
+            i_17595386 += 1;
           }
       } while(false);
     } while(false);
@@ -1877,19 +1889,19 @@ function eq_10420229(a_10420231, b_10420232) {
     
     L1: do {
       var i_10425083 = 0;
-      var colontmp__17560427 = 0;
-      colontmp__17560427 = a_10420231.length;
-      var i_17560428 = 0;
+      var colontmp__17595427 = 0;
+      colontmp__17595427 = a_10420231.length;
+      var i_17595428 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560428 < colontmp__17560427)) break L3;
-            i_10425083 = i_17560428;
+          if (!(i_17595428 < colontmp__17595427)) break L3;
+            i_10425083 = i_17595428;
             if (!((a_10420231[i_10425083] == b_10420232[i_10425083]))) {
             result_10420233 = false;
             break BeforeRet;
             }
             
-            i_17560428 += 1;
+            i_17595428 += 1;
           }
       } while(false);
     } while(false);
@@ -1908,19 +1920,19 @@ function sameAttrs_10561079(a_10561081, b_10561082) {
     result_10561083 = true;
     L1: do {
       var i_10561106 = 0;
-      var colontmp__17560431 = 0;
-      colontmp__17560431 = (a_10561081.attrs).length;
-      var i_17560432 = 0;
+      var colontmp__17595431 = 0;
+      colontmp__17595431 = (a_10561081.attrs).length;
+      var i_17595432 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560432 < colontmp__17560431)) break L3;
-            i_10561106 = i_17560432;
+          if (!(i_17595432 < colontmp__17595431)) break L3;
+            i_10561106 = i_17595432;
             if (!((a_10561081.attrs[i_10561106] == b_10561082.attrs[i_10561106]))) {
             result_10561083 = false;
             break BeforeRet;
             }
             
-            i_17560432 += 1;
+            i_17595432 += 1;
           }
       } while(false);
     } while(false);
@@ -1975,19 +1987,19 @@ function eq_11175614(a_11175616, b_11175617, recursive_11175618) {
     
     L1: do {
       var i_11205008 = 0;
-      var colontmp__17560419 = 0;
-      colontmp__17560419 = len_10550014(a_11175616);
-      var i_17560420 = 0;
+      var colontmp__17595419 = 0;
+      colontmp__17595419 = len_10550014(a_11175616);
+      var i_17595420 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560420 < colontmp__17560419)) break L3;
-            i_11205008 = i_17560420;
+          if (!(i_17595420 < colontmp__17595419)) break L3;
+            i_11205008 = i_17595420;
             if ((eq_11175614(HEX5BHEX5D_10550036(a_11175616, i_11205008), HEX5BHEX5D_10550036(b_11175617, i_11205008), recursive_11175618) == 1)) {
             result_11175619 = 1;
             break BeforeRet;
             }
             
-            i_17560420 += 1;
+            i_17595420 += 1;
           }
       } while(false);
     } while(false);
@@ -2041,19 +2053,19 @@ function eq_11175614(a_11175616, b_11175617, recursive_11175618) {
     
     L6: do {
       var i_11230008 = 0;
-      var colontmp__17560423 = 0;
-      colontmp__17560423 = len_10550014(a_11175616);
-      var i_17560424 = 0;
+      var colontmp__17595423 = 0;
+      colontmp__17595423 = len_10550014(a_11175616);
+      var i_17595424 = 0;
       L7: do {
           L8: while (true) {
-          if (!(i_17560424 < colontmp__17560423)) break L8;
-            i_11230008 = i_17560424;
+          if (!(i_17595424 < colontmp__17595423)) break L8;
+            i_11230008 = i_17595424;
             if (!((eq_11175614(HEX5BHEX5D_10550036(a_11175616, i_11230008), HEX5BHEX5D_10550036(b_11175617, i_11230008), true) == 3))) {
             result_11175619 = 1;
             break BeforeRet;
             }
             
-            i_17560424 += 1;
+            i_17595424 += 1;
           }
       } while(false);
     } while(false);
@@ -2093,18 +2105,18 @@ function updateAttributes_11245052(newNode_11245054, oldNode_11245055) {
       var k_11250009 = null;
       var __11250010 = null;
       L2: do {
-        var i_17560437 = 0;
-        var colontmp__17560438 = 0;
-        colontmp__17560438 = ((oldNode_11245055.attrs).length - 2);
-        var res_17560439 = 0;
+        var i_17595437 = 0;
+        var colontmp__17595438 = 0;
+        colontmp__17595438 = ((oldNode_11245055.attrs).length - 2);
+        var res_17595439 = 0;
         L3: do {
             L4: while (true) {
-            if (!(res_17560439 <= colontmp__17560438)) break L4;
-              i_17560437 = res_17560439;
-              k_11250009 = oldNode_11245055.attrs[i_17560437];
-              __11250010 = oldNode_11245055.attrs[(i_17560437 + 1)];
+            if (!(res_17595439 <= colontmp__17595438)) break L4;
+              i_17595437 = res_17595439;
+              k_11250009 = oldNode_11245055.attrs[i_17595437];
+              __11250010 = oldNode_11245055.attrs[(i_17595437 + 1)];
               oldNode_11245055.dom.removeAttribute(k_11250009);
-              res_17560439 += 2;
+              res_17595439 += 2;
             }
         } while(false);
       } while(false);
@@ -2113,21 +2125,21 @@ function updateAttributes_11245052(newNode_11245054, oldNode_11245055) {
       var k_11250011 = null;
       var v_11250012 = null;
       L6: do {
-        var i_17560445 = 0;
-        var colontmp__17560446 = 0;
-        colontmp__17560446 = ((newNode_11245054.attrs).length - 2);
-        var res_17560447 = 0;
+        var i_17595445 = 0;
+        var colontmp__17595446 = 0;
+        colontmp__17595446 = ((newNode_11245054.attrs).length - 2);
+        var res_17595447 = 0;
         L7: do {
             L8: while (true) {
-            if (!(res_17560447 <= colontmp__17560446)) break L8;
-              i_17560445 = res_17560447;
-              k_11250011 = newNode_11245054.attrs[i_17560445];
-              v_11250012 = newNode_11245054.attrs[(i_17560445 + 1)];
+            if (!(res_17595447 <= colontmp__17595446)) break L8;
+              i_17595445 = res_17595447;
+              k_11250011 = newNode_11245054.attrs[i_17595445];
+              v_11250012 = newNode_11245054.attrs[(i_17595445 + 1)];
               if (!((v_11250012 == null))) {
               oldNode_11245055.dom.setAttribute(k_11250011, v_11250012);
               }
               
-              res_17560447 += 2;
+              res_17595447 += 2;
             }
         } while(false);
       } while(false);
@@ -2144,19 +2156,19 @@ function getAttr_10500183(n_10500185, key_10500186) {
   BeforeRet: do {
     L1: do {
       var i_10500200 = 0;
-      var colontmp__17560452 = 0;
-      colontmp__17560452 = ((n_10500185.attrs).length - 2);
-      var res_17560453 = 0;
+      var colontmp__17595452 = 0;
+      colontmp__17595452 = ((n_10500185.attrs).length - 2);
+      var res_17595453 = 0;
       L2: do {
           L3: while (true) {
-          if (!(res_17560453 <= colontmp__17560452)) break L3;
-            i_10500200 = res_17560453;
+          if (!(res_17595453 <= colontmp__17595452)) break L3;
+            i_10500200 = res_17595453;
             if ((n_10500185.attrs[i_10500200] == key_10500186)) {
             result_10500187 = n_10500185.attrs[(i_10500200 + 1)];
             break BeforeRet;
             }
             
-            res_17560453 += 2;
+            res_17595453 += 2;
           }
       } while(false);
     } while(false);
@@ -2169,15 +2181,15 @@ function removeAllEventHandlers_10897437(d_10897439) {
     if (!((d_10897439.karaxEvents == null))) {
     L1: do {
       var i_10900041 = 0;
-      var colontmp__17560459 = 0;
-      colontmp__17560459 = d_10897439.karaxEvents.length;
-      var i_17560460 = 0;
+      var colontmp__17595459 = 0;
+      colontmp__17595459 = d_10897439.karaxEvents.length;
+      var i_17595460 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560460 < colontmp__17560459)) break L3;
-            i_10900041 = i_17560460;
+          if (!(i_17595460 < colontmp__17595459)) break L3;
+            i_10900041 = i_17595460;
             d_10897439.removeEventListener(d_10897439.karaxEvents[i_10900041]["Field0"], d_10897439.karaxEvents[i_10900041]["Field1"]);
-            i_17560460 += 1;
+            i_17595460 += 1;
           }
       } while(false);
     } while(false);
@@ -2295,28 +2307,28 @@ function diff_11310215(newNode_11310217, oldNode_11310218, parent_11310219, curr
       var pos_11340018 = (nimMin(oldPos_11330214, newPos_11330215) + 1);
       L8: do {
         var i_11340024 = 0;
-        var colontmp__17560394 = 0;
-        colontmp__17560394 = (pos_11340018 - 1);
-        var res_17560395 = commonPrefix_11330202;
+        var colontmp__17595394 = 0;
+        colontmp__17595394 = (pos_11340018 - 1);
+        var res_17595395 = commonPrefix_11330202;
         L9: do {
             L10: while (true) {
-            if (!(res_17560395 <= colontmp__17560394)) break L10;
-              i_11340024 = res_17560395;
+            if (!(res_17595395 <= colontmp__17595394)) break L10;
+              i_11340024 = res_17595395;
               diff_11310215(HEX5BHEX5D_10550036(newNode_11310217, i_11340024), HEX5BHEX5D_10550036(oldNode_11310218, i_11340024), current_11310220, current_11310220.childNodes[i_11340024], kxi_11310221);
-              res_17560395 += 1;
+              res_17595395 += 1;
             }
         } while(false);
       } while(false);
       if (((oldPos_11330214 + 1) == oldLength_11320007)) {
       L11: do {
         var i_11340030 = 0;
-        var res_17560401 = pos_11340018;
+        var res_17595401 = pos_11340018;
         L12: do {
             L13: while (true) {
-            if (!(res_17560401 <= newPos_11330215)) break L13;
-              i_11340030 = res_17560401;
+            if (!(res_17595401 <= newPos_11330215)) break L13;
+              i_11340030 = res_17595401;
               addPatch_11260414(kxi_11310221, 2, current_11310220, null, HEX5BHEX5D_10550036(newNode_11310217, i_11340030), null);
-              res_17560401 += 1;
+              res_17595401 += 1;
             }
         } while(false);
       } while(false);
@@ -2325,13 +2337,13 @@ function diff_11310215(newNode_11310217, oldNode_11310218, parent_11310219, curr
         var before_11340031 = current_11310220.childNodes[(oldPos_11330214 + 1)];
         L14: do {
           var i_11340037 = 0;
-          var res_17560407 = pos_11340018;
+          var res_17595407 = pos_11340018;
           L15: do {
               L16: while (true) {
-              if (!(res_17560407 <= newPos_11330215)) break L16;
-                i_11340037 = res_17560407;
+              if (!(res_17595407 <= newPos_11330215)) break L16;
+                i_11340037 = res_17595407;
                 addPatch_11260414(kxi_11310221, 3, current_11310220, before_11340031, HEX5BHEX5D_10550036(newNode_11310217, i_11340037), null);
-                res_17560407 += 1;
+                res_17595407 += 1;
               }
           } while(false);
         } while(false);
@@ -2339,14 +2351,14 @@ function diff_11310215(newNode_11310217, oldNode_11310218, parent_11310219, curr
       
       L17: do {
         var i_11340043 = 0;
-        var res_17560413 = pos_11340018;
+        var res_17595413 = pos_11340018;
         L18: do {
             L19: while (true) {
-            if (!(res_17560413 <= oldPos_11330214)) break L19;
-              i_11340043 = res_17560413;
+            if (!(res_17595413 <= oldPos_11330214)) break L19;
+              i_11340043 = res_17595413;
               addPatch_11260414(kxi_10897285[0], 4, null, null, null, HEX5BHEX5D_10550036(oldNode_11310218, i_11340043));
               addPatch_11260414(kxi_11310221, 1, current_11310220, current_11310220.childNodes[i_11340043], null, null);
-              res_17560413 += 1;
+              res_17595413 += 1;
             }
         } while(false);
       } while(false);
@@ -2409,15 +2421,15 @@ function moveDom_11270048(dest_11270050, src_11270051) {
     
     L1: do {
       var i_11285208 = 0;
-      var colontmp__17560471 = 0;
-      colontmp__17560471 = len_10550014(dest_11270050);
-      var i_17560472 = 0;
+      var colontmp__17595471 = 0;
+      colontmp__17595471 = len_10550014(dest_11270050);
+      var i_17595472 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560472 < colontmp__17560471)) break L3;
-            i_11285208 = i_17560472;
+          if (!(i_17595472 < colontmp__17595471)) break L3;
+            i_11285208 = i_17595472;
             moveDom_11270048(HEX5BHEX5D_10550036(dest_11270050, i_11285208), HEX5BHEX5D_10550036(src_11270051, i_11285208));
-            i_17560472 += 1;
+            i_17595472 += 1;
           }
       } while(false);
     } while(false);
@@ -2432,11 +2444,11 @@ function HEX5BHEX5DHEX3D_10550054(x_10550056, idx_10550057, y_10550058) {
 function applyPatch_11285222(kxi_11285224) {
     L1: do {
       var i_11285232 = 0;
-      var i_17560465 = 0;
+      var i_17595465 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560465 < kxi_11285224.patchLen)) break L3;
-            i_11285232 = i_17560465;
+          if (!(i_17595465 < kxi_11285224.patchLen)) break L3;
+            i_11285232 = i_17595465;
             var p_11285233 = nimCopy(null, kxi_11285224.patches[i_11285232], NTI10897209);
             switch (p_11285233.k) {
             case 0:
@@ -2489,21 +2501,21 @@ function applyPatch_11285222(kxi_11285224) {
               
               break;
             }
-            i_17560465 += 1;
+            i_17595465 += 1;
           }
       } while(false);
     } while(false);
     kxi_11285224.patchLen = 0;
     L4: do {
       var i_11295013 = 0;
-      var i_17560468 = 0;
+      var i_17595468 = 0;
       L5: do {
           L6: while (true) {
-          if (!(i_17560468 < kxi_11285224.patchLenV)) break L6;
-            i_11295013 = i_17560468;
+          if (!(i_17595468 < kxi_11285224.patchLenV)) break L6;
+            i_11295013 = i_17595468;
             var p_11295014 = nimCopy(null, kxi_11285224.patchesV[i_11295013], NTI10897211);
             HEX5BHEX5DHEX3D_10550054(p_11295014.parent, p_11295014.pos, p_11295014.newChild);
-            i_17560468 += 1;
+            i_17595468 += 1;
           }
       } while(false);
     } while(false);
@@ -2660,13 +2672,13 @@ function tree_10560445(kind_10560447, kids_10560449) {
     L1: do {
       var k_10560483 = null;
       var k_10560483_Idx = 0;
-      var i_17560494 = 0;
+      var i_17595494 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17560494 < (kids_10560449).length)) break L3;
-            k_10560483 = kids_10560449; k_10560483_Idx = i_17560494;
+          if (!(i_17595494 < (kids_10560449).length)) break L3;
+            k_10560483 = kids_10560449; k_10560483_Idx = i_17595494;
             add_10550072(result_10560450, k_10560483[k_10560483_Idx]);
-            i_17560494 += 1;
+            i_17595494 += 1;
           }
       } while(false);
     } while(false);
@@ -2690,6 +2702,22 @@ function verbatim_10560819(s_10560821) {
   return result_10560822;
 
 }
+function toParam_17431090(val_17431092) {
+  var result_17431093 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
+
+    nimCopy(result_17431093, {kind: 5, sVal: nimCopy(null, val_17431092, NTI1188013), vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, aVal: [], oVal: []}, NTI17431017);
+
+  return result_17431093;
+
+}
+function toParam_17431156(val_17431158) {
+  var result_17431159 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
+
+    nimCopy(result_17431159, {kind: 3, iVal: val_17431158, vVal: false, nVal: false, bVal: false, fVal: 0.0, sVal: [], aVal: [], oVal: []}, NTI17431017);
+
+  return result_17431159;
+
+}
 function parseSaturatedNatural_2245017(s_2245019, b_2245021, b_2245021_Idx, start_2245022) {
       var Tmp1;
           var Tmp4;
@@ -2701,11 +2729,11 @@ function parseSaturatedNatural_2245017(s_2245019, b_2245021, b_2245021_Idx, star
     i_2245025 += 1;
     }
     
-      if (!(i_2245025 < (s_2245019).length)) Tmp1 = false; else {        Tmp1 = (ConstSet8[s_2245019[i_2245025]] != undefined);      }    if (Tmp1) {
+      if (!(i_2245025 < (s_2245019).length)) Tmp1 = false; else {        Tmp1 = (ConstSet14[s_2245019[i_2245025]] != undefined);      }    if (Tmp1) {
     b_2245021[b_2245021_Idx] = 0;
     L2: do {
         L3: while (true) {
-          if (!(i_2245025 < (s_2245019).length)) Tmp4 = false; else {            Tmp4 = (ConstSet9[s_2245019[i_2245025]] != undefined);          }        if (!Tmp4) break L3;
+          if (!(i_2245025 < (s_2245019).length)) Tmp4 = false; else {            Tmp4 = (ConstSet15[s_2245019[i_2245025]] != undefined);          }        if (!Tmp4) break L3;
           var c_2255016 = (s_2245019[i_2245025] - 48);
           if ((b_2245021[b_2245021_Idx] <= Math.trunc((2147483647 - c_2255016) / 10))) {
           b_2245021[b_2245021_Idx] = ((b_2245021[b_2245021_Idx] * 10) + c_2255016);
@@ -2738,13 +2766,13 @@ function HEX5BHEX5D_5890068(s_5890072, x_5890074) {
     result_5890075 = nimCopy(null, mnewString(L_5890401), NTI1188013);
     L1: do {
       var i_5890409 = 0;
-      var i_17535677 = 0;
+      var i_17570657 = 0;
       L2: do {
           L3: while (true) {
-          if (!(i_17535677 < L_5890401)) break L3;
-            i_5890409 = i_17535677;
+          if (!(i_17570657 < L_5890401)) break L3;
+            i_5890409 = i_17570657;
             result_5890075[i_5890409] = s_5890072[(i_5890409 + a_5890201)];
-            i_17535677 += 1;
+            i_17570657 += 1;
           }
       } while(false);
     } while(false);
@@ -2771,18 +2799,18 @@ function parseStandardFormatSpecifier_11550322(s_11550324, start_11550325, ignor
     result_11550328.align = 0;
     result_11550328.sign = 45;
     var i_11550331 = start_11550325;
-    if ((((i_11550331 + 1) < (s_11550324).length) && (ConstSet4[s_11550324[(i_11550331 + 1)]] != undefined))) {
+    if ((((i_11550331 + 1) < (s_11550324).length) && (ConstSet10[s_11550324[(i_11550331 + 1)]] != undefined))) {
     result_11550328.fill = s_11550324[i_11550331];
     result_11550328.align = s_11550324[(i_11550331 + 1)];
     i_11550331 += 2;
     }
     else {
-    if (((i_11550331 < (s_11550324).length) && (ConstSet5[s_11550324[i_11550331]] != undefined))) {
+    if (((i_11550331 < (s_11550324).length) && (ConstSet11[s_11550324[i_11550331]] != undefined))) {
     result_11550328.align = s_11550324[i_11550331];
     i_11550331 += 1;
     }
     }
-    if (((i_11550331 < (s_11550324).length) && (ConstSet6[s_11550324[i_11550331]] != undefined))) {
+    if (((i_11550331 < (s_11550324).length) && (ConstSet12[s_11550324[i_11550331]] != undefined))) {
     result_11550328.sign = s_11550324[i_11550331];
     i_11550331 += 1;
     }
@@ -2792,7 +2820,7 @@ function parseStandardFormatSpecifier_11550322(s_11550324, start_11550325, ignor
     i_11550331 += 1;
     }
     
-      if (!(((i_11550331 + 1) < (s_11550324).length) && (s_11550324[i_11550331] == 48))) Tmp1 = false; else {        Tmp1 = (ConstSet7[s_11550324[(i_11550331 + 1)]] != undefined);      }    if (Tmp1) {
+      if (!(((i_11550331 + 1) < (s_11550324).length) && (s_11550324[i_11550331] == 48))) Tmp1 = false; else {        Tmp1 = (ConstSet13[s_11550324[(i_11550331 + 1)]] != undefined);      }    if (Tmp1) {
     result_11550328.padWithZero = true;
     i_11550331 += 1;
     }
@@ -2808,7 +2836,7 @@ function parseStandardFormatSpecifier_11550322(s_11550324, start_11550325, ignor
       result_11550328.precision = -1;
     }
     
-      if (!(i_11550331 < (s_11550324).length)) Tmp2 = false; else {        Tmp2 = (ConstSet10[s_11550324[i_11550331]] != undefined);      }    if (Tmp2) {
+      if (!(i_11550331 < (s_11550324).length)) Tmp2 = false; else {        Tmp2 = (ConstSet16[s_11550324[i_11550331]] != undefined);      }    if (Tmp2) {
     result_11550328.typ = s_11550324[i_11550331];
     i_11550331 += 1;
     }
@@ -3078,34 +3106,34 @@ function formatValue_11595080(result_11595083, result_11595083_Idx, value_115950
 
   
 }
-function quoteString_17426081(str_17426083) {
-  var result_17426084 = [];
+function quoteString_17470048(str_17470050) {
+  var result_17470051 = [];
 
     L1: do {
-      var ch_17426086 = 0;
-      var i_17560539 = 0;
-      var L_17560540 = (str_17426083).length;
+      var ch_17470053 = 0;
+      var i_17595541 = 0;
+      var L_17595542 = (str_17470050).length;
       L2: do {
           L3: while (true) {
-          if (!(i_17560539 < L_17560540)) break L3;
-            ch_17426086 = str_17426083[i_17560539];
-            if ((ch_17426086 == 34)) {
-            addChar(result_17426084, 92);;
-            addChar(result_17426084, 34);;
+          if (!(i_17595541 < L_17595542)) break L3;
+            ch_17470053 = str_17470050[i_17595541];
+            if ((ch_17470053 == 34)) {
+            addChar(result_17470051, 92);;
+            addChar(result_17470051, 34);;
             }
             else {
-            addChar(result_17426084, ch_17426086);;
+            addChar(result_17470051, ch_17470053);;
             }
             
-            i_17560539 += 1;
+            i_17595541 += 1;
           }
       } while(false);
     } while(false);
 
-  return result_17426084;
+  return result_17470051;
 
 }
-function toCode_17426114(p_17426116, pretty_17426117, indentationLevel_17426118) {
+function toCode_17470081(p_17470083, pretty_17470084, indentationLevel_17470085) {
       var Tmp1;
       var Tmp2;
       var Tmp3;
@@ -3117,229 +3145,233 @@ function toCode_17426114(p_17426116, pretty_17426117, indentationLevel_17426118)
         var Tmp13;
               var Tmp16;
 
-  var result_17426119 = [];
+  var result_17470086 = [];
 
-    switch (p_17426116.kind) {
+    switch (p_17470083.kind) {
     case 0:
       break;
     case 1:
-      result_17426119 = nimCopy(null, makeNimstrLit("null"), NTI1188013);
+      result_17470086 = nimCopy(null, makeNimstrLit("null"), NTI1188013);
       break;
     case 2:
-      var Tmp1 = p_17426116;
-      if (ConstSet11[Tmp1.kind]===undefined) { raiseFieldError(makeNimstrLit("\'bVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-      result_17426119 = nimCopy(null, nimBoolToStr(Tmp1.bVal), NTI1188013);
+      var Tmp1 = p_17470083;
+      if (ConstSet7[Tmp1.kind]===undefined) { raiseFieldError(makeNimstrLit("\'bVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      result_17470086 = nimCopy(null, nimBoolToStr(Tmp1.bVal), NTI1188013);
       break;
     case 3:
-      var Tmp2 = p_17426116;
-      if (ConstSet12[Tmp2.kind]===undefined) { raiseFieldError(makeNimstrLit("\'iVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-      result_17426119 = nimCopy(null, cstrToNimstr((Tmp2.iVal)+""), NTI1188013);
+      var Tmp2 = p_17470083;
+      if (ConstSet8[Tmp2.kind]===undefined) { raiseFieldError(makeNimstrLit("\'iVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      result_17470086 = nimCopy(null, cstrToNimstr((Tmp2.iVal)+""), NTI1188013);
       break;
     case 4:
-      var Tmp3 = p_17426116;
-      if (ConstSet13[Tmp3.kind]===undefined) { raiseFieldError(makeNimstrLit("\'fVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-      result_17426119 = nimCopy(null, cstrToNimstr(nimFloatToString(Tmp3.fVal)), NTI1188013);
+      var Tmp3 = p_17470083;
+      if (ConstSet9[Tmp3.kind]===undefined) { raiseFieldError(makeNimstrLit("\'fVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      result_17470086 = nimCopy(null, cstrToNimstr(nimFloatToString(Tmp3.fVal)), NTI1188013);
       break;
     case 5:
-      var fmtRes_17435204 = [mnewString(0)];
-      fmtRes_17435204[0].push.apply(fmtRes_17435204[0], makeNimstrLit("\""));;
-      var Tmp4 = p_17426116;
-      if (ConstSet14[Tmp4.kind]===undefined) { raiseFieldError(makeNimstrLit("\'sVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-      formatValue_11595080(fmtRes_17435204, 0, quoteString_17426081(Tmp4.sVal), []);
-      fmtRes_17435204[0].push.apply(fmtRes_17435204[0], makeNimstrLit("\""));;
-      result_17426119 = nimCopy(null, fmtRes_17435204[0], NTI1188013);
+      var fmtRes_17480204 = [mnewString(0)];
+      fmtRes_17480204[0].push.apply(fmtRes_17480204[0], makeNimstrLit("\""));;
+      var Tmp4 = p_17470083;
+      if (ConstSet17[Tmp4.kind]===undefined) { raiseFieldError(makeNimstrLit("\'sVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      formatValue_11595080(fmtRes_17480204, 0, quoteString_17470048(Tmp4.sVal), []);
+      fmtRes_17480204[0].push.apply(fmtRes_17480204[0], makeNimstrLit("\""));;
+      result_17470086 = nimCopy(null, fmtRes_17480204[0], NTI1188013);
       break;
     case 6:
-      result_17426119.push.apply(result_17426119, makeNimstrLit("["));;
-        var Tmp5 = p_17426116;
-        if (ConstSet15[Tmp5.kind]===undefined) { raiseFieldError(makeNimstrLit("\'aVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      result_17470086.push.apply(result_17470086, makeNimstrLit("["));;
+        var Tmp5 = p_17470083;
+        if (ConstSet18[Tmp5.kind]===undefined) { raiseFieldError(makeNimstrLit("\'aVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
       if ((0 < (Tmp5.aVal).length)) {
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, makeNimstrLit("\x0A"));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, makeNimstrLit("\x0A"));;
       }
       
       L6: do {
-        var idx_17455248 = 0;
-        var parameter_17455249 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
-        var colontmp__17560527 = [];
-        var Tmp7 = p_17426116;
-        if (ConstSet16[Tmp7.kind]===undefined) { raiseFieldError(makeNimstrLit("\'aVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-        colontmp__17560527 = Tmp7.aVal;
-        var i_17560529 = 0;
-        var L_17560530 = (colontmp__17560527).length;
+        var idx_17500231 = 0;
+        var parameter_17500232 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
+        var colontmp__17595503 = [];
+        var Tmp7 = p_17470083;
+        if (ConstSet19[Tmp7.kind]===undefined) { raiseFieldError(makeNimstrLit("\'aVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+        colontmp__17595503 = Tmp7.aVal;
+        var i_17595505 = 0;
+        var L_17595506 = (colontmp__17595503).length;
         L8: do {
             L9: while (true) {
-            if (!(i_17560529 < L_17560530)) break L9;
-              idx_17455248 = i_17560529;
-              nimCopy(parameter_17455249, colontmp__17560527[i_17560529], NTI17426017);
-              if (!((idx_17455248 == 0))) {
-              if (pretty_17426117) {
+            if (!(i_17595505 < L_17595506)) break L9;
+              idx_17500231 = i_17595505;
+              nimCopy(parameter_17500232, colontmp__17595503[i_17595505], NTI17431017);
+              if (!((idx_17500231 == 0))) {
+              if (pretty_17470084) {
               Tmp10 = makeNimstrLit(",\x0A");
               }
               else {
               Tmp10 = makeNimstrLit(", ");
               }
               
-              result_17426119.push.apply(result_17426119, Tmp10);;
+              result_17470086.push.apply(result_17470086, Tmp10);;
               }
               
-              if (pretty_17426117) {
-              result_17426119.push.apply(result_17426119, nsuRepeatChar(32, (indentationLevel_17426118 * 4)));;
+              if (pretty_17470084) {
+              result_17470086.push.apply(result_17470086, nsuRepeatChar(32, (indentationLevel_17470085 * 4)));;
               }
               
-              result_17426119.push.apply(result_17426119, toCode_17426114(parameter_17455249, pretty_17426117, (indentationLevel_17426118 + 1)));;
-              i_17560529 += 1;
+              result_17470086.push.apply(result_17470086, toCode_17470081(parameter_17500232, pretty_17470084, (indentationLevel_17470085 + 1)));;
+              i_17595505 += 1;
             }
         } while(false);
       } while(false);
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, makeNimstrLit("\x0A"));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, makeNimstrLit("\x0A"));;
       }
       
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, nsuRepeatChar(32, ((indentationLevel_17426118 - 1) * 4)));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, nsuRepeatChar(32, ((indentationLevel_17470085 - 1) * 4)));;
       }
       
       }
       
-      result_17426119.push.apply(result_17426119, makeNimstrLit("]"));;
+      result_17470086.push.apply(result_17470086, makeNimstrLit("]"));;
       break;
     case 7:
-      result_17426119.push.apply(result_17426119, makeNimstrLit("{"));;
-        var Tmp11 = p_17426116;
-        if (ConstSet17[Tmp11.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      result_17470086.push.apply(result_17470086, makeNimstrLit("{"));;
+        var Tmp11 = p_17470083;
+        if (ConstSet20[Tmp11.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
       if ((0 < (Tmp11.oVal).length)) {
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, makeNimstrLit("\x0A"));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, makeNimstrLit("\x0A"));;
       }
       
       L12: do {
-        var idx_17475248 = 0;
-        var key_17475249 = [];
-        var parameter_17475250 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
-        var colontmp__17560533 = [];
-        var Tmp13 = p_17426116;
-        if (ConstSet18[Tmp13.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
-        colontmp__17560533 = Tmp13.oVal;
-        var i_17560535 = 0;
-        var L_17560536 = (colontmp__17560533).length;
+        var idx_17520248 = 0;
+        var key_17520249 = [];
+        var parameter_17520250 = ({kind: 0, vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: [], oVal: []});
+        var colontmp__17595509 = [];
+        var Tmp13 = p_17470083;
+        if (ConstSet21[Tmp13.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+        colontmp__17595509 = Tmp13.oVal;
+        var i_17595511 = 0;
+        var L_17595512 = (colontmp__17595509).length;
         L14: do {
             L15: while (true) {
-            if (!(i_17560535 < L_17560536)) break L15;
-              idx_17475248 = i_17560535;
-              key_17475249 = colontmp__17560533[i_17560535]["Field0"];
-              nimCopy(parameter_17475250, colontmp__17560533[i_17560535]["Field1"], NTI17426017);
-              if (!((idx_17475248 == 0))) {
-              if (pretty_17426117) {
+            if (!(i_17595511 < L_17595512)) break L15;
+              idx_17520248 = i_17595511;
+              key_17520249 = colontmp__17595509[i_17595511]["Field0"];
+              nimCopy(parameter_17520250, colontmp__17595509[i_17595511]["Field1"], NTI17431017);
+              if (!((idx_17520248 == 0))) {
+              if (pretty_17470084) {
               Tmp16 = makeNimstrLit(",\x0A");
               }
               else {
               Tmp16 = makeNimstrLit(", ");
               }
               
-              result_17426119.push.apply(result_17426119, Tmp16);;
+              result_17470086.push.apply(result_17470086, Tmp16);;
               }
               
-              if (pretty_17426117) {
-              result_17426119.push.apply(result_17426119, nsuRepeatChar(32, (indentationLevel_17426118 * 4)));;
+              if (pretty_17470084) {
+              result_17470086.push.apply(result_17470086, nsuRepeatChar(32, (indentationLevel_17470085 * 4)));;
               }
               
-              var fmtRes_17480001 = [mnewString(0)];
-              fmtRes_17480001[0].push.apply(fmtRes_17480001[0], makeNimstrLit("\""));;
-              formatValue_11595080(fmtRes_17480001, 0, key_17475249, []);
-              fmtRes_17480001[0].push.apply(fmtRes_17480001[0], makeNimstrLit("\": "));;
-              formatValue_11595080(fmtRes_17480001, 0, toCode_17426114(parameter_17475250, pretty_17426117, (indentationLevel_17426118 + 1)), []);
-              result_17426119.push.apply(result_17426119, fmtRes_17480001[0]);;
-              i_17560535 += 1;
+              var fmtRes_17525001 = [mnewString(0)];
+              fmtRes_17525001[0].push.apply(fmtRes_17525001[0], makeNimstrLit("\""));;
+              formatValue_11595080(fmtRes_17525001, 0, key_17520249, []);
+              fmtRes_17525001[0].push.apply(fmtRes_17525001[0], makeNimstrLit("\": "));;
+              formatValue_11595080(fmtRes_17525001, 0, toCode_17470081(parameter_17520250, pretty_17470084, (indentationLevel_17470085 + 1)), []);
+              result_17470086.push.apply(result_17470086, fmtRes_17525001[0]);;
+              i_17595511 += 1;
             }
         } while(false);
       } while(false);
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, makeNimstrLit("\x0A"));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, makeNimstrLit("\x0A"));;
       }
       
-      if (pretty_17426117) {
-      result_17426119.push.apply(result_17426119, nsuRepeatChar(32, ((indentationLevel_17426118 - 1) * 4)));;
+      if (pretty_17470084) {
+      result_17470086.push.apply(result_17470086, nsuRepeatChar(32, ((indentationLevel_17470085 - 1) * 4)));;
       }
       
       }
       
-      result_17426119.push.apply(result_17426119, makeNimstrLit("}"));;
+      result_17470086.push.apply(result_17470086, makeNimstrLit("}"));;
       break;
     }
 
-  return result_17426119;
+  return result_17470086;
 
 }
-function toCode_17485111(r_17485113, pretty_17485114, indentationLevel_17485115) {
-  var result_17485116 = [];
+function toCode_17530033(r_17530035, pretty_17530036, indentationLevel_17530037) {
+    var Tmp1;
+    var Tmp2;
+    var Tmp3;
 
-    var fmtRes_17485117 = mnewString(0);
-    fmtRes_17485117.push.apply(fmtRes_17485117, makeNimstrLit("{\"jsonrpc\": \"2.0\""));;
-    result_17485116.push.apply(result_17485116, fmtRes_17485117);;
-    if (!(r_17485113.notification)) {
-    result_17485116.push.apply(result_17485116, makeNimstrLit(", \"id\": 1"));;
+  var result_17530038 = [];
+
+    var rs_17545213 = {kind: 7, oVal: [nimCopy(null, {Field0: makeNimstrLit("jsonrpc"), Field1: toParam_17431090(makeNimstrLit("2.0"))}, NTI17545202)], vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: []};
+    if (!(r_17530035.notification)) {
+    var Tmp1 = rs_17545213;
+    if (ConstSet4[Tmp1.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+    Tmp1.oVal.push({Field0: makeNimstrLit("id"), Field1: toParam_17431156(1)});;
     }
     
-    var fmtRes_17490001 = [mnewString(0)];
-    fmtRes_17490001[0].push.apply(fmtRes_17490001[0], makeNimstrLit(", \"method\": \""));;
-    formatValue_11595080(fmtRes_17490001, 0, r_17485113.method, []);
-    fmtRes_17490001[0].push.apply(fmtRes_17490001[0], makeNimstrLit("\""));;
-    result_17485116.push.apply(result_17485116, fmtRes_17490001[0]);;
-    if (!((r_17485113.params.kind == 0))) {
-    var fmtRes_17500006 = [mnewString(0)];
-    fmtRes_17500006[0].push.apply(fmtRes_17500006[0], makeNimstrLit(", \"params\": "));;
-    formatValue_11595080(fmtRes_17500006, 0, toCode_17426114(r_17485113.params, pretty_17485114, indentationLevel_17485115), []);
-    result_17485116.push.apply(result_17485116, fmtRes_17500006[0]);;
+    var Tmp2 = rs_17545213;
+    if (ConstSet5[Tmp2.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+    Tmp2.oVal.push({Field0: makeNimstrLit("method"), Field1: toParam_17431090(r_17530035.method)});;
+    if (!((r_17530035.params.kind == 0))) {
+    var Tmp3 = rs_17545213;
+    if (ConstSet6[Tmp3.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+    Tmp3.oVal.push({Field0: makeNimstrLit("params"), Field1: nimCopy(null, r_17530035.params, NTI17431017)});;
     }
     
-    result_17485116.push.apply(result_17485116, makeNimstrLit("}"));;
+    result_17530038 = nimCopy(null, toCode_17470081(rs_17545213, pretty_17530036, indentationLevel_17530037), NTI1188013);
 
-  return result_17485116;
-
-}
-function toCode_17485048(e_17485050, pretty_17485051, indentationLevel_17485052) {
-  var result_17485053 = [];
-
-    result_17485053 = nimCopy(null, toCode_17426114({kind: 7, oVal: [nimCopy(null, {Field0: makeNimstrLit("code"), Field1: {kind: 3, iVal: e_17485050.code, vVal: false, nVal: false, bVal: false, fVal: 0.0, sVal: [], aVal: [], oVal: []}}, NTI17485055), nimCopy(null, {Field0: makeNimstrLit("message"), Field1: {kind: 5, sVal: nimCopy(null, e_17485050.message, NTI1188013), vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, aVal: [], oVal: []}}, NTI17485055)], vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: []}, pretty_17485051, indentationLevel_17485052), NTI1188013);
-
-  return result_17485053;
+  return result_17530038;
 
 }
-function toCode_17505017(r_17505019, pretty_17505020, indentationLevel_17505021) {
-      var Tmp1;
+function toCode_17550046(r_17550048, pretty_17550049, indentationLevel_17550050) {
+    var Tmp1;
       var Tmp2;
+      var Tmp3;
+      var Tmp4;
+      var Tmp5;
+      var Tmp6;
+      var Tmp7;
 
-  var result_17505022 = [];
+  var result_17550051 = [];
 
-    result_17505022.push.apply(result_17505022, makeNimstrLit("{\"jsonrpc\": \"2.0\""));;
-    if (!(r_17505019.notification)) {
-    var fmtRes_17505023 = mnewString(0);
-    fmtRes_17505023.push.apply(fmtRes_17505023, makeNimstrLit(", \"id\": 1"));;
-    result_17505022.push.apply(result_17505022, fmtRes_17505023);;
+    var rs_17550064 = {kind: 7, oVal: [nimCopy(null, {Field0: makeNimstrLit("jsonrpc"), Field1: toParam_17431090(makeNimstrLit("2.0"))}, NTI17550053)], vVal: false, nVal: false, bVal: false, iVal: 0, fVal: 0.0, sVal: [], aVal: []};
+    if (!(r_17550048.notification)) {
+    var Tmp1 = rs_17550064;
+    if (ConstSet24[Tmp1.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+    Tmp1.oVal.push({Field0: makeNimstrLit("id"), Field1: toParam_17431156(1)});;
     }
     
-    switch (r_17505019.kind) {
+    switch (r_17550048.kind) {
     case 0:
-      var fmtRes_17510001 = [mnewString(0)];
-      fmtRes_17510001[0].push.apply(fmtRes_17510001[0], makeNimstrLit(", \"result\": "));;
-      var Tmp1 = r_17505019;
-      if (ConstSet21[Tmp1.kind]===undefined) { raiseFieldError(makeNimstrLit("\'result\' is not accessible using discriminant \'kind\' of type \'Response\'")); }
-      formatValue_11595080(fmtRes_17510001, 0, toCode_17426114(Tmp1.result, pretty_17505020, indentationLevel_17505021), []);
-      result_17505022.push.apply(result_17505022, fmtRes_17510001[0]);;
+      var Tmp2 = rs_17550064;
+      if (ConstSet25[Tmp2.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      var Tmp3 = r_17550048;
+      if (ConstSet26[Tmp3.kind]===undefined) { raiseFieldError(makeNimstrLit("\'result\' is not accessible using discriminant \'kind\' of type \'Response\'")); }
+      Tmp2.oVal.push({Field0: makeNimstrLit("result"), Field1: nimCopy(null, Tmp3.result, NTI17431017)});;
       break;
     case 1:
-      var Tmp2 = r_17505019;
-      if (ConstSet22[Tmp2.kind]===undefined) { raiseFieldError(makeNimstrLit("\'error\' is not accessible using discriminant \'kind\' of type \'Response\'")); }
-      result_17505022.push.apply(result_17505022, toCode_17485048(Tmp2.error, pretty_17505020, indentationLevel_17505021));;
+      var Tmp4 = rs_17550064;
+      if (ConstSet27[Tmp4.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      var Tmp5 = r_17550048;
+      if (ConstSet28[Tmp5.kind]===undefined) { raiseFieldError(makeNimstrLit("\'error\' is not accessible using discriminant \'kind\' of type \'Response\'")); }
+      Tmp4.oVal.push({Field0: makeNimstrLit("code"), Field1: toParam_17431156(Tmp5.error.code)});;
+      var Tmp6 = rs_17550064;
+      if (ConstSet29[Tmp6.kind]===undefined) { raiseFieldError(makeNimstrLit("\'oVal\' is not accessible using discriminant \'kind\' of type \'Parameter\'")); }
+      var Tmp7 = r_17550048;
+      if (ConstSet30[Tmp7.kind]===undefined) { raiseFieldError(makeNimstrLit("\'error\' is not accessible using discriminant \'kind\' of type \'Response\'")); }
+      Tmp6.oVal.push({Field0: makeNimstrLit("message"), Field1: toParam_17431090(Tmp7.error.message)});;
       break;
     }
-    result_17505022.push.apply(result_17505022, makeNimstrLit("}"));;
+    result_17550051 = nimCopy(null, toCode_17470081(rs_17550064, pretty_17550049, indentationLevel_17550050), NTI1188013);
 
-  return result_17505022;
+  return result_17550051;
 
 }
-function createDom_17536014() {
+function createDom_17571014() {
                     var Tmp7;
                       var Tmp8;
                       var Tmp9;
@@ -3349,48 +3381,48 @@ function createDom_17536014() {
                       var Tmp13;
                       var Tmp14;
 
-  var result_17536016 = null;
+  var result_17571016 = null;
 
-    var tmp_17536049 = tree_10560445(43, []);
-    var tmp_17536050 = tree_10560445(21, []);
-    add_10550072(tmp_17536050, text_10560582(makeNimstrLit("Kisa API documentation")));
-    add_10550072(tmp_17536049, tmp_17536050);
+    var tmp_17571049 = tree_10560445(43, []);
+    var tmp_17571050 = tree_10560445(21, []);
+    add_10550072(tmp_17571050, text_10560582(makeNimstrLit("Kisa API documentation")));
+    add_10550072(tmp_17571049, tmp_17571050);
     L1: do {
-      var interaction_17550214 = null;
-      var i_17560489 = 0;
-      var L_17560490 = 2;
+      var interaction_17585214 = null;
+      var i_17595489 = 0;
+      var L_17595490 = 2;
       L2: do {
           L3: while (true) {
-          if (!(i_17560489 < L_17560490)) break L3;
-            interaction_17550214 = interactions_17535693[i_17560489];
-            var tmp_17536055 = tree_10560445(22, []);
-            add_10550072(tmp_17536055, text_10560582(interaction_17550214.title));
-            add_10550072(tmp_17536049, tmp_17536055);
-            var tmp_17536056 = tree_10560445(31, []);
-            add_10550072(tmp_17536056, verbatim_10560819(interaction_17550214.description));
-            add_10550072(tmp_17536049, tmp_17536056);
-            var tmp_17536057 = tree_10560445(35, []);
+          if (!(i_17595489 < L_17595490)) break L3;
+            interaction_17585214 = interactions_17570673[i_17595489];
+            var tmp_17571054 = tree_10560445(22, []);
+            add_10550072(tmp_17571054, text_10560582(interaction_17585214.title));
+            add_10550072(tmp_17571049, tmp_17571054);
+            var tmp_17571055 = tree_10560445(31, []);
+            add_10550072(tmp_17571055, verbatim_10560819(interaction_17585214.description));
+            add_10550072(tmp_17571049, tmp_17571055);
+            var tmp_17571056 = tree_10560445(35, []);
             L4: do {
-              var step_17560214 = null;
-              var i_17560485 = 0;
-              var L_17560486 = (interaction_17550214.steps).length;
+              var step_17595214 = null;
+              var i_17595485 = 0;
+              var L_17595486 = (interaction_17585214.steps).length;
               L5: do {
                   L6: while (true) {
-                  if (!(i_17560485 < L_17560486)) break L6;
-                    step_17560214 = interaction_17550214.steps[i_17560485];
-                    var tmp_17536058 = tree_10560445(37, []);
-                    var tmp_17536059 = tree_10560445(31, []);
-                    add_10550072(tmp_17536059, verbatim_10560819(step_17560214.description));
-                    add_10550072(tmp_17536058, tmp_17536059);
-                    var tmp_17536060 = tree_10560445(33, []);
-                    switch (step_17560214.kind) {
+                  if (!(i_17595485 < L_17595486)) break L6;
+                    step_17595214 = interaction_17585214.steps[i_17595485];
+                    var tmp_17571057 = tree_10560445(37, []);
+                    var tmp_17571058 = tree_10560445(31, []);
+                    add_10550072(tmp_17571058, verbatim_10560819(step_17595214.description));
+                    add_10550072(tmp_17571057, tmp_17571058);
+                    var tmp_17571059 = tree_10560445(33, []);
+                    switch (step_17595214.kind) {
                     case 2:
-                      var Tmp8 = step_17560214;
+                      var Tmp8 = step_17595214;
                       if (ConstSet2[Tmp8.kind]===undefined) { raiseFieldError(makeNimstrLit("\'other\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
                       Tmp7 = Tmp8.other;
                       break;
                     case 0:
-                      var Tmp9 = step_17560214;
+                      var Tmp9 = step_17595214;
                       if (ConstSet3[Tmp9.kind]===undefined) { raiseFieldError(makeNimstrLit("\'to\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
                       switch (Tmp9.to) {
                       case 1:
@@ -3400,14 +3432,14 @@ function createDom_17536014() {
                         Tmp10 = makeNimstrLit("  To Client --> ");
                         break;
                       }
-                      var str_17560229 = nimCopy(null, Tmp10, NTI1188013);
-                      var Tmp11 = step_17560214;
-                      if (ConstSet19[Tmp11.kind]===undefined) { raiseFieldError(makeNimstrLit("\'request\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
-                      Tmp7 = (str_17560229 || []).concat(toCode_17485111(Tmp11.request, true, 1) || []);
+                      var str_17595229 = nimCopy(null, Tmp10, NTI1188013);
+                      var Tmp11 = step_17595214;
+                      if (ConstSet22[Tmp11.kind]===undefined) { raiseFieldError(makeNimstrLit("\'request\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
+                      Tmp7 = (str_17595229 || []).concat(toCode_17530033(Tmp11.request, step_17595214.pretty, 1) || []);
                       break;
                     case 1:
-                      var Tmp12 = step_17560214;
-                      if (ConstSet20[Tmp12.kind]===undefined) { raiseFieldError(makeNimstrLit("\'from\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
+                      var Tmp12 = step_17595214;
+                      if (ConstSet23[Tmp12.kind]===undefined) { raiseFieldError(makeNimstrLit("\'from\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
                       switch (Tmp12.from) {
                       case 1:
                         Tmp13 = makeNimstrLit("From Server <-- ");
@@ -3416,27 +3448,27 @@ function createDom_17536014() {
                         Tmp13 = makeNimstrLit("From Client <-- ");
                         break;
                       }
-                      var str_17560232 = nimCopy(null, Tmp13, NTI1188013);
-                      var Tmp14 = step_17560214;
-                      if (ConstSet23[Tmp14.kind]===undefined) { raiseFieldError(makeNimstrLit("\'response\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
-                      Tmp7 = (str_17560232 || []).concat(toCode_17505017(Tmp14.response, true, 1) || []);
+                      var str_17595232 = nimCopy(null, Tmp13, NTI1188013);
+                      var Tmp14 = step_17595214;
+                      if (ConstSet31[Tmp14.kind]===undefined) { raiseFieldError(makeNimstrLit("\'response\' is not accessible using discriminant \'kind\' of type \'Step\'")); }
+                      Tmp7 = (str_17595232 || []).concat(toCode_17550046(Tmp14.response, step_17595214.pretty, 1) || []);
                       break;
                     }
-                    add_10550072(tmp_17536060, text_10560582(Tmp7));
-                    add_10550072(tmp_17536058, tmp_17536060);
-                    add_10550072(tmp_17536057, tmp_17536058);
-                    i_17560485 += 1;
+                    add_10550072(tmp_17571059, text_10560582(Tmp7));
+                    add_10550072(tmp_17571057, tmp_17571059);
+                    add_10550072(tmp_17571056, tmp_17571057);
+                    i_17595485 += 1;
                   }
               } while(false);
             } while(false);
-            add_10550072(tmp_17536049, tmp_17536057);
-            i_17560489 += 1;
+            add_10550072(tmp_17571049, tmp_17571056);
+            i_17595489 += 1;
           }
       } while(false);
     } while(false);
-    result_17536016 = tmp_17536049;
+    result_17571016 = tmp_17571049;
 
-  return result_17536016;
+  return result_17571016;
 
 }
-setRenderer_11455238(createDom_17536014, "ROOT", null);
+setRenderer_11455238(createDom_17571014, "ROOT", null);

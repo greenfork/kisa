@@ -1,9 +1,10 @@
 import strformat
 import tables
 from strutils import repeat
+from sequtils import mapIt
 from ./poormanmarkdown import markdown
 
-# Partial JSON-RPC specification in types.
+# Partial JSON-RPC 2.0 specification in types.
 type
   ParamKind* = enum
     pkVoid, pkNull, pkBool, pkInteger, pkFloat, pkString, pkArray, pkObject
@@ -37,6 +38,7 @@ type
     tkClient, tkServer
   Step* = object
     description*: string
+    pretty*: bool
     case kind*: StepKind
     of skRequest:
       request*: Request
@@ -50,6 +52,16 @@ type
     title*: string
     description*: string
     steps*: seq[Step]
+  FaceAttribute = enum
+    underline, reverse, bold, blink, dim, italic
+
+func toParam(val: string): Parameter = Parameter(kind: pkString, sVal: val)
+func toParam(val: bool): Parameter = Parameter(kind: pkBool, bVal: val)
+func toParam(val: int): Parameter = Parameter(kind: pkInteger, iVal: val)
+func toParam(val: float): Parameter = Parameter(kind: pkFloat, fVal: val)
+func toParam(val: openArray[string]): Parameter =
+  Parameter(kind: pkArray, aVal: val.mapIt(it.toParam))
+func toParam(val: openArray[FaceAttribute]): Parameter = val.mapIt($it).toParam
 
 func quoteString(str: string): string =
   for ch in str:
@@ -92,34 +104,40 @@ func toCode(p: Parameter, pretty = false, indentationLevel: Natural = 0): string
       if pretty: result &= repeat(' ', (indentationLevel - 1) * spacesPerIndentationLevel)
     result &= "}"
 
-func toCode(e: ErrorObj, pretty = false, indentationLevel: Natural = 0): string =
-  Parameter(
-    kind: pkObject,
-    oVal: @[
-      ("code", Parameter(kind: pkInteger, iVal: e.code)),
-      ("message", Parameter(kind: pkString, sVal: e.message)),
-    ]
-  ).toCode(pretty, indentationLevel)
-
 func toCode*(r: Request, pretty = false, indentationLevel: Natural = 0): string =
-  result &= fmt"""{{"jsonrpc": "2.0""""
+  assert r.params.kind in [pkArray, pkObject, pkVoid] # as per specification
+
+  var rs = Parameter(
+    kind: pkObject,
+    oVal: @[("jsonrpc", "2.0".toParam)]
+  )
   if not r.notification:
-    result &= """, "id": 1"""
-  result &= fmt""", "method": "{r.`method`}""""
+    rs.oVal.add ("id", 1.toParam)
+  rs.oVal.add ("method", r.`method`.toParam)
   if r.params.kind != pkVoid:
-    result &= fmt""", "params": {r.params.toCode(pretty, indentationLevel)}"""
-  result &= "}"
+    rs.oVal.add ("params", r.params)
+  result = rs.toCode(pretty, indentationLevel)
 
 func toCode*(r: Response, pretty = false, indentationLevel: Natural = 0): string =
-  result &= """{"jsonrpc": "2.0""""
+  var rs = Parameter(
+    kind: pkObject,
+    oVal: @[("jsonrpc", "2.0".toParam)]
+  )
   if not r.notification:
-    result &= fmt""", "id": 1"""
+    rs.oVal.add ("id", 1.toParam)
   case r.kind
   of rkResult:
-    result &= fmt""", "result": {r.result.toCode(pretty, indentationLevel)}"""
+    rs.oVal.add ("result", r.result)
   of rkError:
-    result &= r.error.toCode(pretty, indentationLevel)
-  result &= "}"
+    rs.oVal.add ("code", r.error.code.toParam)
+    rs.oVal.add ("message", r.error.message.toParam)
+  result = rs.toCode(pretty, indentationLevel)
+
+func faceParam(fg: string, bg: string, attributes: openArray[FaceAttribute] = []): Parameter =
+  result = Parameter(kind: pkObject)
+  result.oVal.add ("fg", fg.toParam)
+  result.oVal.add ("bg", bg.toParam)
+  result.oVal.add ("attributes", attributes.toParam)
 
 const interactions* = block:
   var interactions: seq[Interaction]
@@ -189,7 +207,7 @@ Server sends an ID which it assigned to the client.
           `from`: tkServer,
           response: Response(
             kind: rkResult,
-            result: Parameter(kind: pkBool, bVal: true)
+            result: true.toParam
           )
         )
       ]
@@ -208,6 +226,7 @@ of this documentation as "data to draw".
         Step(
           kind: skRequest,
           description: "For now it copies what Kakoune does and will be changed in future.",
+          pretty: true,
           to: tkClient,
           request: Request(
             `method`: "draw",
@@ -225,72 +244,22 @@ of this documentation as "data to draw".
                         Parameter(
                           kind: pkObject,
                           oVal: @[
-                            ("contents", Parameter(kind: pkString, sVal: " 1 ")),
-                            (
-                              "face",
-                              Parameter(
-                                kind: pkObject,
-                                oVal: @[
-                                  ("fg", Parameter(kind: pkString, sVal: "#fcfcfc")),
-                                  ("bg", Parameter(kind: pkString, sVal: "#fedcdc")),
-                                  (
-                                    "attributes",
-                                    Parameter(
-                                      kind: pkArray,
-                                      aVal: @[
-                                        Parameter(kind: pkString, sVal: "reverse"),
-                                        Parameter(kind: pkString, sVal: "bold"),
-                                      ]
-                                    )
-                                  )
-                                ]
-                              )
-                            )
+                            ("contents", " 1 ".toParam),
+                            ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
                           ]
                         ),
                         Parameter(
                           kind: pkObject,
                           oVal: @[
-                            ("contents", Parameter(kind: pkString, sVal: "my first string")),
-                            (
-                              "face",
-                              Parameter(
-                                kind: pkObject,
-                                oVal: @[
-                                  ("fg", Parameter(kind: pkString, sVal: "default")),
-                                  ("bg", Parameter(kind: pkString, sVal: "default")),
-                                  (
-                                    "attributes",
-                                    Parameter(kind: pkArray, aVal: @[])
-                                  )
-                                ]
-                              )
-                            )
+                            ("contents", "my first string".toParam),
+                            ("face", faceParam("default", "default"))
                           ]
                         ),
                         Parameter(
                           kind: pkObject,
                           oVal: @[
-                            ("contents", Parameter(kind: pkString, sVal: " and more")),
-                            (
-                              "face",
-                              Parameter(
-                                kind: pkObject,
-                                oVal: @[
-                                  ("fg", Parameter(kind: pkString, sVal: "red")),
-                                  ("bg", Parameter(kind: pkString, sVal: "black")),
-                                  (
-                                    "attributes",
-                                    Parameter(
-                                      kind: pkArray,
-                                      aVal: @[
-                                        Parameter(kind: pkString, sVal: "italic")
-                                      ]
-                                    )
-                                  )
-                                ]
-                              )
-                            )
+                            ("contents", " and more".toParam),
+                            ("face", faceParam("red", "black", [italic]))
                           ]
                         ),
                       ]
@@ -302,52 +271,15 @@ of this documentation as "data to draw".
                         Parameter(
                           kind: pkObject,
                           oVal: @[
-                            ("contents", Parameter(kind: pkString, sVal: " 2 ")),
-                            (
-                              "face",
-                              Parameter(
-                                kind: pkObject,
-                                oVal: @[
-                                  ("fg", Parameter(kind: pkString, sVal: "#fcfcfc")),
-                                  ("bg", Parameter(kind: pkString, sVal: "#fedcdc")),
-                                  (
-                                    "attributes",
-                                    Parameter(
-                                      kind: pkArray,
-                                      aVal: @[
-                                        Parameter(kind: pkString, sVal: "reverse"),
-                                        Parameter(kind: pkString, sVal: "bold"),
-                                      ]
-                                    )
-                                  )
-                                ]
-                              )
-                            )
+                            ("contents", " 2 ".toParam),
+                            ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
                           ]
                         ),
                         Parameter(
                           kind: pkObject,
                           oVal: @[
-                            ("contents", Parameter(kind: pkString, sVal: "next line")),
-                            (
-                              "face",
-                              Parameter(
-                                kind: pkObject,
-                                oVal: @[
-                                  ("fg", Parameter(kind: pkString, sVal: "red")),
-                                  ("bg", Parameter(kind: pkString, sVal: "black")),
-                                  (
-                                    "attributes",
-                                    Parameter(
-                                      kind: pkArray,
-                                      aVal: @[
-                                        Parameter(kind: pkString, sVal: "italic")
-                                      ]
-                                    )
-                                  )
-                                ]
-                              )
-                            )
+                            ("contents", "next line".toParam),
+                            ("face", faceParam("red", "black", [italic]))
                           ]
                         ),
                       ]
@@ -358,14 +290,8 @@ of this documentation as "data to draw".
                 Parameter(
                   kind: pkArray,
                   aVal: @[
-                    Parameter(
-                      kind: pkObject,
-                      oVal: @[
-                        ("fg", Parameter(kind: pkString, sVal: "default")),
-                        ("bg", Parameter(kind: pkString, sVal: "default")),
-                        ("attributes", Parameter(kind: pkArray, aVal: @[])),
-                      ]
-                    )
+                    faceParam("default", "default", []),
+                    faceParam("blue", "black", [])
                   ]
                 )
               ]
