@@ -59,9 +59,9 @@ func toParam(val: string): Parameter = Parameter(kind: pkString, sVal: val)
 func toParam(val: bool): Parameter = Parameter(kind: pkBool, bVal: val)
 func toParam(val: int): Parameter = Parameter(kind: pkInteger, iVal: val)
 func toParam(val: float): Parameter = Parameter(kind: pkFloat, fVal: val)
-func toParam(val: openArray[string]): Parameter =
+func toParam(val: FaceAttribute): Parameter = ($val).toParam
+func toParam[T](val: openArray[T]): Parameter =
   Parameter(kind: pkArray, aVal: val.mapIt(it.toParam))
-func toParam(val: openArray[FaceAttribute]): Parameter = val.mapIt($it).toParam
 
 func quoteString(str: string): string =
   for ch in str:
@@ -141,6 +141,40 @@ func faceParam(fg: string, bg: string, attributes: openArray[FaceAttribute] = []
 
 const interactions* = block:
   var interactions: seq[Interaction]
+
+
+  # interactions.add(
+  #   Interaction(
+  #     title: "Testing",
+  #     steps: @[
+  #       Step(
+  #         kind: skRequest,
+  #         to: tkClient,
+  #         request: Request(
+  #           `method`: "shouldAskId",
+  #           params: [1,2,3].toParam,
+  #           notification: true
+  #         )
+  #       ),
+  #       Step(
+  #         kind: skRequest,
+  #         to: tkServer,
+  #         request: Request(
+  #           `method`: "askId",
+  #           params: Parameter(kind: pkVoid)
+  #         )
+  #       ),
+  #       Step(
+  #         kind: skResponse,
+  #         `from`: tkServer,
+  #         response: Response(
+  #           kind: rkResult,
+  #           result: true.toParam
+  #         )
+  #       )
+  #     ]
+  #   )
+  # )
 
   interactions.add(
     Interaction(
