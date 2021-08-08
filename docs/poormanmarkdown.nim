@@ -4,6 +4,7 @@ import tables
 from regex import re, findAll, groupFirstCapture, replace
 from strutils import multiReplace
 import strformat
+from ./utils import sanitizeHtml
 
 const linkDefinitionRe = re"(?m)^(\[.+?\]): (.+)$"
 
@@ -30,9 +31,6 @@ func markdown*(str: string, links: var Table[string, string]): string =
   for m in findAll(str, linkDefinitionRe):
     links[m.groupFirstCapture(0, str)] = m.groupFirstCapture(1, str)
   result = str.replace(linkDefinitionRe, "")
-  result = result.multiReplace(
-    ("<", "&lt;"),
-    (">", "&gt;"),
-  )
+  result = result.sanitizeHtml()
   result = result.multiReplace(inlineCodeReplacementGroups(result))
   result = result.multiReplace(links.toReplacementGroups)

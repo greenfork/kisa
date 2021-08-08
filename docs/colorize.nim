@@ -32,8 +32,8 @@ func logError(args: varargs[string, `$`]) =
 func colorizeJson*(str: string): string =
   var states: seq[ParserState]
   states.add Value
-
   var cnt = 0
+
   proc skipSpaces() =
     while cnt < str.len and str[cnt].isSpaceAscii():
       result.add str[cnt]
