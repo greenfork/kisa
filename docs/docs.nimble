@@ -15,4 +15,5 @@ requires "karax#head"
 requires "regex"
 
 task release, "build site in release mode for most space efficiency":
+  exec "nim r increase_indexjs_version.nim"
   exec "nim js -d:release -d:danger index.nim"
