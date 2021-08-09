@@ -250,6 +250,36 @@ Server sends an ID which it assigned to the client.
 
   interactions.add(
     Interaction(
+      title: "Deinitialize a client",
+      description: """
+Client notifies the server that it is going to be deinitialized. If this is
+the last client of the server, the server exits itself.
+""",
+      steps: @[
+        Step(
+          kind: skRequest,
+          description: "Send notification that the client exits.",
+          to: tkServer,
+          request: Request(
+            `method`: "exitNotify",
+            params: Parameter(kind: pkVoid)
+          )
+        ),
+        Step(
+          kind: skResponse,
+          description: "Acknowledgement.",
+          `from`: tkServer,
+          response: Response(
+            kind: rkResult,
+            result: true.toParam
+          )
+        )
+      ]
+    )
+  )
+
+  interactions.add(
+    Interaction(
       title: "Receive the data to draw",
       description: """
 On many occasions the client will receive the data that should be drawn on the

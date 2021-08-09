@@ -185,7 +185,7 @@ pub const Client = struct {
     pub fn sendExitNotify(self: *Client) !void {
         var message = self.emptyJsonRpcRequest();
         message.method = "exitNotify";
-        // TODO: 1 should be changed to id or something.
+        // TODO: params must be omitted.
         message.params = .{ .Integer = 1 };
         try self.server.send(message);
         try self.waitForResponse(message.id);
@@ -301,16 +301,17 @@ pub const Server = struct {
             if (client.id == id) {
                 _ = self.clients.swapRemove(idx);
                 client.deinit();
-                return;
+                break;
             }
         }
+        self.watcher.removeFileDescriptor(id);
     }
 
     /// Main loop of the server, listens for requests and sends responses.
     pub fn loop(self: *Self) !void {
-        // var packet_buf: [ClientRepresentationForServer.max_packet_size]u8 = undefined;
-        // var method_buf: [ClientRepresentationForServer.max_method_size]u8 = undefined;
-        // var message_buf: [ClientRepresentationForServer.max_message_size]u8 = undefined;
+        var packet_buf: [ClientRepresentationForServer.max_packet_size]u8 = undefined;
+        var method_buf: [ClientRepresentationForServer.max_method_size]u8 = undefined;
+        var message_buf: [ClientRepresentationForServer.max_message_size]u8 = undefined;
         while (true) {
             switch (try self.watcher.pollReadable()) {
                 .success => |polled_data| {
@@ -332,37 +333,43 @@ pub const Server = struct {
                             );
                             try client.send(message);
                         },
-                        .connection_socket => {},
+                        .connection_socket => {
+                            const client =
+                                self.findClient(polled_data.id) orelse return error.ClientNotFound;
+                            const packet = (try client.readPacket(&packet_buf)).?;
+                            const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+                            if (mem.eql(u8, "keypress", method)) {
+                                const keypress_message = try KeypressRequest.parse(
+                                    &message_buf,
+                                    packet,
+                                );
+                                std.debug.print("keypress_message: {}\n", .{keypress_message});
+                            } else if (mem.eql(u8, "exitNotify", method)) {
+                                const exit_request_message = try jsonrpc.SimpleRequest.parse(
+                                    &message_buf,
+                                    packet,
+                                );
+                                const ack_response = jsonrpc.SimpleResponse.initResult(
+                                    exit_request_message.id,
+                                    .{ .Bool = true },
+                                );
+                                try client.send(ack_response);
+                                self.removeClient(polled_data.id);
+                                if (self.clients.items.len == 0) {
+                                    self.deinit();
+                                    break;
+                                }
+                            } else {
+                                @panic("unknown method in server loop");
+                            }
+                        },
                     }
                 },
                 .err => |polled_data| {
-                    if (self.findClient(polled_data.id)) |client| {
-                        client.deinit();
-                    }
+                    self.removeClient(polled_data.id);
                 },
             }
         }
-
-        // while (true) {
-        //     if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
-        //         const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
-        //         if (mem.eql(u8, "keypress", method)) {
-        //             const keypress_message = try KeypressRequest.parse(&message_buf, packet);
-        //             std.debug.print("keypress_message: {}\n", .{keypress_message});
-        //         } else if (mem.eql(u8, "exitNotify", method)) {
-        //             const exit_request_message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
-        //             const ack_response = jsonrpc.SimpleResponse.initResult(
-        //                 exit_request_message.id,
-        //                 .{ .Bool = true },
-        //             );
-        //             try self.clients.items[0].send(ack_response);
-        //             self.deinit();
-        //             break;
-        //         } else {
-        //             @panic("unknown method in server loop");
-        //         }
-        //     }
-        // }
     }
 
     fn readConfig(ally: *mem.Allocator) !Config {
