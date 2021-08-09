@@ -255,7 +255,6 @@ pub const Client = struct {
 
 pub const Server = struct {
     ally: *mem.Allocator,
-    clients: std.ArrayList(ClientRepresentationForServer),
     config: Config,
     listen_socket: os.socket_t,
     watcher: transport.Watcher,
@@ -270,7 +269,6 @@ pub const Server = struct {
         try watcher.addListenSocket(listen_socket, 0);
         return Self{
             .ally = ally,
-            .clients = std.ArrayList(ClientRepresentationForServer).init(ally),
             .config = try readConfig(ally),
             .listen_socket = listen_socket,
             .watcher = watcher,
@@ -278,32 +276,18 @@ pub const Server = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.clients.items) |*client| client.deinitComms();
-        self.clients.deinit();
         self.config.deinit();
         self.watcher.deinit();
     }
 
-    pub fn acceptClient(self: *Self) !void {
-        const accepted_socket = try os.accept(self.listen_socket, null, null, os.SOCK_CLOEXEC);
-        try self.clients.append(ClientRepresentationForServer.initWithUnixSocket(accepted_socket));
-    }
-
     fn findClient(self: Self, id: ClientId) ?ClientRepresentationForServer {
-        for (self.clients.items) |client| {
-            if (client.id == id) return client;
+        if (self.watcher.findFileDescriptor(id)) |fd_result| {
+            return ClientRepresentationForServer.initWithUnixSocket(fd_result.fd);
         }
         return null;
     }
 
     fn removeClient(self: *Self, id: ClientId) void {
-        for (self.clients.items) |client, idx| {
-            if (client.id == id) {
-                _ = self.clients.swapRemove(idx);
-                client.deinit();
-                break;
-            }
-        }
         self.watcher.removeFileDescriptor(id);
     }
 
@@ -324,8 +308,6 @@ pub const Server = struct {
                             var client = ClientRepresentationForServer.initWithUnixSocket(
                                 accepted_socket,
                             );
-                            client.id = client_id;
-                            try self.clients.append(client);
                             errdefer self.removeClient(client_id);
                             var message = jsonrpc.SimpleRequest.initNotification(
                                 "shouldAskId",
@@ -355,7 +337,7 @@ pub const Server = struct {
                                 );
                                 try client.send(ack_response);
                                 self.removeClient(polled_data.id);
-                                if (self.clients.items.len == 0) {
+                                if (self.watcher.fds.len == 1) {
                                     self.deinit();
                                     break;
                                 }
@@ -397,7 +379,6 @@ pub const Server = struct {
 
 /// How Server sees a Client.
 pub const ClientRepresentationForServer = struct {
-    id: ClientId = 0,
     comms: transport.CommunicationResources,
 
     const Self = @This();

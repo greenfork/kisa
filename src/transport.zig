@@ -187,8 +187,9 @@ pub const Watcher = struct {
     pending_events_cursor: usize = 0,
 
     const Self = @This();
+    const Result = struct { fd: os.fd_t, id: u32, ty: FdType, fd_index: usize };
     const PollResult = union(enum) {
-        success: struct { fd: os.fd_t, id: u32, ty: FdType, fd_index: usize },
+        success: Result,
         err: struct { id: u32 },
     };
 
@@ -209,6 +210,22 @@ pub const Watcher = struct {
     /// Adds connection socket which is used for communication between server and client.
     pub fn addConnectionSocket(self: *Self, fd: os.fd_t, id: u32) !void {
         try self.addFd(fd, os.POLLIN, .connection_socket, id);
+    }
+
+    pub fn findFileDescriptor(self: Self, id: u32) ?Result {
+        for (self.fds.items(.id)) |fds_id, idx| {
+            if (fds_id == id) {
+                const pollfds = self.fds.items(.pollfd);
+                const tys = self.fds.items(.ty);
+                return Result{
+                    .fd = pollfds[idx].fd,
+                    .id = id,
+                    .ty = tys[idx],
+                    .fd_index = idx,
+                };
+            }
+        }
+        return null;
     }
 
     /// Removes any file descriptor with `id`, `id` must exist in the current
