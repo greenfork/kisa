@@ -4,9 +4,13 @@ const os = std.os;
 const io = std.io;
 const mem = std.mem;
 const net = std.net;
+const assert = std.debug.assert;
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
 const transport = @import("transport.zig");
+
+const ClientId = u32;
+const ServerId = u32;
 
 pub const MoveDirection = enum {
     up,
@@ -171,6 +175,9 @@ pub const Client = struct {
         self.server = ServerRepresentationForClient.initWithUnixSocket(
             try transport.connectToUnixSocket(address),
         );
+        var request_buf: [ServerRepresentationForClient.max_packet_size]u8 = undefined;
+        const request = (try self.server.recv(jsonrpc.SimpleRequest, &request_buf)).?;
+        assert(mem.eql(u8, "shouldAskId", request.method));
     }
 
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
@@ -251,16 +258,22 @@ pub const Server = struct {
     clients: std.ArrayList(ClientRepresentationForServer),
     config: Config,
     listen_socket: os.socket_t,
+    watcher: transport.Watcher,
+    last_client_id: ClientId = 0,
 
     const Self = @This();
 
     pub fn init(ally: *mem.Allocator, address: *net.Address) !Self {
         defer ally.destroy(address);
+        const listen_socket = try transport.bindUnixSocket(address);
+        var watcher = transport.Watcher.init(ally);
+        try watcher.addListenSocket(listen_socket, 0);
         return Self{
             .ally = ally,
             .clients = std.ArrayList(ClientRepresentationForServer).init(ally),
             .config = try readConfig(ally),
-            .listen_socket = try transport.bindUnixSocket(address),
+            .listen_socket = listen_socket,
+            .watcher = watcher,
         };
     }
 
@@ -268,6 +281,7 @@ pub const Server = struct {
         for (self.clients.items) |*client| client.deinitComms();
         self.clients.deinit();
         self.config.deinit();
+        self.watcher.deinit();
     }
 
     pub fn acceptClient(self: *Self) !void {
@@ -275,31 +289,80 @@ pub const Server = struct {
         try self.clients.append(ClientRepresentationForServer.initWithUnixSocket(accepted_socket));
     }
 
-    /// Main loop of the server, listens for requests and sends responses.
-    pub fn loop(self: *Self) !void {
-        var packet_buf: [ClientRepresentationForServer.max_packet_size]u8 = undefined;
-        var method_buf: [ClientRepresentationForServer.max_method_size]u8 = undefined;
-        var message_buf: [ClientRepresentationForServer.max_message_size]u8 = undefined;
-        while (true) {
-            if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
-                const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
-                if (mem.eql(u8, "keypress", method)) {
-                    const keypress_message = try KeypressRequest.parse(&message_buf, packet);
-                    std.debug.print("keypress_message: {}\n", .{keypress_message});
-                } else if (mem.eql(u8, "exitNotify", method)) {
-                    const exit_request_message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
-                    const ack_response = jsonrpc.SimpleResponse.initResult(
-                        exit_request_message.id,
-                        .{ .Bool = true },
-                    );
-                    try self.clients.items[0].send(ack_response);
-                    self.deinit();
-                    break;
-                } else {
-                    @panic("unknown method in server loop");
-                }
+    fn findClient(self: Self, id: ClientId) ?ClientRepresentationForServer {
+        for (self.clients.items) |client| {
+            if (client.id == id) return client;
+        }
+        return null;
+    }
+
+    fn removeClient(self: *Self, id: ClientId) void {
+        for (self.clients.items) |client, idx| {
+            if (client.id == id) {
+                _ = self.clients.swapRemove(idx);
+                client.deinit();
+                return;
             }
         }
+    }
+
+    /// Main loop of the server, listens for requests and sends responses.
+    pub fn loop(self: *Self) !void {
+        // var packet_buf: [ClientRepresentationForServer.max_packet_size]u8 = undefined;
+        // var method_buf: [ClientRepresentationForServer.max_method_size]u8 = undefined;
+        // var message_buf: [ClientRepresentationForServer.max_message_size]u8 = undefined;
+        while (true) {
+            switch (try self.watcher.pollReadable()) {
+                .success => |polled_data| {
+                    switch (polled_data.ty) {
+                        .listen_socket => {
+                            const accepted_socket = try os.accept(polled_data.fd, null, null, 0);
+                            const client_id = self.nextClientId();
+                            try self.watcher.addConnectionSocket(accepted_socket, client_id);
+                            errdefer self.watcher.removeFileDescriptor(client_id);
+                            var client = ClientRepresentationForServer.initWithUnixSocket(
+                                accepted_socket,
+                            );
+                            client.id = client_id;
+                            try self.clients.append(client);
+                            errdefer self.removeClient(client_id);
+                            var message = jsonrpc.SimpleRequest.initNotification(
+                                "shouldAskId",
+                                .{ .Bool = true },
+                            );
+                            try client.send(message);
+                        },
+                        .connection_socket => {},
+                    }
+                },
+                .err => |polled_data| {
+                    if (self.findClient(polled_data.id)) |client| {
+                        client.deinit();
+                    }
+                },
+            }
+        }
+
+        // while (true) {
+        //     if (try self.clients.items[0].readPacket(&packet_buf)) |packet| {
+        //         const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+        //         if (mem.eql(u8, "keypress", method)) {
+        //             const keypress_message = try KeypressRequest.parse(&message_buf, packet);
+        //             std.debug.print("keypress_message: {}\n", .{keypress_message});
+        //         } else if (mem.eql(u8, "exitNotify", method)) {
+        //             const exit_request_message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
+        //             const ack_response = jsonrpc.SimpleResponse.initResult(
+        //                 exit_request_message.id,
+        //                 .{ .Bool = true },
+        //             );
+        //             try self.clients.items[0].send(ack_response);
+        //             self.deinit();
+        //             break;
+        //         } else {
+        //             @panic("unknown method in server loop");
+        //         }
+        //     }
+        // }
     }
 
     fn readConfig(ally: *mem.Allocator) !Config {
@@ -318,11 +381,23 @@ pub const Server = struct {
         defer file.close();
         return try file.readToEndAlloc(ally, std.math.maxInt(usize));
     }
+
+    fn nextClientId(self: *Self) ClientId {
+        self.last_client_id += 1;
+        return self.last_client_id;
+    }
 };
 
 /// How Server sees a Client.
 pub const ClientRepresentationForServer = struct {
+    id: ClientId = 0,
     comms: transport.CommunicationResources,
+
+    const Self = @This();
+
+    pub fn deinit(self: Self) void {
+        self.deinitComms();
+    }
 
     pub usingnamespace transport.CommunicationMixin(@This());
 };
@@ -330,6 +405,12 @@ pub const ClientRepresentationForServer = struct {
 /// How Client sees a Server.
 pub const ServerRepresentationForClient = struct {
     comms: transport.CommunicationResources,
+
+    const Self = @This();
+
+    pub fn deinit(self: Self) void {
+        self.deinitComms();
+    }
 
     pub usingnamespace transport.CommunicationMixin(@This());
 };
@@ -396,7 +477,6 @@ pub const Application = struct {
     fn startServer(ally: *mem.Allocator, address: *net.Address) !void {
         var server = try Server.init(ally, address);
         errdefer server.deinit();
-        try server.acceptClient();
         try server.loop();
     }
 

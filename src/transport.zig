@@ -121,6 +121,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
             }
         }
 
+        // TODO: allow the caller to pass `packet_buf`.
         /// Sends a message, `message` must implement `generate` receiving a buffer and putting
         /// []u8 content into it.
         pub fn send(self: Self, message: anytype) !void {

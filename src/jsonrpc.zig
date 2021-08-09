@@ -39,6 +39,8 @@ pub const IdValue = union(enum) {
 };
 
 // TODO: check that the json rpc version is correct inside this library. Probably an error.
+// TODO: allow to omit `params` in request altogether.
+// TODO: only allow arrays and objects as a request `params`, as per specification.
 
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
 /// For notifications the `id` field is `null`.
