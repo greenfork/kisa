@@ -203,6 +203,84 @@ pub const Workspace = struct {
         }
     }
 
+    pub fn newWindowPane(
+        self: *Self,
+        active_display_state: ActiveDisplayState,
+        window_pane_init_params: WindowPane.InitParams,
+    ) !ActiveDisplayState {
+        var window_pane = try self.createWindowPane(window_pane_init_params);
+        errdefer self.destroyWindowPane(window_pane.data.id);
+        var display_window = try self.createDisplayWindow();
+        errdefer self.destroyDisplayWindow(display_window.data.id);
+        var window_tab = self.findWindowTab(active_display_state.window_tab_id).?;
+        try window_tab.data.addWindowPaneId(window_pane.data.id);
+        errdefer window_tab.data.removeWindowPaneId(window_pane.data.id);
+        window_pane.data.window_tab_id = active_display_state.window_tab_id;
+        window_pane.data.display_window_id = display_window.data.id;
+        display_window.data.window_pane_id = window_pane.data.id;
+        var text_buffer = self.text_buffers.last orelse return error.LastTextBufferAbsent;
+        try text_buffer.data.addDisplayWindowId(display_window.data.id);
+        errdefer text_buffer.data.removeDisplayWindowId(display_window.data.id);
+        display_window.data.text_buffer_id = text_buffer.data.id;
+        return self.openWindowPane(
+            active_display_state,
+            window_pane.data.id,
+        ) catch |err| switch (err) {
+            error.WindowPaneNotFound => unreachable,
+            else => return err,
+        };
+    }
+
+    /// Switch active display state only.
+    pub fn openWindowPane(
+        self: *Self,
+        active_display_state: ActiveDisplayState,
+        window_pane_id: Id,
+    ) !ActiveDisplayState {
+        _ = active_display_state;
+        if (self.findWindowPane(window_pane_id)) |window_pane| {
+            return ActiveDisplayState{
+                .display_window_id = window_pane.data.display_window_id,
+                .window_pane_id = window_pane.data.id,
+                .window_tab_id = window_pane.data.window_tab_id,
+            };
+        } else {
+            return error.WindowPaneNotFound;
+        }
+    }
+
+    // TODO: decide on the errors during `close` functions.
+    // TODO: solve when we close current tab and switch to the next tab.
+    /// When several window panes on same tab - Destroy DisplayWindow, WindowPane.
+    pub fn closeWindowPane(
+        self: *Self,
+        active_display_state: ActiveDisplayState,
+        window_pane_id: Id,
+    ) !ActiveDisplayState {
+        if (self.window_panes.len == 1) {
+            // TODO: tell the outer world about our deinitialization and deinit.
+            @panic("not implemented");
+        } else {
+            var window_tab = self.findWindowTab(active_display_state.window_tab_id).?;
+            window_tab.data.removeWindowPaneId(window_pane_id);
+            // errdefer window_tab.data.addWindowPaneId(window_pane_id) catch {};
+            const display_window = self.findDisplayWindow(active_display_state.display_window_id).?;
+            var text_buffer = self.findTextBuffer(
+                display_window.data.text_buffer_id,
+            ) orelse return error.ActiveTextBufferAbsent;
+            text_buffer.data.removeDisplayWindowId(display_window.data.id);
+            self.destroyDisplayWindow(active_display_state.display_window_id);
+            self.destroyWindowPane(window_pane_id);
+
+            const last_window_pane = self.window_panes.last.?;
+            return ActiveDisplayState{
+                .display_window_id = last_window_pane.data.display_window_id,
+                .window_pane_id = last_window_pane.data.id,
+                .window_tab_id = active_display_state.window_tab_id,
+            };
+        }
+    }
+
     fn createTextBuffer(self: *Self, init_params: TextBuffer.InitParams) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
         text_buffer.data = TextBuffer.init(self, init_params);
@@ -423,6 +501,66 @@ test "state: handle failing conditions" {
     ));
 
     try checkLastStateItemsCongruence(workspace, old_active_display_state);
+}
+
+test "state: new window pane" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+
+    var old_text = try testing.allocator.dupe(u8, "hello");
+    var old_name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .content = old_text,
+        .path = null,
+        .name = old_name,
+    };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
+    const active_display_state = try workspace.newWindowPane(
+        old_active_display_state,
+        window_pane_init_params,
+    );
+
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 2), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 2), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 2), workspace.window_tabs.last.?.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 2), workspace.text_buffers.last.?.data.display_window_ids.len);
+
+    try checkLastStateItemsCongruence(workspace, active_display_state);
+}
+
+test "state: close window pane when there are several window panes on window tab" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+
+    var old_text = try testing.allocator.dupe(u8, "hello");
+    var old_name = try testing.allocator.dupe(u8, "name");
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .content = old_text,
+        .path = null,
+        .name = old_name,
+    };
+    const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
+    const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
+    const med_active_display_state = try workspace.newWindowPane(
+        old_active_display_state,
+        window_pane_init_params,
+    );
+    const active_display_state = try workspace.closeWindowPane(
+        med_active_display_state,
+        workspace.window_panes.last.?.data.id,
+    );
+
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
+    try testing.expectEqual(@as(usize, 1), workspace.window_tabs.last.?.data.window_pane_ids.len);
+    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.last.?.data.display_window_ids.len);
+
+    try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
 /// Manages the content of an opened file on a filesystem or of a virtual file
