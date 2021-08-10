@@ -1,5 +1,13 @@
-.tok-boundary { color: slategray }
 .tok-string { color: green }
 .tok-object-key { color: sienna }
 .tok-value { color: crimson }
 .tok-comma { color: sienna }
+.tok-boundary-0 { color: #ef476f }
+.tok-boundary-1 { color: #ffd166 }
+.tok-boundary-2 { color: #06d6a0 }
+.tok-boundary-3 { color: #118ab2 }
+.tok-boundary-4 { color: #073b4c }
+.tok-boundary-5 { color: #ef476f }
+.tok-boundary-6 { color: #ffd166 }
+.tok-boundary-7 { color: #06d6a0 }
+.tok-boundary-8 { color: #118ab2 }

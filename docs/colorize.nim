@@ -1,4 +1,3 @@
-import colors
 import strformat
 import strutils
 import jsconsole
@@ -23,6 +22,8 @@ func spanStart(class: TokenKind): string = fmt"""<span class="tok tok-{$class}">
 func spanEnd(): string = "</span>"
 func span(str: string, class: TokenKind): string = spanStart(class) & str & spanEnd()
 func span(ch: char, class: TokenKind): string = ($ch).span(class)
+func spanBoundary(ch: char, stackLevel: int): string =
+  fmt"""<span class="tok tok-{$TokenKind.tkBoundary}-{$(stackLevel mod 9)}">{ch}</span>"""
 
 func logError(args: varargs[string, `$`]) =
   when not defined(release):
@@ -33,6 +34,7 @@ func colorizeJson*(str: string): string =
   var states: seq[ParserState]
   states.add Value
   var cnt = 0
+  var stackLevel = 0
 
   proc skipSpaces() =
     while cnt < str.len and str[cnt].isSpaceAscii():
@@ -60,10 +62,12 @@ func colorizeJson*(str: string): string =
         cnt.dec
         discard states.pop()
       elif str[cnt] == '{':
-        result &= span(str[cnt], tkBoundary)
+        result &= spanBoundary('{', stackLevel)
+        stackLevel.inc
         states.add Object
       elif str[cnt] == '[':
-        result &= span(str[cnt], tkBoundary)
+        result &= spanBoundary('[', stackLevel)
+        stackLevel.inc
         states.add Array
       elif str[cnt] == '"':
         result &= spanStart(tkString)
@@ -101,7 +105,8 @@ func colorizeJson*(str: string): string =
         discard states.pop()
     of Array:
       if str[cnt] == ']':
-        result &= span(']', tkBoundary)
+        stackLevel.dec
+        result &= spanBoundary(']', stackLevel)
         discard states.pop()
       else:
         cnt.dec
@@ -109,7 +114,8 @@ func colorizeJson*(str: string): string =
     of Object:
       if str[cnt] == '}':
         result &= spanEnd()
-        result &= span('}', tkBoundary)
+        stackLevel.dec
+        result &= spanBoundary('}', stackLevel)
         discard states.pop()
       elif str[cnt] == '"':
         result &= spanStart(tkObjectKey)
