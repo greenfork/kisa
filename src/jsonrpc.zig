@@ -1,14 +1,5 @@
 // Limitations:
 // 1. No batch mode, contributions are welcome.
-// 2. ID value for requests can't be `null`, it becomes a notification with absent "id" field
-//    in the resulting json. Specification discourages the use of `null` for IDs, hopefully
-//    this will never be a use case. This limitation is partly due to standard library json
-//    parser being unable to parse into unions with `void` values.
-//
-//    Another solution to this problem would be to return a "subtype" from `parse` but
-//    it complicates things for the user of this library since it will require to switch
-//    on the type of the returned value instead of just checking for nulls in fields in
-//    order to determine the object type.
 
 const std = @import("std");
 const json = std.json;
@@ -42,7 +33,7 @@ pub const IdValue = union(enum) {
     String: []const u8,
 };
 
-// TODO: allow to omit `params` in request altogether.
+pub const RequestKind = enum { Request, RequestNoParams, Notification, NotificationNoParams };
 
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
 /// For notifications the `id` field is `null`.
@@ -56,41 +47,97 @@ pub fn Request(comptime ParamsShape: type) type {
         else => @compileError(error_message),
     }
 
-    return struct {
-        jsonrpc: []const u8,
-        method: []const u8,
-        id: ?IdValue = null,
-        params: ParamsShape,
-
-        const RequestSubtype = struct {
+    return union(RequestKind) {
+        Request: struct {
             jsonrpc: []const u8,
             method: []const u8,
-            id: IdValue,
+            id: ?IdValue,
             params: ParamsShape,
-        };
-        const NotificationSubtype = struct {
+        },
+        RequestNoParams: struct {
+            jsonrpc: []const u8,
+            method: []const u8,
+            id: ?IdValue,
+        },
+        Notification: struct {
             jsonrpc: []const u8,
             method: []const u8,
             params: ParamsShape,
-        };
+        },
+        NotificationNoParams: struct {
+            jsonrpc: []const u8,
+            method: []const u8,
+        },
 
         const Self = @This();
 
-        pub fn init(id: IdValue, method: []const u8, params: ParamsShape) Self {
-            return Self{
-                .jsonrpc = jsonrpc_version,
-                .id = id,
-                .method = method,
-                .params = params,
+        pub fn init(_id: ?IdValue, _method: []const u8, _params: ?ParamsShape) Self {
+            if (_params) |p| {
+                return Self{ .Request = .{
+                    .jsonrpc = jsonrpc_version,
+                    .id = _id,
+                    .method = _method,
+                    .params = p,
+                } };
+            } else {
+                return Self{ .RequestNoParams = .{
+                    .jsonrpc = jsonrpc_version,
+                    .id = _id,
+                    .method = _method,
+                } };
+            }
+        }
+
+        pub fn initNotification(_method: []const u8, _params: ?ParamsShape) Self {
+            if (_params) |p| {
+                return Self{ .Notification = .{
+                    .jsonrpc = jsonrpc_version,
+                    .method = _method,
+                    .params = p,
+                } };
+            } else {
+                return Self{ .NotificationNoParams = .{
+                    .jsonrpc = jsonrpc_version,
+                    .method = _method,
+                } };
+            }
+        }
+
+        /// Getter function for `jsonrpc`.
+        pub fn jsonrpc(self: Self) []const u8 {
+            return switch (self) {
+                .Request => |s| s.jsonrpc,
+                .RequestNoParams => |s| s.jsonrpc,
+                .Notification => |s| s.jsonrpc,
+                .NotificationNoParams => |s| s.jsonrpc,
             };
         }
 
-        pub fn initNotification(method: []const u8, params: ParamsShape) Self {
-            return Self{
-                .jsonrpc = jsonrpc_version,
-                .id = null,
-                .method = method,
-                .params = params,
+        /// Getter function for `method`.
+        pub fn method(self: Self) []const u8 {
+            return switch (self) {
+                .Request => |s| s.method,
+                .RequestNoParams => |s| s.method,
+                .Notification => |s| s.method,
+                .NotificationNoParams => |s| s.method,
+            };
+        }
+
+        /// Getter function for `id`.
+        pub fn id(self: Self) ?IdValue {
+            return switch (self) {
+                .Request => |s| s.id,
+                .RequestNoParams => |s| s.id,
+                .Notification, .NotificationNoParams => null,
+            };
+        }
+
+        /// Getter function for `params`.
+        pub fn params(self: Self) ?ParamsShape {
+            return switch (self) {
+                .Request => |s| s.params,
+                .Notification => |s| s.params,
+                .RequestNoParams, .NotificationNoParams => null,
             };
         }
 
@@ -102,7 +149,7 @@ pub fn Request(comptime ParamsShape: type) type {
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
             const result = try json.parse(Self, &token_stream, parse_options);
-            if (!mem.eql(u8, jsonrpc_version, result.jsonrpc)) return error.IncorrectJsonrpcVersion;
+            if (!mem.eql(u8, jsonrpc_version, result.jsonrpc())) return error.IncorrectJsonrpcVersion;
             return result;
         }
 
@@ -151,28 +198,6 @@ pub fn Request(comptime ParamsShape: type) type {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             var ally = &fba.allocator;
             return try parseMethodAlloc(ally, string);
-        }
-
-        /// Used by `std.json.stringify`.
-        pub fn jsonStringify(
-            self: Self,
-            options: json.StringifyOptions,
-            out_stream: anytype,
-        ) @TypeOf(out_stream).Error!void {
-            if (self.id == null) {
-                try json.stringify(NotificationSubtype{
-                    .jsonrpc = self.jsonrpc,
-                    .method = self.method,
-                    .params = self.params,
-                }, options, out_stream);
-            } else {
-                try json.stringify(RequestSubtype{
-                    .jsonrpc = self.jsonrpc,
-                    .method = self.method,
-                    .params = self.params,
-                    .id = self.id.?,
-                }, options, out_stream);
-            }
         }
     };
 }
@@ -281,44 +306,35 @@ pub fn Response(comptime ResultShape: type) type {
 
 test "jsonrpc: parse alloc request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const request = SimpleRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "startParty",
-        .params = &params,
-        .id = .{ .Integer = 63 },
-    };
+    const request = SimpleRequest.init(IdValue{ .Integer = 63 }, "startParty", &params);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
     const parsed = try SimpleRequest.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params[0].String, parsed.params[0].String);
-    try testing.expectEqualStrings(request.params[1].String, parsed.params[1].String);
-    try testing.expectEqual(request.params[2].Integer, parsed.params[2].Integer);
-    try testing.expectEqual(request.id, parsed.id);
+    try testing.expectEqual(RequestKind.Request, std.meta.activeTag(parsed));
+    try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqualStrings(request.method(), parsed.method());
+    try testing.expectEqualStrings(request.params().?[0].String, parsed.params().?[0].String);
+    try testing.expectEqualStrings(request.params().?[1].String, parsed.params().?[1].String);
+    try testing.expectEqual(request.params().?[2].Integer, parsed.params().?[2].Integer);
+    try testing.expectEqual(request.id(), parsed.id());
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: parse request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const request = SimpleRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "startParty",
-        .params = &params,
-        .id = .{ .Integer = 63 },
-    };
+    const request = SimpleRequest.init(IdValue{ .Integer = 63 }, "startParty", &params);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
     var buf: [4096]u8 = undefined;
     const parsed = try SimpleRequest.parse(&buf, jsonrpc_string);
-    try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params[0].String, parsed.params[0].String);
-    try testing.expectEqualStrings(request.params[1].String, parsed.params[1].String);
-    try testing.expectEqual(request.params[2].Integer, parsed.params[2].Integer);
-    try testing.expectEqual(request.id, parsed.id);
+    try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqualStrings(request.method(), parsed.method());
+    try testing.expectEqualStrings(request.params().?[0].String, parsed.params().?[0].String);
+    try testing.expectEqualStrings(request.params().?[1].String, parsed.params().?[1].String);
+    try testing.expectEqual(request.params().?[2].Integer, parsed.params().?[2].Integer);
+    try testing.expectEqual(request.id(), parsed.id());
 }
 
 const Face = struct {
@@ -416,12 +432,7 @@ test "jsonrpc: parse complex request" {
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
-    const params_array = std.mem.span(&params);
-    const request = MyRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "draw",
-        .params = params_array,
-    };
+    const request = MyRequest.initNotification("draw", &params);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
         \\{
@@ -501,33 +512,28 @@ test "jsonrpc: parse complex request" {
         \\}
     ;
     const parsed = try MyRequest.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqual(request.id, parsed.id);
+    try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqualStrings(request.method(), parsed.method());
+    try testing.expectEqual(request.id(), parsed.id());
 
     var line_idx: usize = 0;
-    const lines = request.params[0].lines;
+    const lines = request.params().?[0].lines;
     while (line_idx < lines.len) : (line_idx += 1) {
         var span_idx: usize = 0;
         const spans = lines[line_idx];
         while (span_idx < spans.len) : (span_idx += 1) {
-            try expectEqualSpans(spans[span_idx], parsed.params[0].lines[line_idx][span_idx]);
+            try expectEqualSpans(spans[span_idx], parsed.params().?[0].lines[line_idx][span_idx]);
         }
     }
 
-    try expectEqualFaces(request.params[1].face, parsed.params[1].face);
-    try expectEqualFaces(request.params[2].face, parsed.params[2].face);
+    try expectEqualFaces(request.params().?[1].face, parsed.params().?[1].face);
+    try expectEqualFaces(request.params().?[2].face, parsed.params().?[2].face);
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: generate alloc request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const request = SimpleRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "startParty",
-        .params = &params,
-        .id = .{ .Integer = 63 },
-    };
+    const request = SimpleRequest.init(IdValue{ .Integer = 63 }, "startParty", &params);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
     ;
@@ -538,12 +544,7 @@ test "jsonrpc: generate alloc request" {
 
 test "jsonrpc: generate request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const request = SimpleRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "startParty",
-        .params = &params,
-        .id = .{ .Integer = 63 },
-    };
+    const request = SimpleRequest.init(IdValue{ .Integer = 63 }, "startParty", &params);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","id":63,"params":["Bob","Alice",10]}
     ;
@@ -554,12 +555,7 @@ test "jsonrpc: generate request" {
 
 test "jsonrpc: generate notification without ID" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const request = SimpleRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "startParty",
-        .params = &params,
-        .id = null,
-    };
+    const request = SimpleRequest.initNotification("startParty", &params);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10]}
     ;
@@ -615,13 +611,7 @@ test "jsonrpc: generate complex request" {
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
-    const params_array = std.mem.span(&params);
-    const request = MyRequest{
-        .jsonrpc = jsonrpc_version,
-        .method = "draw",
-        .params = params_array,
-        .id = .{ .Integer = 87 },
-    };
+    const request = MyRequest.init(IdValue{ .Integer = 87 }, "draw", &params);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
         \\{
@@ -1131,24 +1121,24 @@ test "jsonrpc: parse request and only return a method" {
 }
 
 test "jsonrpc: must return an error if jsonrpc has missing field" {
-    var buf: [256]u8 = undefined;
+    var buf: [512]u8 = undefined;
 
     {
         const jsonrpc_string =
             \\{"method":"startParty","params":["Bob","Alice",10],"id":63}
         ;
-        try testing.expectError(error.MissingField, SimpleRequest.parse(&buf, jsonrpc_string));
+        try testing.expectError(error.NoUnionMembersMatched, SimpleRequest.parse(&buf, jsonrpc_string));
     }
-    {
-        const jsonrpc_string =
-            \\{"id":63,"result":42}
-        ;
-        try testing.expectError(error.MissingField, SimpleResponse.parse(&buf, jsonrpc_string));
-    }
+    // {
+    //     const jsonrpc_string =
+    //         \\{"id":63,"result":42}
+    //     ;
+    //     try testing.expectError(error.MissingField, SimpleResponse.parse(&buf, jsonrpc_string));
+    // }
 }
 
 test "jsonrpc: must return an error if jsonrpc has incorrect version" {
-    var buf: [256]u8 = undefined;
+    var buf: [512]u8 = undefined;
 
     {
         const jsonrpc_string =
@@ -1156,10 +1146,43 @@ test "jsonrpc: must return an error if jsonrpc has incorrect version" {
         ;
         try testing.expectError(error.IncorrectJsonrpcVersion, SimpleRequest.parse(&buf, jsonrpc_string));
     }
+    // {
+    //     const jsonrpc_string =
+    //         \\{"jsonrpc":"2.1","id":63,"result":42}
+    //     ;
+    //     try testing.expectError(error.IncorrectJsonrpcVersion, SimpleResponse.parse(&buf, jsonrpc_string));
+    // }
+}
+
+test "jsonrpc: parse null id values" {
+    var buf: [256]u8 = undefined;
+
     {
         const jsonrpc_string =
-            \\{"jsonrpc":"2.1","id":63,"result":42}
+            \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":null}
         ;
-        try testing.expectError(error.IncorrectJsonrpcVersion, SimpleResponse.parse(&buf, jsonrpc_string));
+        const request = try SimpleRequest.parse(&buf, jsonrpc_string);
+        try testing.expectEqual(@as(?IdValue, null), request.id());
+    }
+    // TODO: same for response
+}
+
+test "jsonrpc: parse requests without params" {
+    var buf: [256]u8 = undefined;
+
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.0","method":"startParty","id":"uid250"}
+        ;
+        const request = try SimpleRequest.parse(&buf, jsonrpc_string);
+        try testing.expectEqual(RequestKind.RequestNoParams, std.meta.activeTag(request));
+    }
+
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.0","method":"startParty"}
+        ;
+        const request = try SimpleRequest.parse(&buf, jsonrpc_string);
+        try testing.expectEqual(RequestKind.NotificationNoParams, std.meta.activeTag(request));
     }
 }
