@@ -47,13 +47,13 @@ pub const IdValue = union(enum) {
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
 /// For notifications the `id` field is `null`.
 pub fn Request(comptime ParamsShape: type) type {
+    const error_message = "Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'";
     switch (@typeInfo(ParamsShape)) {
         .Struct => {},
         .Pointer => |info| {
-            if (info.size != .Slice)
-                @compileError("Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'");
+            if (info.size != .Slice) @compileError(error_message);
         },
-        else => @compileError("Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'"),
+        else => @compileError(error_message),
     }
 
     return struct {
