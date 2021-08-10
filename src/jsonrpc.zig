@@ -15,7 +15,7 @@ const default_parse_options = json.ParseOptions{
 };
 
 pub const SimpleRequest = Request([]const Value);
-pub const SimpleResponse = Response(Value);
+pub const SimpleResponse = Response(Value, Value);
 
 /// Primitive json value which can be represented as Zig value.
 /// Includes all json values but "object". For objects one should construct a Zig struct.
@@ -123,6 +123,7 @@ pub fn Request(comptime ParamsShape: type) type {
             };
         }
 
+        // TODO: make unreachable
         /// Getter function for `id`.
         pub fn id(self: Self) ?IdValue {
             return switch (self) {
@@ -202,36 +203,117 @@ pub fn Request(comptime ParamsShape: type) type {
     };
 }
 
-// TODO: add `data` field.
-pub const ResponseErrorImpl = struct { code: i64, message: []const u8 };
+pub const ResponseKind = enum { Result, Error };
 
 /// The resulting structure which represents a "response" object as specified in json-rpc 2.0.
 /// `Response` has either `null` value in `result` or in `error` field depending on the type.
-pub fn Response(comptime ResultShape: type) type {
-    return struct {
-        jsonrpc: []const u8,
-        id: ?IdValue,
-        result: ?ResultShape = null,
-        @"error": ?ResponseErrorImpl = null,
-
-        const ResultSubtype = struct {
-            jsonrpc: []const u8,
-            id: IdValue,
-            result: ?ResultShape,
-        };
-        const ErrorSubtype = struct {
+pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type {
+    return union(ResponseKind) {
+        Result: struct {
             jsonrpc: []const u8,
             id: ?IdValue,
-            @"error": ResponseErrorImpl,
-        };
+            result: ResultShape,
+        },
+        Error: struct {
+            jsonrpc: []const u8,
+            id: ?IdValue,
+            @"error": ErrorObject,
+        },
 
         const Self = @This();
+        const ErrorObjectWithoutData = struct { code: i64, message: []const u8 };
+        const ErrorObjectWithData = struct { code: i64, message: []const u8, data: ErrorDataShape };
+        const ErrorObject = union(enum) {
+            WithoutData: ErrorObjectWithoutData,
+            WithData: ErrorObjectWithData,
+        };
 
-        pub fn initResult(id: ?IdValue, result: ResultShape) Self {
-            return Self{
+        pub fn initResult(_id: ?IdValue, _result: ResultShape) Self {
+            return Self{ .Result = .{
                 .jsonrpc = jsonrpc_version,
-                .id = id,
-                .result = result,
+                .id = _id,
+                .result = _result,
+            } };
+        }
+
+        pub fn initError(_id: ?IdValue, _code: i64, _message: []const u8, _data: ?ErrorDataShape) Self {
+            if (_data) |data| {
+                return Self{ .Error = .{
+                    .jsonrpc = jsonrpc_version,
+                    .id = _id,
+                    .@"error" = .{ .WithData = .{ .code = _code, .message = _message, .data = data } },
+                } };
+            } else {
+                return Self{ .Error = .{
+                    .jsonrpc = jsonrpc_version,
+                    .id = _id,
+                    .@"error" = .{ .WithoutData = .{ .code = _code, .message = _message } },
+                } };
+            }
+        }
+
+        /// Getter function for `jsonrpc`.
+        pub fn jsonrpc(self: Self) []const u8 {
+            return switch (self) {
+                .Result => |s| s.jsonrpc,
+                .Error => |s| s.jsonrpc,
+            };
+        }
+
+        /// Getter function for `id`.
+        pub fn id(self: Self) ?IdValue {
+            return switch (self) {
+                .Result => |s| s.id,
+                .Error => |s| s.id,
+            };
+        }
+
+        /// Getter function for `result`.
+        pub fn result(self: Self) ResultShape {
+            return switch (self) {
+                .Result => |s| s.result,
+                .Error => unreachable,
+            };
+        }
+
+        /// Getter function for `error`.
+        pub fn @"error"(self: Self) ErrorObject {
+            return switch (self) {
+                .Result => unreachable,
+                .Error => |s| s.@"error",
+            };
+        }
+
+        /// Getter function for `error.code`.
+        pub fn errorCode(self: Self) i64 {
+            return switch (self) {
+                .Result => unreachable,
+                .Error => |s| switch (s.@"error") {
+                    .WithoutData => |e| e.code,
+                    .WithData => |e| e.code,
+                },
+            };
+        }
+
+        /// Getter function for `error.message`.
+        pub fn errorMessage(self: Self) []const u8 {
+            return switch (self) {
+                .Result => unreachable,
+                .Error => |s| switch (s.@"error") {
+                    .WithoutData => |e| e.message,
+                    .WithData => |e| e.message,
+                },
+            };
+        }
+
+        /// Getter function for `error.data`.
+        pub fn errorData(self: Self) ErrorDataShape {
+            return switch (self) {
+                .Result => unreachable,
+                .Error => |s| switch (s.@"error") {
+                    .WithoutData => unreachable,
+                    .WithData => |e| e.data,
+                },
             };
         }
 
@@ -242,9 +324,9 @@ pub fn Response(comptime ResultShape: type) type {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
-            const result = try json.parse(Self, &token_stream, parse_options);
-            if (!mem.eql(u8, jsonrpc_version, result.jsonrpc)) return error.IncorrectJsonrpcVersion;
-            return result;
+            const rs = try json.parse(Self, &token_stream, parse_options);
+            if (!mem.eql(u8, jsonrpc_version, rs.jsonrpc())) return error.IncorrectJsonrpcVersion;
+            return rs;
         }
 
         pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
@@ -260,9 +342,9 @@ pub fn Response(comptime ResultShape: type) type {
 
         /// Caller owns the memory.
         pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
-            var result = std.ArrayList(u8).init(allocator);
-            try self.writeTo(result.writer());
-            return result.toOwnedSlice();
+            var rs = std.ArrayList(u8).init(allocator);
+            try self.writeTo(rs.writer());
+            return rs.toOwnedSlice();
         }
 
         pub fn generate(self: Self, buf: []u8) ![]u8 {
@@ -272,27 +354,6 @@ pub fn Response(comptime ResultShape: type) type {
 
         pub fn writeTo(self: Self, stream: anytype) !void {
             try json.stringify(self, .{}, stream);
-        }
-
-        /// Used by `std.json.stringify`.
-        pub fn jsonStringify(
-            self: Self,
-            options: json.StringifyOptions,
-            out_stream: anytype,
-        ) @TypeOf(out_stream).Error!void {
-            if (self.result == null) {
-                try json.stringify(ErrorSubtype{
-                    .jsonrpc = self.jsonrpc,
-                    .id = self.id,
-                    .@"error" = self.@"error".?,
-                }, options, out_stream);
-            } else {
-                try json.stringify(ResultSubtype{
-                    .jsonrpc = self.jsonrpc,
-                    .id = self.id.?,
-                    .result = self.result,
-                }, options, out_stream);
-            }
         }
     };
 }
@@ -700,72 +761,74 @@ test "jsonrpc: generate complex request" {
 
 test "jsonrpc: parse alloc success response" {
     const data = Value{ .Integer = 42 };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, data);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":42,"id":63}
     ;
     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.result.?.Integer, parsed.result.?.Integer);
-    try testing.expectEqual(response.id, parsed.id);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.result().Integer, parsed.result().Integer);
+    try testing.expectEqual(response.id(), parsed.id());
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: parse buf success response" {
     const data = Value{ .Integer = 42 };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, data);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":42,"id":63}
     ;
     var buf: [4096]u8 = undefined;
     const parsed = try SimpleResponse.parse(&buf, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.result.?.Integer, parsed.result.?.Integer);
-    try testing.expectEqual(response.id, parsed.id);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.result().Integer, parsed.result().Integer);
+    try testing.expectEqual(response.id(), parsed.id());
 }
 
 test "jsonrpc: parse error response" {
-    const data = ResponseErrorImpl{ .code = 13, .message = "error message" };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .@"error" = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initError(IdValue{ .Integer = 63 }, 13, "error message", null);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","error":{"code":13,"message":"error message"},"id":63}
     ;
     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.@"error".?.code, parsed.@"error".?.code);
-    try testing.expectEqualStrings(response.@"error".?.message, parsed.@"error".?.message);
-    try testing.expectEqual(response.id, parsed.id);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.errorCode(), parsed.errorCode());
+    try testing.expectEqualStrings(response.errorMessage(), parsed.errorMessage());
+    try testing.expectEqual(response.id(), parsed.id());
+    parsed.parseFree(testing.allocator);
+}
+
+test "jsonrpc: parse error response with data" {
+    const response = SimpleResponse.initError(
+        IdValue{ .Integer = 63 },
+        13,
+        "error message",
+        Value{ .String = "additional info" },
+    );
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message","data":"additional info"}}
+    ;
+    const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.errorCode(), parsed.errorCode());
+    try testing.expectEqualStrings(response.errorMessage(), parsed.errorMessage());
+    try testing.expectEqual(response.id(), parsed.id());
+    try testing.expectEqualStrings(response.errorData().String, parsed.errorData().String);
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: parse array response" {
     const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
     const array_data = .{ .Array = std.mem.span(&data) };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = array_data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, array_data);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
     ;
     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.result.?.Array[0].Integer, parsed.result.?.Array[0].Integer);
-    try testing.expectEqualStrings(response.result.?.Array[1].String, parsed.result.?.Array[1].String);
-    try testing.expectEqual(response.id, parsed.id);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.result().Array[0].Integer, parsed.result().Array[0].Integer);
+    try testing.expectEqualStrings(response.result().Array[1].String, parsed.result().Array[1].String);
+    try testing.expectEqual(response.id(), parsed.id());
     parsed.parseFree(testing.allocator);
 }
 
@@ -777,7 +840,7 @@ test "jsonrpc: parse complex response" {
         face: Face,
     };
     const ResultShape = []const Parameter;
-    const MyResponse = Response(ResultShape);
+    const MyResponse = Response(ResultShape, Value);
 
     const first_line_array = [_]Span{
         Span{
@@ -817,11 +880,7 @@ test "jsonrpc: parse complex response" {
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
     const params_array = std.mem.span(&params);
-    const response = MyResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = params_array,
-        .id = .{ .Integer = 98 },
-    };
+    const response = MyResponse.initResult(IdValue{ .Integer = 98 }, params_array);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
         \\{
@@ -901,31 +960,27 @@ test "jsonrpc: parse complex response" {
         \\}
     ;
     const parsed = try MyResponse.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc, parsed.jsonrpc);
-    try testing.expectEqual(response.id, parsed.id);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.id(), parsed.id());
 
     var line_idx: usize = 0;
-    const lines = response.result.?[0].lines;
+    const lines = response.result()[0].lines;
     while (line_idx < lines.len) : (line_idx += 1) {
         var span_idx: usize = 0;
         const spans = lines[line_idx];
         while (span_idx < spans.len) : (span_idx += 1) {
-            try expectEqualSpans(spans[span_idx], parsed.result.?[0].lines[line_idx][span_idx]);
+            try expectEqualSpans(spans[span_idx], parsed.result()[0].lines[line_idx][span_idx]);
         }
     }
 
-    try expectEqualFaces(response.result.?[1].face, parsed.result.?[1].face);
-    try expectEqualFaces(response.result.?[2].face, parsed.result.?[2].face);
+    try expectEqualFaces(response.result()[1].face, parsed.result()[1].face);
+    try expectEqualFaces(response.result()[2].face, parsed.result()[2].face);
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: generate alloc success response" {
     const data = Value{ .Integer = 42 };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, data);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"result":42}
     ;
@@ -936,11 +991,7 @@ test "jsonrpc: generate alloc success response" {
 
 test "jsonrpc: generate success response" {
     const data = Value{ .Integer = 42 };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, data);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"result":42}
     ;
@@ -950,14 +1001,24 @@ test "jsonrpc: generate success response" {
 }
 
 test "jsonrpc: generate error response" {
-    const data = ResponseErrorImpl{ .code = 13, .message = "error message" };
-    const response = SimpleResponse{
-        .jsonrpc = jsonrpc_version,
-        .@"error" = data,
-        .id = .{ .Integer = 63 },
-    };
+    const response = SimpleResponse.initError(IdValue{ .Integer = 63 }, 13, "error message", null);
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message"}}
+    ;
+    const generated = try response.generateAlloc(testing.allocator);
+    defer testing.allocator.free(generated);
+    try testing.expectEqualStrings(jsonrpc_string, generated);
+}
+
+test "jsonrpc: generate error response with data" {
+    const response = SimpleResponse.initError(
+        IdValue{ .Integer = 63 },
+        13,
+        "error message",
+        Value{ .String = "additional data" },
+    );
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","id":63,"error":{"code":13,"message":"error message","data":"additional data"}}
     ;
     const generated = try response.generateAlloc(testing.allocator);
     defer testing.allocator.free(generated);
@@ -972,7 +1033,7 @@ test "jsonrpc: generate complex response" {
         face: Face,
     };
     const ResultShape = []const Parameter;
-    const MyResponse = Response(ResultShape);
+    const MyResponse = Response(ResultShape, Value);
 
     const first_line_array = [_]Span{
         Span{
@@ -1012,11 +1073,7 @@ test "jsonrpc: generate complex response" {
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
     const params_array = std.mem.span(&params);
-    const response = MyResponse{
-        .jsonrpc = jsonrpc_version,
-        .result = params_array,
-        .id = .{ .Integer = 98 },
-    };
+    const response = MyResponse.initResult(IdValue{ .Integer = 98 }, params_array);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
         \\{
@@ -1129,12 +1186,12 @@ test "jsonrpc: must return an error if jsonrpc has missing field" {
         ;
         try testing.expectError(error.NoUnionMembersMatched, SimpleRequest.parse(&buf, jsonrpc_string));
     }
-    // {
-    //     const jsonrpc_string =
-    //         \\{"id":63,"result":42}
-    //     ;
-    //     try testing.expectError(error.MissingField, SimpleResponse.parse(&buf, jsonrpc_string));
-    // }
+    {
+        const jsonrpc_string =
+            \\{"id":63,"result":42}
+        ;
+        try testing.expectError(error.NoUnionMembersMatched, SimpleResponse.parse(&buf, jsonrpc_string));
+    }
 }
 
 test "jsonrpc: must return an error if jsonrpc has incorrect version" {
@@ -1146,12 +1203,12 @@ test "jsonrpc: must return an error if jsonrpc has incorrect version" {
         ;
         try testing.expectError(error.IncorrectJsonrpcVersion, SimpleRequest.parse(&buf, jsonrpc_string));
     }
-    // {
-    //     const jsonrpc_string =
-    //         \\{"jsonrpc":"2.1","id":63,"result":42}
-    //     ;
-    //     try testing.expectError(error.IncorrectJsonrpcVersion, SimpleResponse.parse(&buf, jsonrpc_string));
-    // }
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.1","id":63,"result":42}
+        ;
+        try testing.expectError(error.IncorrectJsonrpcVersion, SimpleResponse.parse(&buf, jsonrpc_string));
+    }
 }
 
 test "jsonrpc: parse null id values" {
@@ -1164,7 +1221,13 @@ test "jsonrpc: parse null id values" {
         const request = try SimpleRequest.parse(&buf, jsonrpc_string);
         try testing.expectEqual(@as(?IdValue, null), request.id());
     }
-    // TODO: same for response
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.0","id":null,"result":42}
+        ;
+        const response = try SimpleResponse.parse(&buf, jsonrpc_string);
+        try testing.expectEqual(@as(?IdValue, null), response.id());
+    }
 }
 
 test "jsonrpc: parse requests without params" {
