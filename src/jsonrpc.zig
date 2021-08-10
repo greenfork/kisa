@@ -123,22 +123,21 @@ pub fn Request(comptime ParamsShape: type) type {
             };
         }
 
-        // TODO: make unreachable
         /// Getter function for `id`.
         pub fn id(self: Self) ?IdValue {
             return switch (self) {
                 .Request => |s| s.id,
                 .RequestNoParams => |s| s.id,
-                .Notification, .NotificationNoParams => null,
+                .Notification, .NotificationNoParams => unreachable,
             };
         }
 
         /// Getter function for `params`.
-        pub fn params(self: Self) ?ParamsShape {
+        pub fn params(self: Self) ParamsShape {
             return switch (self) {
                 .Request => |s| s.params,
                 .Notification => |s| s.params,
-                .RequestNoParams, .NotificationNoParams => null,
+                .RequestNoParams, .NotificationNoParams => unreachable,
             };
         }
 
@@ -375,9 +374,9 @@ test "jsonrpc: parse alloc request" {
     try testing.expectEqual(RequestKind.Request, std.meta.activeTag(parsed));
     try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
     try testing.expectEqualStrings(request.method(), parsed.method());
-    try testing.expectEqualStrings(request.params().?[0].String, parsed.params().?[0].String);
-    try testing.expectEqualStrings(request.params().?[1].String, parsed.params().?[1].String);
-    try testing.expectEqual(request.params().?[2].Integer, parsed.params().?[2].Integer);
+    try testing.expectEqualStrings(request.params()[0].String, parsed.params()[0].String);
+    try testing.expectEqualStrings(request.params()[1].String, parsed.params()[1].String);
+    try testing.expectEqual(request.params()[2].Integer, parsed.params()[2].Integer);
     try testing.expectEqual(request.id(), parsed.id());
     parsed.parseFree(testing.allocator);
 }
@@ -392,9 +391,9 @@ test "jsonrpc: parse request" {
     const parsed = try SimpleRequest.parse(&buf, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
     try testing.expectEqualStrings(request.method(), parsed.method());
-    try testing.expectEqualStrings(request.params().?[0].String, parsed.params().?[0].String);
-    try testing.expectEqualStrings(request.params().?[1].String, parsed.params().?[1].String);
-    try testing.expectEqual(request.params().?[2].Integer, parsed.params().?[2].Integer);
+    try testing.expectEqualStrings(request.params()[0].String, parsed.params()[0].String);
+    try testing.expectEqualStrings(request.params()[1].String, parsed.params()[1].String);
+    try testing.expectEqual(request.params()[2].Integer, parsed.params()[2].Integer);
     try testing.expectEqual(request.id(), parsed.id());
 }
 
@@ -575,20 +574,20 @@ test "jsonrpc: parse complex request" {
     const parsed = try MyRequest.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc(), parsed.jsonrpc());
     try testing.expectEqualStrings(request.method(), parsed.method());
-    try testing.expectEqual(request.id(), parsed.id());
+    try testing.expectEqual(RequestKind.Notification, std.meta.activeTag(request));
 
     var line_idx: usize = 0;
-    const lines = request.params().?[0].lines;
+    const lines = request.params()[0].lines;
     while (line_idx < lines.len) : (line_idx += 1) {
         var span_idx: usize = 0;
         const spans = lines[line_idx];
         while (span_idx < spans.len) : (span_idx += 1) {
-            try expectEqualSpans(spans[span_idx], parsed.params().?[0].lines[line_idx][span_idx]);
+            try expectEqualSpans(spans[span_idx], parsed.params()[0].lines[line_idx][span_idx]);
         }
     }
 
-    try expectEqualFaces(request.params().?[1].face, parsed.params().?[1].face);
-    try expectEqualFaces(request.params().?[2].face, parsed.params().?[2].face);
+    try expectEqualFaces(request.params()[1].face, parsed.params()[1].face);
+    try expectEqualFaces(request.params()[2].face, parsed.params()[2].face);
     parsed.parseFree(testing.allocator);
 }
 
@@ -766,6 +765,7 @@ test "jsonrpc: parse alloc success response" {
         \\{"jsonrpc":"2.0","result":42,"id":63}
     ;
     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
+    try testing.expectEqual(ResponseKind.Result, std.meta.activeTag(parsed));
     try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
     try testing.expectEqual(response.result().Integer, parsed.result().Integer);
     try testing.expectEqual(response.id(), parsed.id());
@@ -791,6 +791,7 @@ test "jsonrpc: parse error response" {
         \\{"jsonrpc":"2.0","error":{"code":13,"message":"error message"},"id":63}
     ;
     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
+    try testing.expectEqual(ResponseKind.Error, std.meta.activeTag(parsed));
     try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
     try testing.expectEqual(response.errorCode(), parsed.errorCode());
     try testing.expectEqualStrings(response.errorMessage(), parsed.errorMessage());
