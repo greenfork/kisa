@@ -22,6 +22,9 @@ const default_parse_options = json.ParseOptions{
     .allow_trailing_data = false,
 };
 
+pub const SimpleRequest = Request([]const Value);
+pub const SimpleResponse = Response(Value);
+
 /// Primitive json value which can be represented as Zig value.
 /// Includes all json values but "object". For objects one should construct a Zig struct.
 pub const Value = union(enum) {
@@ -40,11 +43,19 @@ pub const IdValue = union(enum) {
 
 // TODO: check that the json rpc version is correct inside this library. Probably an error.
 // TODO: allow to omit `params` in request altogether.
-// TODO: only allow arrays and objects as a request `params`, as per specification.
 
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
 /// For notifications the `id` field is `null`.
 pub fn Request(comptime ParamsShape: type) type {
+    switch (@typeInfo(ParamsShape)) {
+        .Struct => {},
+        .Pointer => |info| {
+            if (info.size != .Slice)
+                @compileError("Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'");
+        },
+        else => @compileError("Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'"),
+    }
+
     return struct {
         jsonrpc: []const u8,
         method: []const u8,
@@ -165,8 +176,6 @@ pub fn Request(comptime ParamsShape: type) type {
     };
 }
 
-pub const SimpleRequest = Request(Value);
-
 // TODO: add `data` field.
 pub const ResponseErrorImpl = struct { code: i64, message: []const u8 };
 
@@ -259,8 +268,6 @@ pub fn Response(comptime ResultShape: type) type {
         }
     };
 }
-
-pub const SimpleResponse = Response(Value);
 
 // ===========================================================================
 // Testing
