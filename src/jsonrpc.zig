@@ -134,6 +134,26 @@ pub fn Request(comptime ParamsShape: type) type {
             try json.stringify(self, .{}, stream);
         }
 
+        /// Caller owns the memory.
+        pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
+            const RequestMethod = struct { method: []u8 };
+            const parse_options = json.ParseOptions{
+                .allocator = ally,
+                .duplicate_field_behavior = .Error,
+                .ignore_unknown_fields = true,
+                .allow_trailing_data = false,
+            };
+            var token_stream = json.TokenStream.init(string);
+            const parsed = try json.parse(RequestMethod, &token_stream, parse_options);
+            return parsed.method;
+        }
+
+        pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
+            var fba = std.heap.FixedBufferAllocator.init(buf);
+            var ally = &fba.allocator;
+            return try parseMethodAlloc(ally, string);
+        }
+
         /// Used by `std.json.stringify`.
         pub fn jsonStringify(
             self: Self,
@@ -154,26 +174,6 @@ pub fn Request(comptime ParamsShape: type) type {
                     .id = self.id.?,
                 }, options, out_stream);
             }
-        }
-
-        /// Caller owns the memory.
-        pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
-            const RequestMethod = struct { method: []u8 };
-            const parse_options = json.ParseOptions{
-                .allocator = ally,
-                .duplicate_field_behavior = .Error,
-                .ignore_unknown_fields = true,
-                .allow_trailing_data = false,
-            };
-            var token_stream = json.TokenStream.init(string);
-            const parsed = try json.parse(RequestMethod, &token_stream, parse_options);
-            return parsed.method;
-        }
-
-        pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
-            var fba = std.heap.FixedBufferAllocator.init(buf);
-            var ally = &fba.allocator;
-            return try parseMethodAlloc(ally, string);
         }
     };
 }
