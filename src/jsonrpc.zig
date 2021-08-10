@@ -12,6 +12,7 @@
 
 const std = @import("std");
 const json = std.json;
+const mem = std.mem;
 const testing = std.testing;
 
 pub const jsonrpc_version = "2.0";
@@ -102,6 +103,7 @@ pub fn Request(comptime ParamsShape: type) type {
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
             const result = try json.parse(Self, &token_stream, parse_options);
+            if (!mem.eql(u8, jsonrpc_version, result.jsonrpc)) return error.IncorrectJsonrpcVersion;
             return result;
         }
 
@@ -216,7 +218,9 @@ pub fn Response(comptime ResultShape: type) type {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
-            return try json.parse(Self, &token_stream, parse_options);
+            const result = try json.parse(Self, &token_stream, parse_options);
+            if (!mem.eql(u8, jsonrpc_version, result.jsonrpc)) return error.IncorrectJsonrpcVersion;
+            return result;
         }
 
         pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
