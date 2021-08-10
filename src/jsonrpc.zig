@@ -27,6 +27,7 @@ pub const Value = union(enum) {
     Array: []const Value,
 };
 
+/// Id can be a number, a string or null.
 pub const IdValue = union(enum) {
     Integer: i64,
     Float: f64,
@@ -35,8 +36,8 @@ pub const IdValue = union(enum) {
 
 pub const RequestKind = enum { Request, RequestNoParams, Notification, NotificationNoParams };
 
-/// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
-/// For notifications the `id` field is `null`.
+/// The resulting structure which represents a "Request" object as specified in JSON-RPC 2.0.
+/// Request object has `null` in `id` field for Notification type.
 pub fn Request(comptime ParamsShape: type) type {
     const error_message = "Only Struct or Slice is allowed, found '" ++ @typeName(ParamsShape) ++ "'";
     switch (@typeInfo(ParamsShape)) {
@@ -48,22 +49,26 @@ pub fn Request(comptime ParamsShape: type) type {
     }
 
     return union(RequestKind) {
+        /// Request object with all the fields present.
         Request: struct {
             jsonrpc: []const u8,
             method: []const u8,
             id: ?IdValue,
             params: ParamsShape,
         },
+        /// Request object with `params` field omitted.
         RequestNoParams: struct {
             jsonrpc: []const u8,
             method: []const u8,
             id: ?IdValue,
         },
+        /// Notification object with all the fields present.
         Notification: struct {
             jsonrpc: []const u8,
             method: []const u8,
             params: ParamsShape,
         },
+        /// Notification object with `params` field omitted.
         NotificationNoParams: struct {
             jsonrpc: []const u8,
             method: []const u8,
@@ -71,6 +76,7 @@ pub fn Request(comptime ParamsShape: type) type {
 
         const Self = @This();
 
+        /// Initializes a Request object. Pass `null` to `params` in order to omit it.
         pub fn init(_id: ?IdValue, _method: []const u8, _params: ?ParamsShape) Self {
             if (_params) |p| {
                 return Self{ .Request = .{
@@ -88,6 +94,7 @@ pub fn Request(comptime ParamsShape: type) type {
             }
         }
 
+        /// Initializes a Notification object. Pass `null` to `params` in order to omit it.
         pub fn initNotification(_method: []const u8, _params: ?ParamsShape) Self {
             if (_params) |p| {
                 return Self{ .Notification = .{
@@ -141,7 +148,7 @@ pub fn Request(comptime ParamsShape: type) type {
             };
         }
 
-        /// Parses a string into specified `Request` structure. Requires `allocator` if
+        /// Parses a string into a Request object. Requires `allocator` if
         /// any of the `Request` values are arrays/pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
         pub fn parseAlloc(allocator: *std.mem.Allocator, string: []const u8) !Self {
@@ -153,34 +160,38 @@ pub fn Request(comptime ParamsShape: type) type {
             return result;
         }
 
+        /// Frees memory from call to `parseAlloc`.
         pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
         }
 
+        /// Parses a string into a Request object.
         pub fn parse(buf: []u8, string: []const u8) !Self {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             return try parseAlloc(&fba.allocator, string);
         }
 
-        /// Caller owns the memory.
+        /// Generates a string representation of a Request object. Caller owns the memory.
         pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
             try self.writeTo(result.writer());
             return result.toOwnedSlice();
         }
 
+        /// Generates a string representation of a Request object.
         pub fn generate(self: Self, buf: []u8) ![]u8 {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             return try self.generateAlloc(&fba.allocator);
         }
 
+        /// Writes a string representation of a Request object to a specified `stream`.
         pub fn writeTo(self: Self, stream: anytype) !void {
             try json.stringify(self, .{}, stream);
         }
 
-        /// Caller owns the memory.
+        /// Parses a `method` of a Request object from `string`. Caller owns the memory.
         pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
             const RequestMethod = struct { method: []u8 };
             const parse_options = json.ParseOptions{
@@ -194,6 +205,7 @@ pub fn Request(comptime ParamsShape: type) type {
             return parsed.method;
         }
 
+        /// Parses a `method` of a Request object from `string`.
         pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             var ally = &fba.allocator;
@@ -204,15 +216,17 @@ pub fn Request(comptime ParamsShape: type) type {
 
 pub const ResponseKind = enum { Result, Error };
 
-/// The resulting structure which represents a "response" object as specified in json-rpc 2.0.
-/// `Response` has either `null` value in `result` or in `error` field depending on the type.
+/// The resulting structure which represents a "Response" object as specified in JSON-RPC 2.0.
+/// Response object has either `null` value in `result` or in `error` field depending on the type.
 pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type {
     return union(ResponseKind) {
+        /// Successful Response object.
         Result: struct {
             jsonrpc: []const u8,
             id: ?IdValue,
             result: ResultShape,
         },
+        /// Error Response object.
         Error: struct {
             jsonrpc: []const u8,
             id: ?IdValue,
@@ -227,6 +241,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
             WithData: ErrorObjectWithData,
         };
 
+        /// Initializes a successful Response object.
         pub fn initResult(_id: ?IdValue, _result: ResultShape) Self {
             return Self{ .Result = .{
                 .jsonrpc = jsonrpc_version,
@@ -235,6 +250,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
             } };
         }
 
+        /// Initializes an error Response object. Pass `null` to `data` to omit this field.
         pub fn initError(_id: ?IdValue, _code: i64, _message: []const u8, _data: ?ErrorDataShape) Self {
             if (_data) |data| {
                 return Self{ .Error = .{
@@ -316,7 +332,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
             };
         }
 
-        /// Parses a string into specified `Response` structure. Requires `allocator` if
+        /// Parses a string into a `Response` object. Requires `allocator` if
         /// any of the `Response` values are arrays/pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
         pub fn parseAlloc(allocator: ?*std.mem.Allocator, string: []const u8) !Self {
@@ -328,29 +344,33 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
             return rs;
         }
 
+        /// Frees memory from `parseAlloc` call.
         pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
         }
 
+        /// Parses a string into a `Response` object.
         pub fn parse(buf: []u8, string: []const u8) !Self {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             return try parseAlloc(&fba.allocator, string);
         }
 
-        /// Caller owns the memory.
+        /// Generates a string representation of a Response object. Caller owns the memory.
         pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
             var rs = std.ArrayList(u8).init(allocator);
             try self.writeTo(rs.writer());
             return rs.toOwnedSlice();
         }
 
+        /// Generates a string representation of a Response object.
         pub fn generate(self: Self, buf: []u8) ![]u8 {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             return try self.generateAlloc(&fba.allocator);
         }
 
+        /// Writes a string representation of a Response object to a specified `stream`.
         pub fn writeTo(self: Self, stream: anytype) !void {
             try json.stringify(self, .{}, stream);
         }
