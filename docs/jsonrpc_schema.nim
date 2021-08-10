@@ -180,7 +180,7 @@ const interactions* = block:
     Interaction(
       title: "Initialize a client",
       description: """
-The first thing the client should do is to connect to the server and receive and ID.
+The first thing the client should do is to connect to the server.
 """,
       steps: @[
         Step(
@@ -188,8 +188,8 @@ The first thing the client should do is to connect to the server and receive and
           description: """
 The first thing to do is to send a connection request to unix domain socket which
 is located at user runtime directory inside `kisa` directory with an <ID> of a
-currently running session (by convention it is the process ID of the server).
-Below is an example for a Zig language, see documentation of
+currently running session (by convention it is the process ID of the running server).
+Below is an example for a Zig language, see the documentation of
 [socket(2)] and [connect(2)] for more information.
 
 [socket(2)]: https://linux.die.net/man/2/socket
@@ -212,38 +212,15 @@ os.connect(socket, &address.any, address.getOsSockLen());
         Step(
           kind: skRequest,
           description: """
-After that the server notifies the client that the connection was accepted
-and sends a notification saying that the client must ask for its ID.
+After that the server notifies the client that the connection was accepted.
 """,
           to: tkClient,
           request: Request(
-            `method`: "shouldAskId",
+            `method`: "connected",
             params: Parameter(kind: pkVoid),
             notification: true
           )
         ),
-        Step(
-          kind: skRequest,
-          description: """
-After receiving a notification, the client asks for an ID.
-""",
-          to: tkServer,
-          request: Request(
-            `method`: "askId",
-            params: Parameter(kind: pkVoid)
-          )
-        ),
-        Step(
-          kind: skResponse,
-          description: """
-Server sends an ID which it assigned to the client.
-""",
-          `from`: tkServer,
-          response: Response(
-            kind: rkResult,
-            result: true.toParam
-          )
-        )
       ]
     )
   )
@@ -253,27 +230,19 @@ Server sends an ID which it assigned to the client.
       title: "Deinitialize a client",
       description: """
 Client notifies the server that it is going to be deinitialized. If this is
-the last client of the server, the server exits itself.
+the last client of the server, the server quits.
 """,
       steps: @[
         Step(
           kind: skRequest,
-          description: "Send notification that the client exits.",
+          description: "Send a notification that the client quits.",
           to: tkServer,
           request: Request(
-            `method`: "exitNotify",
+            `method`: "quitted",
+            notification: true,
             params: Parameter(kind: pkVoid)
           )
         ),
-        Step(
-          kind: skResponse,
-          description: "Acknowledgement.",
-          `from`: tkServer,
-          response: Response(
-            kind: rkResult,
-            result: true.toParam
-          )
-        )
       ]
     )
   )
