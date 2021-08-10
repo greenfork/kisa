@@ -42,7 +42,6 @@ pub const IdValue = union(enum) {
     String: []const u8,
 };
 
-// TODO: check that the json rpc version is correct inside this library. Probably an error.
 // TODO: allow to omit `params` in request altogether.
 
 /// The resulting structure which represents a "request" object as specified in json-rpc 2.0.
@@ -282,11 +281,10 @@ pub fn Response(comptime ResultShape: type) type {
 
 test "jsonrpc: parse alloc request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
-        .params = params_array,
+        .params = &params,
         .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
@@ -295,20 +293,19 @@ test "jsonrpc: parse alloc request" {
     const parsed = try SimpleRequest.parseAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
     try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params.Array[0].String, parsed.params.Array[0].String);
-    try testing.expectEqualStrings(request.params.Array[1].String, parsed.params.Array[1].String);
-    try testing.expectEqual(request.params.Array[2].Integer, parsed.params.Array[2].Integer);
+    try testing.expectEqualStrings(request.params[0].String, parsed.params[0].String);
+    try testing.expectEqualStrings(request.params[1].String, parsed.params[1].String);
+    try testing.expectEqual(request.params[2].Integer, parsed.params[2].Integer);
     try testing.expectEqual(request.id, parsed.id);
     parsed.parseFree(testing.allocator);
 }
 
 test "jsonrpc: parse request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
-        .params = params_array,
+        .params = &params,
         .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
@@ -318,9 +315,9 @@ test "jsonrpc: parse request" {
     const parsed = try SimpleRequest.parse(&buf, jsonrpc_string);
     try testing.expectEqualStrings(request.jsonrpc, parsed.jsonrpc);
     try testing.expectEqualStrings(request.method, parsed.method);
-    try testing.expectEqualStrings(request.params.Array[0].String, parsed.params.Array[0].String);
-    try testing.expectEqualStrings(request.params.Array[1].String, parsed.params.Array[1].String);
-    try testing.expectEqual(request.params.Array[2].Integer, parsed.params.Array[2].Integer);
+    try testing.expectEqualStrings(request.params[0].String, parsed.params[0].String);
+    try testing.expectEqualStrings(request.params[1].String, parsed.params[1].String);
+    try testing.expectEqual(request.params[2].Integer, parsed.params[2].Integer);
     try testing.expectEqual(request.id, parsed.id);
 }
 
@@ -525,11 +522,10 @@ test "jsonrpc: parse complex request" {
 
 test "jsonrpc: generate alloc request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
-        .params = params_array,
+        .params = &params,
         .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
@@ -542,11 +538,10 @@ test "jsonrpc: generate alloc request" {
 
 test "jsonrpc: generate request" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
-        .params = params_array,
+        .params = &params,
         .id = .{ .Integer = 63 },
     };
     const jsonrpc_string =
@@ -559,11 +554,10 @@ test "jsonrpc: generate request" {
 
 test "jsonrpc: generate notification without ID" {
     const params = [_]Value{ .{ .String = "Bob" }, .{ .String = "Alice" }, .{ .Integer = 10 } };
-    const params_array = .{ .Array = std.mem.span(&params) };
     const request = SimpleRequest{
         .jsonrpc = jsonrpc_version,
         .method = "startParty",
-        .params = params_array,
+        .params = &params,
         .id = null,
     };
     const jsonrpc_string =
@@ -1134,4 +1128,38 @@ test "jsonrpc: parse request and only return a method" {
     var buf: [32]u8 = undefined;
     const method = try SimpleRequest.parseMethod(&buf, jsonrpc_string);
     try testing.expectEqualStrings("startParty", method);
+}
+
+test "jsonrpc: must return an error if jsonrpc has missing field" {
+    var buf: [256]u8 = undefined;
+
+    {
+        const jsonrpc_string =
+            \\{"method":"startParty","params":["Bob","Alice",10],"id":63}
+        ;
+        try testing.expectError(error.MissingField, SimpleRequest.parse(&buf, jsonrpc_string));
+    }
+    {
+        const jsonrpc_string =
+            \\{"id":63,"result":42}
+        ;
+        try testing.expectError(error.MissingField, SimpleResponse.parse(&buf, jsonrpc_string));
+    }
+}
+
+test "jsonrpc: must return an error if jsonrpc has incorrect version" {
+    var buf: [256]u8 = undefined;
+
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.1","method":"startParty","params":["Bob","Alice",10],"id":63}
+        ;
+        try testing.expectError(error.IncorrectJsonrpcVersion, SimpleRequest.parse(&buf, jsonrpc_string));
+    }
+    {
+        const jsonrpc_string =
+            \\{"jsonrpc":"2.1","id":63,"result":42}
+        ;
+        try testing.expectError(error.IncorrectJsonrpcVersion, SimpleResponse.parse(&buf, jsonrpc_string));
+    }
 }
