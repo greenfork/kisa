@@ -237,7 +237,6 @@ pub const Watcher = struct {
                 return;
             }
         }
-        unreachable;
     }
 
     fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType, id: u32) !void {

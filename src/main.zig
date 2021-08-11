@@ -175,20 +175,16 @@ pub const Client = struct {
         self.server = ServerRepresentationForClient.initWithUnixSocket(
             try transport.connectToUnixSocket(address),
         );
-        var request_buf: [ServerRepresentationForClient.max_packet_size]u8 = undefined;
+        var request_buf: [ServerRepresentationForClient.max_method_size]u8 = undefined;
         const request = (try self.server.recv(jsonrpc.SimpleRequest, &request_buf)).?;
-        assert(mem.eql(u8, "shouldAskId", request.method));
+        assert(mem.eql(u8, "connected", request.method()));
     }
 
     /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
     /// we want to receive an acknowledgement from the server.
     pub fn sendExitNotify(self: *Client) !void {
-        var message = self.emptyJsonRpcRequest();
-        message.method = "exitNotify";
-        // TODO: params must be omitted.
-        message.params = .{ .Integer = 1 };
+        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
         try self.server.send(message);
-        try self.waitForResponse(message.id);
     }
 
     // TODO: better name
@@ -209,14 +205,14 @@ pub const Client = struct {
         }
     }
 
-    pub fn sendFileToOpen(self: *Client, filename: []u8) !void {
-        self.last_message_id += 1;
-        var message = self.emptyJsonRpcRequest();
-        message.method = "openFile";
-        message.params = .{ .String = filename };
-        try message.writeTo(self.server.writer());
-        try self.server.writeEndByte();
-    }
+    // pub fn sendFileToOpen(self: *Client, filename: []u8) !void {
+    //     self.last_message_id += 1;
+    //     var message = self.emptyJsonRpcRequest();
+    //     message.method = "openFile";
+    //     message.params = .{ .String = filename };
+    //     try message.writeTo(self.server.writer());
+    //     try self.server.writeEndByte();
+    // }
 
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
         const id = @intCast(i64, self.nextMessageId());
@@ -230,26 +226,18 @@ pub const Client = struct {
         try self.waitForResponse(id);
     }
 
+    // TODO: deal with error responses.
     pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
         var message_buf: [ServerRepresentationForClient.max_message_size]u8 = undefined;
         const maybe_response = try self.server.recv(jsonrpc.SimpleResponse, &message_buf);
         const response = maybe_response orelse return error.ClosedForReading;
-        _ = response.result orelse return error.ErrorResponse;
+        _ = response.result() orelse return error.ErrorResponse;
         if (!std.meta.eql(id, response.id)) return error.InvalidIdResponse;
     }
 
     pub fn nextMessageId(self: *Self) u32 {
         self.last_message_id += 1;
         return self.last_message_id;
-    }
-
-    fn emptyJsonRpcRequest(self: *Self) jsonrpc.SimpleRequest {
-        return jsonrpc.SimpleRequest{
-            .jsonrpc = jsonrpc.jsonrpc_version,
-            .id = .{ .Integer = self.nextMessageId() },
-            .method = undefined,
-            .params = undefined,
-        };
     }
 };
 
@@ -309,10 +297,7 @@ pub const Server = struct {
                                 accepted_socket,
                             );
                             errdefer self.removeClient(client_id);
-                            var message = jsonrpc.SimpleRequest.initNotification(
-                                "shouldAskId",
-                                .{ .Bool = true },
-                            );
+                            var message = jsonrpc.SimpleRequest.initNotification("connected", null);
                             try client.send(message);
                         },
                         .connection_socket => {
@@ -326,16 +311,7 @@ pub const Server = struct {
                                     packet,
                                 );
                                 std.debug.print("keypress_message: {}\n", .{keypress_message});
-                            } else if (mem.eql(u8, "exitNotify", method)) {
-                                const exit_request_message = try jsonrpc.SimpleRequest.parse(
-                                    &message_buf,
-                                    packet,
-                                );
-                                const ack_response = jsonrpc.SimpleResponse.initResult(
-                                    exit_request_message.id,
-                                    .{ .Bool = true },
-                                );
-                                try client.send(ack_response);
+                            } else if (mem.eql(u8, "quitted", method)) {
                                 self.removeClient(polled_data.id);
                                 if (self.watcher.fds.len == 1) {
                                     self.deinit();
@@ -349,6 +325,10 @@ pub const Server = struct {
                 },
                 .err => |polled_data| {
                     self.removeClient(polled_data.id);
+                    if (self.watcher.fds.len == 1) {
+                        self.deinit();
+                        break;
+                    }
                 },
             }
         }
