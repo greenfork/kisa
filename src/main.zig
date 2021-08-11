@@ -244,7 +244,6 @@ pub const Client = struct {
 pub const Server = struct {
     ally: *mem.Allocator,
     config: Config,
-    listen_socket: os.socket_t,
     watcher: transport.Watcher,
     last_client_id: ClientId = 0,
 
@@ -258,7 +257,6 @@ pub const Server = struct {
         return Self{
             .ally = ally,
             .config = try readConfig(ally),
-            .listen_socket = listen_socket,
             .watcher = watcher,
         };
     }
