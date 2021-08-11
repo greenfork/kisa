@@ -23,15 +23,26 @@ proc createDom(): VNode =
                 of skOther:
                   step.other.sanitizeHtml
                 of skRequest:
-                  var str = case step.to
-                  of tkServer: "  To Server --> "
-                  of tkClient: "  To Client --> "
-                  str & step.request.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
+                  var toTarget =
+                    case step.to
+                    of tkServer: "  To Server --> "
+                    of tkClient: "  To Client --> "
+                  toTarget &
+                    step.request.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
                 of skResponse:
-                  var str = case step.`from`
-                  of tkServer: "From Server <-- "
-                  of tkClient: "From Client <-- "
-                  str & step.response.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
+                  var fromTarget =
+                    case step.`from`
+                    of tkServer: "From Server <-- "
+                    of tkClient: "From Client <-- "
+                  var rs =
+                    fromTarget &
+                    step.success.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
+                  for error in step.errors:
+                    rs &=
+                      "\n" &
+                      fromTarget &
+                      error.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
+                  rs
               )
 
 setRenderer createDom

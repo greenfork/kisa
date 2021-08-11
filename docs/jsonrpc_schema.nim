@@ -19,19 +19,24 @@ type
     of pkArray: aVal*: seq[Parameter]
     of pkObject: oVal*: seq[(string, Parameter)]
   Request* = object
+    id: int
     `method`*: string
     params*: Parameter
     notification*: bool ## notifications in json-rpc don't have an `id` element
-  ErrorObj* = object
+  Error* = object
     code*: int
     message*: string
+    data*: Parameter
   ResponseKind* = enum
     rkResult, rkError
   Response* = object
+    id: int
     notification: bool ## notifications in json-rpc don't have an `id` element
     case kind*: ResponseKind
-    of rkResult: result*: Parameter
-    of rkError: error*: ErrorObj
+    of rkResult:
+      result*: Parameter
+    of rkError:
+      error*: Error
   StepKind* = enum
     skRequest, skResponse, skOther
   TargetKind* = enum
@@ -44,7 +49,8 @@ type
       request*: Request
       to*: TargetKind
     of skResponse:
-      response*: Response
+      success*: Response
+      errors*: seq[Response]
       `from`*: TargetKind
     of skOther:
       other*: string
@@ -62,6 +68,7 @@ func toParam(val: float): Parameter = Parameter(kind: pkFloat, fVal: val)
 func toParam(val: FaceAttribute): Parameter = ($val).toParam
 func toParam[T](val: openArray[T]): Parameter =
   Parameter(kind: pkArray, aVal: val.mapIt(it.toParam))
+func toParam(val: Parameter): Parameter = val
 
 func quoteString(str: string): string =
   for ch in str:
@@ -73,7 +80,8 @@ func quoteString(str: string): string =
 
 const spacesPerIndentationLevel = 4
 
-func toCode(p: Parameter, pretty = false, indentationLevel: Natural = 0): string =
+func toCode(p: Parameter, pretty = false,
+    indentationLevel: Natural = 0): string =
   case p.kind
   of pkVoid: assert false
   of pkNull: result = "null"
@@ -104,7 +112,8 @@ func toCode(p: Parameter, pretty = false, indentationLevel: Natural = 0): string
       if pretty: result &= repeat(' ', (indentationLevel - 1) * spacesPerIndentationLevel)
     result &= "}"
 
-func toCode*(r: Request, pretty = false, indentationLevel: Natural = 0): string =
+func toCode*(r: Request, pretty = false,
+    indentationLevel: Natural = 0): string =
   assert r.params.kind in [pkArray, pkObject, pkVoid] # as per specification
 
   var rs = Parameter(
@@ -112,25 +121,28 @@ func toCode*(r: Request, pretty = false, indentationLevel: Natural = 0): string 
     oVal: @[("jsonrpc", "2.0".toParam)]
   )
   if not r.notification:
-    rs.oVal.add ("id", 1.toParam)
+    rs.oVal.add ("id", r.id.toParam)
   rs.oVal.add ("method", r.`method`.toParam)
   if r.params.kind != pkVoid:
     rs.oVal.add ("params", r.params)
   result = rs.toCode(pretty, indentationLevel)
 
-func toCode*(r: Response, pretty = false, indentationLevel: Natural = 0): string =
+func toCode*(r: Response, pretty = false,
+    indentationLevel: Natural = 0): string =
   var rs = Parameter(
     kind: pkObject,
     oVal: @[("jsonrpc", "2.0".toParam)]
   )
   if not r.notification:
-    rs.oVal.add ("id", 1.toParam)
+    rs.oVal.add ("id", r.id.toParam)
   case r.kind
   of rkResult:
     rs.oVal.add ("result", r.result)
   of rkError:
     rs.oVal.add ("code", r.error.code.toParam)
     rs.oVal.add ("message", r.error.message.toParam)
+    if r.error.data.kind != pkVoid:
+      rs.oVal.add ("data", r.error.data)
   result = rs.toCode(pretty, indentationLevel)
 
 func faceParam(fg: string, bg: string, attributes: openArray[FaceAttribute] = []): Parameter =
@@ -139,42 +151,42 @@ func faceParam(fg: string, bg: string, attributes: openArray[FaceAttribute] = []
   result.oVal.add ("bg", bg.toParam)
   result.oVal.add ("attributes", attributes.toParam)
 
+func req[T](met: string, param: T = Parameter(kind: pkVoid), id: int = 1): Request =
+  Request(
+    `method`: met,
+    params: param.toParam,
+    notification: false,
+    id: id,
+  )
+
+func notif[T](met: string, param: T = Parameter(kind: pkVoid)): Request =
+  Request(
+    `method`: met,
+    params: param.toParam,
+    notification: true,
+  )
+
+func res[T](rs: T, id: int = 1): Response =
+  Response(
+    kind: rkResult,
+    result: rs.toParam,
+    id: id,
+  )
+
+func err(code: int, message: string, id: int = 1): Response =
+  Response(
+    kind: rkError,
+    error: Error(
+      code: code,
+      message: message,
+    ),
+    id: id,
+  )
+
+# Construction of all the structures must happen at compile time so that we get
+# faster run time and less JavaScript bundle size generated from this file.
 const interactions* = block:
   var interactions: seq[Interaction]
-
-
-  # interactions.add(
-  #   Interaction(
-  #     title: "Testing",
-  #     steps: @[
-  #       Step(
-  #         kind: skRequest,
-  #         to: tkClient,
-  #         request: Request(
-  #           `method`: "shouldAskId",
-  #           params: [1,2,3].toParam,
-  #           notification: true
-  #         )
-  #       ),
-  #       Step(
-  #         kind: skRequest,
-  #         to: tkServer,
-  #         request: Request(
-  #           `method`: "askId",
-  #           params: Parameter(kind: pkVoid)
-  #         )
-  #       ),
-  #       Step(
-  #         kind: skResponse,
-  #         `from`: tkServer,
-  #         response: Response(
-  #           kind: rkResult,
-  #           result: true.toParam
-  #         )
-  #       )
-  #     ]
-  #   )
-  # )
 
   interactions.add(
     Interaction(
@@ -217,11 +229,7 @@ os.connect(socket, &address.any, address.getOsSockLen());
 After that the server notifies the client that the connection was accepted.
 """,
           to: tkClient,
-          request: Request(
-            `method`: "connected",
-            params: Parameter(kind: pkVoid),
-            notification: true
-          )
+          request: notif("connected"),
         ),
       ]
     )
@@ -238,13 +246,68 @@ the last client of the server, the server quits.
       steps: @[
         Step(
           kind: skRequest,
-          description: "Send a notification that the client quits.",
+          description: "Client sends a notification that the client quits.",
           to: tkServer,
-          request: Request(
-            `method`: "quitted",
-            notification: true,
-            params: Parameter(kind: pkVoid)
-          )
+          request: notif("quitted")
+        ),
+      ]
+    )
+  )
+
+  interactions.add(
+    Interaction(
+      title: "Open a file",
+      description: """
+Client asks the server to open a file and get data to display it on the screen.
+""",
+      steps: @[
+        Step(
+          kind: skRequest,
+          description: "Client sends an absolute path to file.",
+          to: tkServer,
+          request: req("openFile", ["/home/grfork/reps/kisa/kisarc.zzz"]),
+        ),
+        Step(
+          kind: skResponse,
+          description: """
+Server responds with `true` on success or with error description.
+""",
+          `from`: tkServer,
+          success: res(true),
+          errors: @[
+            err(1, "Operation not permitted"),
+            err(2, "No such file or directory"),
+            err(12, "Cannot allocate memory"),
+            err(13, "Permission denied"),
+            err(16, "Device or resource busy"),
+            err(17, "File exists"),
+            err(19, "No such device"),
+            err(20, "Not a directory"),
+            err(21, "Is a directory"),
+            err(23, "Too many open files in system"),
+            err(24, "Too many open files"),
+            err(27, "File too large"),
+            err(28, "No space left on device"),
+            err(36, "File name too long"),
+            err(40, "Too many levels of symbolic links"),
+            err(75, "Value too large for defined data type"),
+          ],
+        ),
+        Step(
+          kind: skRequest,
+          description: """
+Client asks to receive the data to draw re-sending same file path.
+""",
+          to: tkServer,
+          request: req("sendDrawData", ["/home/grfork/reps/kisa/kisarc.zzz"], 2),
+        ),
+        Step(
+          kind: skResponse,
+          description: """
+Server responds with `true` on success or with error description.
+""",
+          `from`: tkServer,
+          success: res("the-data-to-draw", 2),
         ),
       ]
     )
@@ -265,6 +328,7 @@ of this documentation as "data to draw".
           pretty: true,
           to: tkClient,
           request: Request(
+            id: 1,
             `method`: "draw",
             params: Parameter(
               kind: pkArray,
