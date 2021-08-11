@@ -3,11 +3,13 @@ import tables
 from strutils import repeat
 from sequtils import mapIt
 from ./poormanmarkdown import markdown
+from ./utils import parameterize
 
 # Partial JSON-RPC 2.0 specification in types.
 type
   ParamKind* = enum
-    pkVoid, pkNull, pkBool, pkInteger, pkFloat, pkString, pkArray, pkObject
+    pkVoid, pkNull, pkBool, pkInteger, pkFloat, pkString, pkArray, pkObject,
+    pkReference
   Parameter* = object
     case kind*: ParamKind
     of pkVoid: vVal*: bool
@@ -18,6 +20,7 @@ type
     of pkString: sVal*: string
     of pkArray: aVal*: seq[Parameter]
     of pkObject: oVal*: seq[(string, Parameter)]
+    of pkReference: rVal*: string
   Request* = object
     id: int
     `method`*: string
@@ -58,8 +61,12 @@ type
     title*: string
     description*: string
     steps*: seq[Step]
-  FaceAttribute = enum
+  FaceAttribute* = enum
     underline, reverse, bold, blink, dim, italic
+  DataReference* = object
+    title*: string
+    description*: string
+    data*: Parameter
 
 func toParam(val: string): Parameter = Parameter(kind: pkString, sVal: val)
 func toParam(val: bool): Parameter = Parameter(kind: pkBool, bVal: val)
@@ -80,7 +87,12 @@ func quoteString(str: string): string =
 
 const spacesPerIndentationLevel = 4
 
-func toCode(p: Parameter, pretty = false,
+func linkFormat*(str: string): string = fmt""""%{str.parameterize}%""""
+func anchor*(dr: DataReference): string =
+  let name = dr.title.parameterize
+  result = fmt"""<a href="#{name}">{name}</a>"""
+
+func toCode*(p: Parameter, pretty = false,
     indentationLevel: Natural = 0): string =
   case p.kind
   of pkVoid: assert false
@@ -89,6 +101,7 @@ func toCode(p: Parameter, pretty = false,
   of pkInteger: result = $p.iVal
   of pkFloat: result = $p.fVal
   of pkString: result = fmt""""{quoteString(p.sVal)}""""
+  of pkReference: result = linkFormat(p.rVal)
   of pkArray:
     result &= "["
     if p.aVal.len > 0:
@@ -150,6 +163,12 @@ func faceParam(fg: string, bg: string, attributes: openArray[FaceAttribute] = []
   result.oVal.add ("fg", fg.toParam)
   result.oVal.add ("bg", bg.toParam)
   result.oVal.add ("attributes", attributes.toParam)
+
+func refParam(anchor: string): Parameter =
+  Parameter(
+    kind: pkReference,
+    rVal: anchor.parameterize,
+  )
 
 func req[T](met: string, param: T = Parameter(kind: pkVoid), id: int = 1): Request =
   Request(
@@ -307,97 +326,8 @@ Client asks to receive the data to draw re-sending same file path.
 Server responds with `true` on success or with error description.
 """,
           `from`: tkServer,
-          success: res("the-data-to-draw", 2),
+          success: res(refParam("data-to-draw"), 2),
         ),
-      ]
-    )
-  )
-
-  interactions.add(
-    Interaction(
-      title: "Receive the data to draw",
-      description: """
-On many occasions the client will receive the data that should be drawn on the
-screen. It is documented here and will be referenced further in other parts
-of this documentation as "data to draw".
-""",
-      steps: @[
-        Step(
-          kind: skRequest,
-          description: "For now it copies what Kakoune does and will be changed in future.",
-          pretty: true,
-          to: tkClient,
-          request: Request(
-            id: 1,
-            `method`: "draw",
-            params: Parameter(
-              kind: pkArray,
-              aVal: @[
-                # Lines
-                Parameter(
-                  kind: pkArray,
-                  aVal: @[
-                    # Line 1
-                    Parameter(
-                      kind: pkArray,
-                      aVal: @[
-                        Parameter(
-                          kind: pkObject,
-                          oVal: @[
-                            ("contents", " 1 ".toParam),
-                            ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
-                          ]
-                        ),
-                        Parameter(
-                          kind: pkObject,
-                          oVal: @[
-                            ("contents", "my first string".toParam),
-                            ("face", faceParam("default", "default"))
-                          ]
-                        ),
-                        Parameter(
-                          kind: pkObject,
-                          oVal: @[
-                            ("contents", " and more".toParam),
-                            ("face", faceParam("red", "black", [italic]))
-                          ]
-                        ),
-                      ]
-                    ),
-                    # Line 2
-                    Parameter(
-                      kind: pkArray,
-                      aVal: @[
-                        Parameter(
-                          kind: pkObject,
-                          oVal: @[
-                            ("contents", " 2 ".toParam),
-                            ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
-                          ]
-                        ),
-                        Parameter(
-                          kind: pkObject,
-                          oVal: @[
-                            ("contents", "next line".toParam),
-                            ("face", faceParam("red", "black", [italic]))
-                          ]
-                        ),
-                      ]
-                    ),
-                  ]
-                ),
-                # Cursors
-                Parameter(
-                  kind: pkArray,
-                  aVal: @[
-                    faceParam("default", "default", []),
-                    faceParam("blue", "black", [])
-                  ]
-                )
-              ]
-            )
-          )
-        )
       ]
     )
   )
@@ -409,3 +339,84 @@ of this documentation as "data to draw".
       step.description = markdown(step.description, links)
 
   interactions
+
+const dataReferences* = block:
+  var dataReferences: seq[DataReference]
+
+  dataReferences.add(
+    DataReference(
+      title: "Data to draw",
+      description: """
+On many occasions the client will receive the data that should be drawn on the
+screen. For now it copies what Kakoune does and will be changed in future.
+""",
+      data: Parameter(
+        kind: pkArray,
+        aVal: @[
+          # Lines
+          Parameter(
+            kind: pkArray,
+            aVal: @[
+              # Line 1
+              Parameter(
+                kind: pkArray,
+                aVal: @[
+                  Parameter(
+                    kind: pkObject,
+                    oVal: @[
+                      ("contents", " 1 ".toParam),
+                      ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
+                    ]
+                  ),
+                  Parameter(
+                    kind: pkObject,
+                    oVal: @[
+                      ("contents", "my first string".toParam),
+                      ("face", faceParam("default", "default"))
+                    ]
+                  ),
+                  Parameter(
+                    kind: pkObject,
+                    oVal: @[
+                      ("contents", " and more".toParam),
+                      ("face", faceParam("red", "black", [italic]))
+                    ]
+                  ),
+                ]
+              ),
+              # Line 2
+              Parameter(
+                kind: pkArray,
+                aVal: @[
+                  Parameter(
+                    kind: pkObject,
+                    oVal: @[
+                      ("contents", " 2 ".toParam),
+                      ("face", faceParam("#fcfcfc", "#fedcdc", [reverse, bold]))
+                    ]
+                  ),
+                  Parameter(
+                    kind: pkObject,
+                    oVal: @[
+                      ("contents", "next line".toParam),
+                      ("face", faceParam("red", "black", [italic]))
+                    ]
+                  ),
+                ]
+              ),
+            ]
+          ),
+          # Cursors
+          Parameter(
+            kind: pkArray,
+            aVal: @[
+              faceParam("default", "default", []),
+              faceParam("blue", "black", [])
+            ]
+          )
+        ]
+      )
+    )
+  )
+
+  dataReferences
