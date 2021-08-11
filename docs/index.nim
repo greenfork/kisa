@@ -29,6 +29,7 @@ proc renderStepCode(step: Step): string =
         error.toCode(step.pretty, 1).sanitizeHtml.colorizeJson
 
 func replaceLinks(str: string, dataReferences: seq[DataReference]): string =
+  ## Replaces formatted string "%name%" with an anchor with href="#name".
   result = str
   for dataReference in dataReferences:
     result = result.replace(dataReference.title.linkFormat, dataReference.anchor)
