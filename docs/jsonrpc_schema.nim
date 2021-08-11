@@ -180,17 +180,18 @@ const interactions* = block:
     Interaction(
       title: "Initialize a client",
       description: """
-The first thing the client should do is to connect to the server.
+This is the very first thing the client should do.
+Client connects to the server and receives a confirmation.
 """,
       steps: @[
         Step(
           kind: skOther,
           description: """
-The first thing to do is to send a connection request to unix domain socket which
-is located at user runtime directory inside `kisa` directory with an <ID> of a
-currently running session (by convention it is the process ID of the running server).
-Below is an example for a Zig language, see the documentation of
-[socket(2)] and [connect(2)] for more information.
+The first thing to do is to send a connection request to the unix domain socket
+of type seqpacket which is located at the user runtime directory inside `kisa`
+directory with an <ID> of a currently running session (by convention it is the
+process ID of the running server). Below is an example for a Zig language, see
+the documentation of [socket(2)] and [connect(2)] for more information.
 
 [socket(2)]: https://linux.die.net/man/2/socket
 [connect(2)]: https://linux.die.net/man/2/connect
@@ -198,7 +199,8 @@ Below is an example for a Zig language, see the documentation of
           other: """
 const std = @import("std");
 const os = std.os;
-const allocator = ...;
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var allocator = &gpa.allocator;
 const address = allocator.create(std.net.Address);
 address.* = try std.net.Address.initUnix("/var/run/user/1000/kisa/<ID>");
 const socket = try os.socket(
@@ -229,6 +231,7 @@ After that the server notifies the client that the connection was accepted.
     Interaction(
       title: "Deinitialize a client",
       description: """
+This is the very last thing the client should do.
 Client notifies the server that it is going to be deinitialized. If this is
 the last client of the server, the server quits.
 """,
