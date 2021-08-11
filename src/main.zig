@@ -152,12 +152,11 @@ pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
     server: ServerRepresentationForClient,
-    // TODO: add client ID which is received from the Server on connect.
     last_message_id: u32 = 0,
 
     const Self = @This();
 
-    pub fn init(ally: *mem.Allocator, ui: UI) !Self {
+    pub fn init(ally: *mem.Allocator, ui: UI) Self {
         return Self{
             .ally = ally,
             .ui = ui,
@@ -166,7 +165,8 @@ pub const Client = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.sendExitNotify() catch {};
+        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
+        self.server.send(message) catch {};
         self.server.deinitComms();
     }
 
@@ -180,40 +180,6 @@ pub const Client = struct {
         assert(mem.eql(u8, "connected", request.method()));
     }
 
-    /// Notify the server that this client is closing, but send a synchronous jsonrpc request,
-    /// we want to receive an acknowledgement from the server.
-    pub fn sendExitNotify(self: *Client) !void {
-        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
-        try self.server.send(message);
-    }
-
-    // TODO: better name
-    pub fn acceptText(self: *Client) !void {
-        var packet_buf: [ServerRepresentationForClient.max_packet_size]u8 = undefined;
-        var message_buf: [ServerRepresentationForClient.max_message_size]u8 = undefined;
-        const packet = try self.server.readPacket(&packet_buf);
-        const message = try jsonrpc.SimpleRequest.parseAlloc(&message_buf, packet);
-        if (mem.eql(u8, "draw", message.method)) {
-            const params = message.params.Array;
-            try self.ui.draw(
-                params[0].String,
-                @intCast(u32, params[1].Integer),
-                @intCast(u32, params[1].Integer),
-            );
-        } else {
-            return error.UnrecognizedMethod;
-        }
-    }
-
-    // pub fn sendFileToOpen(self: *Client, filename: []u8) !void {
-    //     self.last_message_id += 1;
-    //     var message = self.emptyJsonRpcRequest();
-    //     message.method = "openFile";
-    //     message.params = .{ .String = filename };
-    //     try message.writeTo(self.server.writer());
-    //     try self.server.writeEndByte();
-    // }
-
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
         const id = @intCast(i64, self.nextMessageId());
         const message = KeypressRequest.init(
@@ -226,13 +192,14 @@ pub const Client = struct {
         try self.waitForResponse(id);
     }
 
-    // TODO: deal with error responses.
     pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
         var message_buf: [ServerRepresentationForClient.max_message_size]u8 = undefined;
         const maybe_response = try self.server.recv(jsonrpc.SimpleResponse, &message_buf);
-        const response = maybe_response orelse return error.ClosedForReading;
-        _ = response.result() orelse return error.ErrorResponse;
-        if (!std.meta.eql(id, response.id)) return error.InvalidIdResponse;
+        const response = maybe_response orelse return error.ServerClosedConnection;
+        switch (response) {
+            .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
+            .Error => return error.ErrorResponse,
+        }
     }
 
     pub fn nextMessageId(self: *Self) u32 {
@@ -355,6 +322,8 @@ pub const Server = struct {
     }
 };
 
+// TODO: do we need it separately from client?
+// TODO: do we need more data than just `comms`?
 /// How Server sees a Client.
 pub const ClientRepresentationForServer = struct {
     comms: transport.CommunicationResources,
@@ -421,7 +390,7 @@ pub const Application = struct {
                     // Client
                     var uivt100 = try UIVT100.init();
                     var ui = UI.init(uivt100);
-                    var client = try Client.init(ally, ui);
+                    var client = Client.init(ally, ui);
                     try client.register(address);
                     return Self{ .client = client };
                 }
@@ -430,7 +399,7 @@ pub const Application = struct {
                 const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
-                var client = try Client.init(ally, ui);
+                var client = Client.init(ally, ui);
                 const address_for_client = try ally.create(net.Address);
                 address_for_client.* = address.*;
                 try client.register(address_for_client);
@@ -626,8 +595,7 @@ pub const Keys = struct {
             self.modifiers = self.modifiers | num_lock_bit;
         }
 
-        // TODO: change scope to private
-        pub fn utf8len(self: Key) usize {
+        fn utf8len(self: Key) usize {
             var length: usize = 0;
             for (self.utf8) |byte| {
                 if (byte == 0) break;
