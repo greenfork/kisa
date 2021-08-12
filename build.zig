@@ -5,8 +5,8 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     const exe = b.addExecutable("kisa", "src/main.zig");
-    exe.addPackagePath("zzz", "zzz/src/main.zig");
-    exe.addPackagePath("known-folders", "known-folders/known-folders.zig");
+    exe.addPackagePath("zzz", "libs/zzz/src/main.zig");
+    exe.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
@@ -31,8 +31,8 @@ pub fn build(b: *std.build.Builder) void {
     {
         var test_cases = b.addTest("src/main.zig");
         test_cases.setFilter("main:");
-        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -44,8 +44,8 @@ pub fn build(b: *std.build.Builder) void {
         // Forked tests must be run 1 at a time, otherwise they interfere with other tests.
         var test_cases = b.addTest("src/main.zig");
         test_cases.setFilter("fork/socket:");
-        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -55,8 +55,8 @@ pub fn build(b: *std.build.Builder) void {
     {
         const test_cases = b.addTest("src/state.zig");
         test_cases.setFilter("state:");
-        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -66,8 +66,8 @@ pub fn build(b: *std.build.Builder) void {
     {
         const test_cases = b.addTest("src/config.zig");
         test_cases.setFilter("config:");
-        test_cases.addPackagePath("zzz", "zzz/src/main.zig");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -86,7 +86,7 @@ pub fn build(b: *std.build.Builder) void {
     {
         const test_cases = b.addTest("src/transport.zig");
         test_cases.setFilter("transport/fork1:");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);
@@ -96,7 +96,7 @@ pub fn build(b: *std.build.Builder) void {
     {
         const test_cases = b.addTest("src/transport.zig");
         test_cases.setFilter("transport/fork2:");
-        test_cases.addPackagePath("known-folders", "known-folders/known-folders.zig");
+        test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_step.dependOn(&test_cases.step);

@@ -1,6 +1,6 @@
 [submodule "zzz"]
-	path = zzz
+	path = libs/zzz
 	url = https://github.com/gruebite/zzz
 [submodule "known-folders"]
-	path = known-folders
+	path = libs/known-folders
 	url = https://github.com/ziglibs/known-folders.git
