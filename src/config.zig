@@ -6,6 +6,21 @@ const zzz = @import("zzz");
 const EventKind = @import("main.zig").EventKind;
 const Keys = @import("main.zig").Keys;
 
+// TODO: display errors from config parsing.
+
+pub const allowed_keypress_events = [_]EventKind{
+    .noop,
+    .insert_character,
+    .cursor_move_down,
+    .cursor_move_left,
+    .cursor_move_right,
+    .cursor_move_up,
+    .quit,
+    .save,
+    .delete_line,
+    .delete_word,
+};
+
 /// Must call first `init`, then `setup` for initialization.
 /// Call `addConfigFile` to continuously add more and more config files in order of
 /// precedence from lowest to highest. After that corresponding fields such as `keymap`
@@ -102,15 +117,24 @@ pub const Config = struct {
                         };
                         var actions_it = binding.nextChild(null);
                         while (actions_it) |action| : (actions_it = binding.nextChild(actions_it)) {
-                            switch (action.value) {
-                                .String => |val| {
-                                    if (std.meta.stringToEnum(EventKind, val)) |event_kind| {
-                                        try key_binding.append(event_kind);
-                                    } else {
-                                        return error.UnknownKeyAction;
-                                    }
-                                },
-                                else => unreachable,
+                            action_loop: {
+                                switch (action.value) {
+                                    .String => |val| {
+                                        const event_kind = std.meta.stringToEnum(
+                                            EventKind,
+                                            val,
+                                        ) orelse return error.UnknownKeyAction;
+                                        for (allowed_keypress_events) |allowed_event_kind| {
+                                            if (event_kind == allowed_event_kind) {
+                                                try key_binding.append(event_kind);
+                                                break :action_loop;
+                                            }
+                                        }
+                                        std.debug.print("{s}\n", .{event_kind});
+                                        return error.UnallowedKeyAction;
+                                    },
+                                    else => unreachable,
+                                }
                             }
                         }
                     }
