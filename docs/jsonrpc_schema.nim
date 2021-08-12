@@ -232,7 +232,7 @@ const std = @import("std");
 const os = std.os;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = &gpa.allocator;
-const address = allocator.create(std.net.Address);
+const address = try allocator.create(std.net.Address);
 address.* = try std.net.Address.initUnix("/var/run/user/1000/kisa/<ID>");
 const socket = try os.socket(
     os.AF_UNIX,
