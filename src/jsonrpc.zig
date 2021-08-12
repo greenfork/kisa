@@ -1,6 +1,3 @@
-// Limitations:
-// 1. No batch mode, contributions are welcome.
-
 const std = @import("std");
 const json = std.json;
 const mem = std.mem;
