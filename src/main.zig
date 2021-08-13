@@ -5,12 +5,10 @@ const io = std.io;
 const mem = std.mem;
 const net = std.net;
 const assert = std.debug.assert;
+const state = @import("state.zig");
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
 const transport = @import("transport.zig");
-
-const ClientId = u32;
-const ServerId = u32;
 
 pub const MoveDirection = enum {
     up,
@@ -89,6 +87,7 @@ pub const EventKind = enum {
     save,
     delete_word,
     delete_line,
+    open_file,
 };
 
 /// Event is a generic notion of an action happenning on the server, usually as a response to
@@ -111,31 +110,32 @@ pub const Event = union(EventKind) {
     delete_word: u32,
     /// Value is multiplier.
     delete_line: u32,
+    /// Value is absolute file path.
+    open_file: []const u8,
 };
 
 /// Event dispatcher processes any events happening on the server. The result is usually
 /// mutation of state, firing of registered hooks if any, and sending response back to client.
 pub const EventDispatcher = struct {
+    commands: *Commands,
+
     const Self = @This();
 
-    pub fn init() Self {
-        return .{ .text_buffer = text_buffer };
-    }
-
-    pub fn dispatch(self: Self, event: Event) !void {
+    pub fn dispatch(self: *Self, event: Event, client: Server.ClientRepresentation) !void {
         switch (event) {
-            .noop => {},
-            .quit => {},
-            .save => {},
-            .insert_character => |val| {
-                self.cmd.insertCharacter(val);
+            .noop => @panic("Not implemented"),
+            .quit => @panic("Not implemented"),
+            .save => @panic("Not implemented"),
+            .insert_character => @panic("Not implemented"),
+            .cursor_move_down => @panic("Not implemented"),
+            .cursor_move_left => @panic("Not implemented"),
+            .cursor_move_up => @panic("Not implemented"),
+            .cursor_move_right => @panic("Not implemented"),
+            .delete_word => @panic("Not implemented"),
+            .delete_line => @panic("Not implemented"),
+            .open_file => |path| {
+                try self.commands.openFile(client, path);
             },
-            .cursor_move_down => {},
-            .cursor_move_left => {},
-            .cursor_move_up => {},
-            .cursor_move_right => {},
-            .delete_word => {},
-            .delete_line => {},
         }
     }
 };
@@ -143,15 +143,38 @@ pub const EventDispatcher = struct {
 /// Commands and occasionally queries is a general interface for interacting with the State
 /// of a text editor.
 pub const Commands = struct {
-    pub fn init() Commands {
-        return Commands{};
+    workspace: *state.Workspace,
+
+    const Self = @This();
+
+    pub fn openFile(
+        self: Self,
+        client: Server.ClientRepresentation,
+        path: []const u8,
+    ) !void {
+        // TODO: open existing text buffer.
+        client.state.active_display_state = try self.workspace.newTextBuffer(
+            client.state.active_display_state,
+            state.TextBuffer.InitParams{
+                .path = path,
+                .name = path,
+                .content = null,
+            },
+        );
+    }
+
+    /// Caller owns the memory.
+    fn openFileAndRead(ally: *mem.Allocator, path: []const u8) ![]u8 {
+        var file = try std.fs.openFileAbsolute(path, .{});
+        defer file.close();
+        return try file.readToEndAlloc(ally, std.math.maxInt(usize));
     }
 };
 
 pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
-    server: ServerRepresentationForClient,
+    server: ServerForClient,
     last_message_id: u32 = 0,
 
     const Self = @This();
@@ -172,12 +195,25 @@ pub const Client = struct {
 
     pub fn register(self: *Self, address: *net.Address) !void {
         defer self.ally.destroy(address);
-        self.server = ServerRepresentationForClient.initWithUnixSocket(
+        self.server = ServerForClient.initWithUnixSocket(
             try transport.connectToUnixSocket(address),
         );
-        var request_buf: [ServerRepresentationForClient.max_method_size]u8 = undefined;
-        const request = (try self.server.recv(jsonrpc.SimpleRequest, &request_buf)).?;
-        assert(mem.eql(u8, "connected", request.method()));
+        var request_buf: [transport.max_method_size]u8 = undefined;
+        const response = (try self.server.recv(jsonrpc.SimpleResponse, &request_buf)).?;
+        assert(response.result().Bool);
+        const message_id = self.nextMessageId();
+        const message = Server.InitClientRequest.init(
+            jsonrpc.IdValue{ .Integer = message_id },
+            "initialize",
+            Server.ClientRepresentation.InitParams{
+                .path = "/home/grfork/reps/kisa/kisarc.zzz",
+                .readonly = false,
+                .text_area_rows = 80,
+                .text_area_cols = 24,
+            },
+        );
+        try self.server.send(message);
+        try self.waitForResponse(jsonrpc.IdValue{ .Integer = message_id });
     }
 
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
@@ -193,9 +229,11 @@ pub const Client = struct {
     }
 
     pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
-        var message_buf: [ServerRepresentationForClient.max_message_size]u8 = undefined;
-        const maybe_response = try self.server.recv(jsonrpc.SimpleResponse, &message_buf);
-        const response = maybe_response orelse return error.ServerClosedConnection;
+        var message_buf: [transport.max_message_size]u8 = undefined;
+        const response = (try self.server.recv(
+            jsonrpc.SimpleResponse,
+            &message_buf,
+        )) orelse return error.ServerClosedConnection;
         switch (response) {
             .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
             .Error => return error.ErrorResponse,
@@ -208,47 +246,130 @@ pub const Client = struct {
     }
 };
 
+pub const ClientMessageMethod = enum {
+    /// Params has information about the key.
+    keypress,
+    /// Sent by client when it quits.
+    quitted,
+    /// First value in params is the event kind, others are arguments to this event.
+    fire_event,
+    /// Provide initial parameters to initialize a client.
+    initialize,
+};
+
 pub const Server = struct {
     ally: *mem.Allocator,
     config: Config,
     watcher: transport.Watcher,
-    last_client_id: ClientId = 0,
+    event_dispatcher: EventDispatcher,
+    workspace: state.Workspace,
+    clients: std.ArrayList(state.Client),
+    commands: Commands,
+    last_client_id: state.Workspace.Id = 0,
 
     const Self = @This();
 
+    const ClientRepresentation = struct {
+        comms: transport.CommunicationResources,
+        state: *state.Client,
+        // id: state.Workspace.Id,
+        // active_display_state: state.ActiveDisplayState,
+
+        /// Parameters necessary to create new state in workspace and get `active_display_state`.
+        const InitParams = struct {
+            path: []const u8,
+            readonly: bool,
+            text_area_rows: u32,
+            text_area_cols: u32,
+        };
+
+        pub usingnamespace transport.CommunicationMixin(@This());
+    };
+    const InitClientRequest = jsonrpc.Request(ClientRepresentation.InitParams);
+
+    /// `initDynamic` must be called right after `init`.
     pub fn init(ally: *mem.Allocator, address: *net.Address) !Self {
         defer ally.destroy(address);
         const listen_socket = try transport.bindUnixSocket(address);
         var watcher = transport.Watcher.init(ally);
         try watcher.addListenSocket(listen_socket, 0);
+        var workspace = state.Workspace.init(ally);
+        try workspace.initDefaultBuffers();
         return Self{
             .ally = ally,
             .config = try readConfig(ally),
             .watcher = watcher,
+            .workspace = workspace,
+            .clients = std.ArrayList(state.Client).init(ally),
+            .event_dispatcher = undefined,
+            .commands = undefined,
         };
+    }
+
+    /// Initializes all the elements with dynamic memory which would require to reference
+    /// objects from the stack if it were in `init`, resulting in error.
+    /// Must be called right after `init`.
+    pub fn initDynamic(self: *Self) void {
+        self.commands = Commands{ .workspace = &self.workspace };
+        self.event_dispatcher = EventDispatcher{ .commands = &self.commands };
     }
 
     pub fn deinit(self: *Self) void {
         self.config.deinit();
         self.watcher.deinit();
+        self.workspace.deinit();
+        for (self.clients.items) |*client| client.deinit();
+        self.clients.deinit();
     }
 
-    fn findClient(self: Self, id: ClientId) ?ClientRepresentationForServer {
-        if (self.watcher.findFileDescriptor(id)) |fd_result| {
-            return ClientRepresentationForServer.initWithUnixSocket(fd_result.fd);
-        }
-        return null;
+    fn findClient(self: Self, id: state.Workspace.Id) ?ClientRepresentation {
+        const watcher_result = self.watcher.findFileDescriptor(id) orelse return null;
+        const client = blk: {
+            for (self.clients.items) |*client| {
+                if (client.id == id) {
+                    break :blk client;
+                }
+            }
+            return null;
+        };
+        return ClientRepresentation{
+            .comms = transport.CommunicationResources.initWithUnixSocket(watcher_result.fd),
+            .state = client,
+        };
     }
 
-    fn removeClient(self: *Self, id: ClientId) void {
+    fn addClient(
+        self: *Self,
+        id: state.Workspace.Id,
+        socket: os.socket_t,
+        active_display_state: state.ActiveDisplayState,
+    ) !ClientRepresentation {
+        try self.watcher.addConnectionSocket(socket, id);
+        errdefer self.watcher.removeFileDescriptor(id);
+        const client = try self.clients.addOne();
+        client.* = state.Client{ .id = id, .active_display_state = active_display_state };
+        return ClientRepresentation{
+            .comms = transport.CommunicationResources.initWithUnixSocket(socket),
+            .state = client,
+        };
+    }
+
+    fn removeClient(self: *Self, id: state.Workspace.Id) void {
         self.watcher.removeFileDescriptor(id);
+        for (self.clients.items) |client, idx| {
+            if (client.id == id) {
+                _ = self.clients.swapRemove(idx);
+                break;
+            }
+        }
     }
 
+    // TODO: send errors to client.
     /// Main loop of the server, listens for requests and sends responses.
     pub fn loop(self: *Self) !void {
-        var packet_buf: [ClientRepresentationForServer.max_packet_size]u8 = undefined;
-        var method_buf: [ClientRepresentationForServer.max_method_size]u8 = undefined;
-        var message_buf: [ClientRepresentationForServer.max_message_size]u8 = undefined;
+        var packet_buf: [transport.max_packet_size]u8 = undefined;
+        var method_buf: [transport.max_method_size]u8 = undefined;
+        var message_buf: [transport.max_message_size]u8 = undefined;
         while (true) {
             switch (try self.watcher.pollReadable()) {
                 .success => |polled_data| {
@@ -256,34 +377,101 @@ pub const Server = struct {
                         .listen_socket => {
                             const accepted_socket = try os.accept(polled_data.fd, null, null, 0);
                             const client_id = self.nextClientId();
-                            try self.watcher.addConnectionSocket(accepted_socket, client_id);
-                            errdefer self.watcher.removeFileDescriptor(client_id);
-                            var client = ClientRepresentationForServer.initWithUnixSocket(
+                            const client = try self.addClient(
+                                client_id,
                                 accepted_socket,
+                                // This `empty` is similar to `undefined`, we can't use it and have
+                                // to initialize first. With `empty` errors should be better. We can
+                                // also make it nullable but it's a pain to always account for a
+                                // nullable field.
+                                state.ActiveDisplayState.empty,
                             );
                             errdefer self.removeClient(client_id);
-                            var message = jsonrpc.SimpleRequest.initNotification("connected", null);
+                            const message = jsonrpc.SimpleResponse.initResult(null, .{ .Bool = true });
                             try client.send(message);
                         },
                         .connection_socket => {
+                            // TODO: check if active display state is empty but we try to do something.
                             const client =
                                 self.findClient(polled_data.id) orelse return error.ClientNotFound;
                             const packet = (try client.readPacket(&packet_buf)).?;
-                            const method = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
-                            if (mem.eql(u8, "keypress", method)) {
-                                const keypress_message = try KeypressRequest.parse(
-                                    &message_buf,
-                                    packet,
-                                );
-                                std.debug.print("keypress_message: {}\n", .{keypress_message});
-                            } else if (mem.eql(u8, "quitted", method)) {
-                                self.removeClient(polled_data.id);
-                                if (self.watcher.fds.len == 1) {
-                                    self.deinit();
-                                    break;
-                                }
-                            } else {
-                                @panic("unknown method in server loop");
+                            const method_str = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+                            const method = std.meta.stringToEnum(
+                                ClientMessageMethod,
+                                method_str,
+                            ) orelse @panic("Unknown jsonrpc method from client");
+                            switch (method) {
+                                .keypress => {
+                                    const keypress_message = try KeypressRequest.parse(
+                                        &message_buf,
+                                        packet,
+                                    );
+                                    std.debug.print("keypress_message: {}\n", .{keypress_message});
+                                },
+                                .fire_event => {
+                                    const message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
+                                    if (message == .RequestNoParams or
+                                        message == .NotificationNoParams)
+                                    {
+                                        @panic("No params in message");
+                                    }
+                                    const params = message.params();
+                                    if (params.len == 0) {
+                                        @panic("Command must not have an empty array as argument");
+                                    }
+                                    if (params[0] != .String) {
+                                        @panic("First params of a command must be a string");
+                                    }
+                                    const event_kind = std.meta.stringToEnum(
+                                        EventKind,
+                                        params[0].String,
+                                    ) orelse @panic("Unknown event kind in a command");
+                                    switch (event_kind) {
+                                        .open_file => {
+                                            if (params.len != 1) @panic("Must have at least 1 argument");
+                                            if (params[1] != .String) @panic("Argument must be a string");
+                                            const event = Event{ .open_file = params[1].String };
+                                            // TODO: do something with the result.
+                                            try self.event_dispatcher.dispatch(event, client);
+                                        },
+                                        else => @panic("Command not implemented"),
+                                    }
+                                },
+                                .initialize => {
+                                    // TODO: error handling.
+                                    const message = try InitClientRequest.parse(&message_buf, packet);
+                                    const client_init_params = message.params();
+                                    for (self.clients.items) |*c| {
+                                        if (client.state.id == c.id) {
+                                            c.active_display_state = try self.workspace.new(
+                                                state.TextBuffer.InitParams{
+                                                    .content = null,
+                                                    .path = client_init_params.path,
+                                                    .name = client_init_params.path,
+                                                    .readonly = client_init_params.readonly,
+                                                },
+                                                state.WindowPane.InitParams{
+                                                    .text_area_rows = client_init_params.text_area_rows,
+                                                    .text_area_cols = client_init_params.text_area_cols,
+                                                },
+                                            );
+                                            break;
+                                        }
+                                    }
+                                    // TODO: id could be null.
+                                    const response = jsonrpc.SimpleResponse.initResult(
+                                        message.id(),
+                                        .{ .Bool = true },
+                                    );
+                                    try client.send(response);
+                                },
+                                .quitted => {
+                                    self.removeClient(polled_data.id);
+                                    if (self.watcher.fds.len == 1) {
+                                        self.deinit();
+                                        break;
+                                    }
+                                },
                             }
                         },
                     }
@@ -309,36 +497,15 @@ pub const Server = struct {
         return config;
     }
 
-    /// Caller owns the memory.
-    fn openFileAndRead(ally: *mem.Allocator, path: []const u8) ![]u8 {
-        var file = try std.fs.openFileAbsolute(path, .{});
-        defer file.close();
-        return try file.readToEndAlloc(ally, std.math.maxInt(usize));
-    }
-
-    fn nextClientId(self: *Self) ClientId {
+    // Ids start at 1 so that for `Watcher` 0 is reserved for a listen socket.
+    fn nextClientId(self: *Self) state.Workspace.Id {
         self.last_client_id += 1;
         return self.last_client_id;
     }
 };
 
-// TODO: do we need it separately from client?
-// TODO: do we need more data than just `comms`?
-/// How Server sees a Client.
-pub const ClientRepresentationForServer = struct {
-    comms: transport.CommunicationResources,
-
-    const Self = @This();
-
-    pub fn deinit(self: Self) void {
-        self.deinitComms();
-    }
-
-    pub usingnamespace transport.CommunicationMixin(@This());
-};
-
-/// How Client sees a Server.
-pub const ServerRepresentationForClient = struct {
+/// How Client sees the Server.
+pub const ServerForClient = struct {
     comms: transport.CommunicationResources,
 
     const Self = @This();
@@ -411,6 +578,7 @@ pub const Application = struct {
 
     fn startServer(ally: *mem.Allocator, address: *net.Address) !void {
         var server = try Server.init(ally, address);
+        server.initDynamic();
         errdefer server.deinit();
         try server.loop();
     }

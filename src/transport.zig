@@ -13,6 +13,9 @@ pub const TransportKind = enum {
     un_socket,
 };
 
+pub const max_packet_size: usize = 1024 * 16;
+pub const max_method_size: usize = 1024;
+pub const max_message_size: usize = max_packet_size;
 const max_connect_retries = 50;
 const connect_retry_delay = std.time.ns_per_ms * 5;
 const listen_socket_backlog = 10;
@@ -96,6 +99,12 @@ pub const CommunicationResources = union(TransportKind) {
     un_socket: struct {
         socket: os.socket_t,
     },
+
+    const Self = @This();
+
+    pub fn initWithUnixSocket(socket: os.socket_t) Self {
+        return Self{ .un_socket = .{ .socket = socket } };
+    }
 };
 
 /// `CommunicationContainer` must be a container which has `comms` field
@@ -103,14 +112,9 @@ pub const CommunicationResources = union(TransportKind) {
 pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
     return struct {
         const Self = CommunicationContainer;
-        pub const max_packet_size: usize = 1024 * 16;
-        pub const max_method_size: usize = 1024;
-        pub const max_message_size: usize = max_packet_size;
 
         pub fn initWithUnixSocket(socket: os.socket_t) Self {
-            return Self{
-                .comms = CommunicationResources{ .un_socket = .{ .socket = socket } },
-            };
+            return Self{ .comms = CommunicationResources.initWithUnixSocket(socket) };
         }
 
         pub fn deinitComms(self: Self) void {

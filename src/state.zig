@@ -3,6 +3,18 @@ const testing = std.testing;
 const mem = std.mem;
 const assert = std.debug.assert;
 
+/// How Server sees a Client.
+pub const Client = struct {
+    id: Workspace.Id,
+    active_display_state: ActiveDisplayState,
+
+    const Self = @This();
+
+    pub fn deinit(self: Self) void {
+        _ = self;
+    }
+};
+
 /// Currently active elements that are displayed on the client. Each client has 1 such struct
 /// assigned but it is stored on the server still.
 /// Assumes that these values can only be changed via 1 client and are always present in Workspace.
@@ -10,6 +22,12 @@ pub const ActiveDisplayState = struct {
     display_window_id: Workspace.Id,
     window_pane_id: Workspace.Id,
     window_tab_id: Workspace.Id,
+
+    pub const empty = ActiveDisplayState{
+        .display_window_id = 0,
+        .window_pane_id = 0,
+        .window_tab_id = 0,
+    };
 };
 
 // More possible modes:
@@ -88,16 +106,36 @@ pub const Workspace = struct {
     window_tab_id_counter: Id = 0,
     window_pane_id_counter: Id = 0,
 
+    pub const Id = u32;
     const Self = @This();
-    const Id = u32;
     const TextBufferNode = std.TailQueue(TextBuffer).Node;
     const DisplayWindowNode = std.TailQueue(DisplayWindow).Node;
     const WindowTabNode = std.TailQueue(WindowTab).Node;
     const WindowPaneNode = std.TailQueue(WindowPane).Node;
     const IdNode = std.TailQueue(Id).Node;
+    const debug_buffer_id = 1;
+    const scratch_buffer_id = 2;
 
     pub fn init(ally: *mem.Allocator) Self {
         return Self{ .ally = ally };
+    }
+
+    pub fn initDefaultBuffers(self: *Self) !void {
+        const debug_buffer = try self.createTextBuffer(TextBuffer.InitParams{
+            .path = null,
+            .name = "*debug*",
+            .content = "Debug buffer for error messages and debug information",
+            .readonly = true,
+        });
+        errdefer self.destroyTextBuffer(debug_buffer.data.id);
+        const scratch_buffer = try self.createTextBuffer(TextBuffer.InitParams{
+            .path = null,
+            .name = "*scratch*",
+            .content = "Scratch buffer for notes and drafts",
+        });
+        errdefer self.destroyTextBuffer(scratch_buffer.data.id);
+        assert(debug_buffer.data.id == debug_buffer_id);
+        assert(scratch_buffer.data.id == scratch_buffer_id);
     }
 
     pub fn deinit(self: Self) void {
@@ -127,7 +165,30 @@ pub const Workspace = struct {
         }
     }
 
-    /// Initializes all the state elements for a new workspace.
+    pub fn checkInit(self: Self) void {
+        var text_buffer = self.text_buffers.first;
+        while (text_buffer) |tb| {
+            text_buffer = tb.next;
+            assert(tb.data.id != 0);
+        }
+        var display_window = self.display_windows.first;
+        while (display_window) |dw| {
+            display_window = dw.next;
+            assert(dw.data.id != 0);
+        }
+        var window_pane = self.window_panes.first;
+        while (window_pane) |wp| {
+            window_pane = wp.next;
+            assert(wp.data.id != 0);
+        }
+        var window_tab = self.window_tabs.first;
+        while (window_tab) |wt| {
+            window_tab = wt.next;
+            assert(wt.data.id != 0);
+        }
+    }
+
+    /// Initializes all the state elements for a new Client.
     pub fn new(
         self: *Self,
         text_buffer_init_params: TextBuffer.InitParams,
@@ -151,6 +212,8 @@ pub const Workspace = struct {
         window_pane.data.window_tab_id = window_tab.data.id;
         display_window.data.window_pane_id = window_pane.data.id;
         window_pane.data.display_window_id = display_window.data.id;
+
+        self.checkInit();
 
         return ActiveDisplayState{
             .display_window_id = display_window.data.id,
@@ -283,7 +346,7 @@ pub const Workspace = struct {
 
     fn createTextBuffer(self: *Self, init_params: TextBuffer.InitParams) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
-        text_buffer.data = TextBuffer.init(self, init_params);
+        text_buffer.data = try TextBuffer.init(self, init_params);
         self.text_buffer_id_counter += 1;
         text_buffer.data.id = self.text_buffer_id_counter;
         self.text_buffers.append(text_buffer);
@@ -404,17 +467,16 @@ fn checkLastStateItemsCongruence(workspace: Workspace, active_display_state: Act
 test "state: new workspace" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
-    var text = try testing.allocator.dupe(u8, "hello");
-    var name = try testing.allocator.dupe(u8, "name");
+    try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = text,
+        .content = "hello",
         .path = null,
-        .name = name,
+        .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
 
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 3), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
@@ -427,28 +489,25 @@ test "state: new workspace" {
 test "state: new text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
-    var old_text = try testing.allocator.dupe(u8, "hello");
-    var old_name = try testing.allocator.dupe(u8, "name");
+    try workspace.initDefaultBuffers();
     const old_text_buffer_init_params = TextBuffer.InitParams{
-        .content = old_text,
+        .content = "hello",
         .path = null,
-        .name = old_name,
+        .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(old_text_buffer_init_params, window_pane_init_params);
-    var text = try testing.allocator.dupe(u8, "hello");
-    var name = try testing.allocator.dupe(u8, "name");
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = text,
+        .content = "hello2",
         .path = null,
-        .name = name,
+        .name = "name2",
     };
     const active_display_state = try workspace.newTextBuffer(
         old_active_display_state,
         text_buffer_init_params,
     );
 
-    try testing.expectEqual(@as(usize, 2), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 4), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
@@ -461,13 +520,11 @@ test "state: new text buffer" {
 test "state: open existing text buffer" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
-
-    var old_text = try testing.allocator.dupe(u8, "hello");
-    var old_name = try testing.allocator.dupe(u8, "name");
+    try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = old_text,
+        .content = "hello",
         .path = null,
-        .name = old_name,
+        .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -476,7 +533,7 @@ test "state: open existing text buffer" {
         workspace.text_buffers.last.?.data.id,
     );
 
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 3), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
@@ -487,12 +544,11 @@ test "state: open existing text buffer" {
 }
 
 test "state: handle failing conditions" {
-    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 7).allocator;
+    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 14).allocator;
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
-    var text = try testing.allocator.dupe(u8, "hello");
-    var name = try testing.allocator.dupe(u8, "name");
-    const text_buffer_init_params = TextBuffer.InitParams{ .content = text, .path = null, .name = name };
+    try workspace.initDefaultBuffers();
+    const text_buffer_init_params = TextBuffer.InitParams{ .content = "hello", .path = null, .name = "name" };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
     try testing.expectError(error.OutOfMemory, workspace.openTextBuffer(
@@ -506,13 +562,11 @@ test "state: handle failing conditions" {
 test "state: new window pane" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
-
-    var old_text = try testing.allocator.dupe(u8, "hello");
-    var old_name = try testing.allocator.dupe(u8, "name");
+    try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = old_text,
+        .content = "hello",
         .path = null,
-        .name = old_name,
+        .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -521,7 +575,7 @@ test "state: new window pane" {
         window_pane_init_params,
     );
 
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 3), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 2), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 2), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
@@ -534,13 +588,11 @@ test "state: new window pane" {
 test "state: close window pane when there are several window panes on window tab" {
     var workspace = Workspace.init(testing.allocator);
     defer workspace.deinit();
-
-    var old_text = try testing.allocator.dupe(u8, "hello");
-    var old_name = try testing.allocator.dupe(u8, "name");
+    try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = old_text,
+        .content = "hello",
         .path = null,
-        .name = old_name,
+        .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -553,7 +605,7 @@ test "state: close window pane when there are several window panes on window tab
         workspace.window_panes.last.?.data.id,
     );
 
-    try testing.expectEqual(@as(usize, 1), workspace.text_buffers.len);
+    try testing.expectEqual(@as(usize, 3), workspace.text_buffers.len);
     try testing.expectEqual(@as(usize, 1), workspace.display_windows.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_panes.len);
     try testing.expectEqual(@as(usize, 1), workspace.window_tabs.len);
@@ -574,36 +626,59 @@ pub const TextBuffer = struct {
     path: ?[]u8,
     /// A textual representation of the buffer name, either path or name for virtual buffer.
     name: []u8,
+    readonly: bool,
     // metrics
     max_line_number: u32 = 0,
 
     const Self = @This();
 
     pub const InitParams = struct {
-        path: ?[]u8,
-        name: []u8,
-        content: []u8,
+        path: ?[]const u8,
+        name: []const u8,
+        content: ?[]const u8,
+        readonly: bool = false,
     };
 
     /// Takes ownership of `path` and `content`, they must be allocated with `workspaces` allocator.
-    pub fn init(workspace: *Workspace, init_params: InitParams) Self {
+    pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
+        // TODO: file reading should be done in text buffer backend.
+        const content = blk: {
+            if (init_params.content) |cont| {
+                break :blk try workspace.ally.dupe(u8, cont);
+            } else if (init_params.path) |p| {
+                var file = try std.fs.openFileAbsolute(p, .{});
+                defer file.close();
+                break :blk try file.readToEndAlloc(workspace.ally, std.math.maxInt(usize));
+            } else {
+                return error.InitParamsMustHaveEitherPathOrContent;
+            }
+        };
+        const path = blk: {
+            if (init_params.path) |p| {
+                break :blk try workspace.ally.dupe(u8, p);
+            } else {
+                break :blk null;
+            }
+        };
+        const name = try workspace.ally.dupe(u8, init_params.name);
         var result = Self{
             .workspace = workspace,
-            .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, init_params.content),
-            .path = init_params.path,
-            .name = init_params.name,
+            .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
+            .path = path,
+            .name = name,
+            .readonly = init_params.readonly,
         };
         result.countMetrics();
         return result;
     }
 
     pub fn deinit(self: Self) void {
-        self.content.deinit();
         var display_window_id = self.display_window_ids.first;
         while (display_window_id) |dw_id| {
             display_window_id = dw_id.next;
             self.workspace.ally.destroy(dw_id);
         }
+        self.content.deinit();
         if (self.path) |p| self.workspace.ally.free(p);
         self.workspace.ally.free(self.name);
     }
