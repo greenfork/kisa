@@ -5,6 +5,7 @@ const io = std.io;
 const mem = std.mem;
 const net = std.net;
 const assert = std.debug.assert;
+const kisa = @import("kisa");
 const state = @import("state.zig");
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
@@ -78,13 +79,14 @@ pub const UI = struct {
 
 pub const EventKind = enum {
     noop,
+    quit,
+    save,
+    request_draw_data,
     insert_character,
     cursor_move_down,
     cursor_move_left,
     cursor_move_up,
     cursor_move_right,
-    quit,
-    save,
     delete_word,
     delete_line,
     open_file,
@@ -96,6 +98,7 @@ pub const Event = union(EventKind) {
     noop,
     quit,
     save,
+    request_draw_data,
     /// Value is inserted character.
     insert_character: u8,
     /// Value is multiplier.
@@ -136,6 +139,9 @@ pub const EventDispatcher = struct {
             .open_file => |path| {
                 try self.commands.openFile(client, path);
             },
+            .request_draw_data => {
+                try self.commands.sendDrawData(client);
+            },
         }
     }
 };
@@ -161,6 +167,20 @@ pub const Commands = struct {
                 .content = null,
             },
         );
+        const message = jsonrpc.SimpleResponse.initResult(
+            jsonrpc.IdValue{ .Integer = client.last_request_id },
+            jsonrpc.Value{ .Bool = true },
+        );
+        try client.send(message);
+    }
+
+    pub fn sendDrawData(self: Self, client: Server.ClientRepresentation) !void {
+        const draw_data = self.workspace.getDrawData(client.state.active_display_state);
+        const message = DrawDataMessage.initResult(
+            jsonrpc.IdValue{ .Integer = client.last_request_id },
+            draw_data,
+        );
+        try client.send(message);
     }
 
     /// Caller owns the memory.
@@ -197,8 +217,7 @@ pub const Server = struct {
     const ClientRepresentation = struct {
         comms: transport.CommunicationResources,
         state: *state.Client,
-        // id: state.Workspace.Id,
-        // active_display_state: state.ActiveDisplayState,
+        last_request_id: u32 = 0,
 
         /// Parameters necessary to create new state in workspace and get `active_display_state`.
         const InitParams = struct {
@@ -317,9 +336,14 @@ pub const Server = struct {
                         },
                         .connection_socket => {
                             // TODO: check if active display state is empty but we try to do something.
-                            const client =
-                                self.findClient(polled_data.id) orelse return error.ClientNotFound;
+                            var client = self.findClient(polled_data.id) orelse return error.ClientNotFound;
                             const packet = (try client.readPacket(&packet_buf)).?;
+                            const request_id = try jsonrpc.SimpleRequest.parseId(null, packet);
+                            client.last_request_id = if (request_id) |id| blk: {
+                                break :blk @intCast(u32, id.Integer);
+                            } else {
+                                unreachable;
+                            };
                             const method_str = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
                             const method = std.meta.stringToEnum(
                                 ClientMessageMethod,
@@ -353,9 +377,15 @@ pub const Server = struct {
                                     ) orelse @panic("Unknown event kind in a command");
                                     switch (event_kind) {
                                         .open_file => {
-                                            if (params.len != 1) @panic("Must have at least 1 argument");
+                                            if (params.len != 2) @panic("Must have at least 1 argument");
                                             if (params[1] != .String) @panic("Argument must be a string");
                                             const event = Event{ .open_file = params[1].String };
+                                            // TODO: do something with the result.
+                                            try self.event_dispatcher.dispatch(event, client);
+                                        },
+                                        .request_draw_data => {
+                                            if (params.len != 1) @panic("Must have no arguments");
+                                            const event = Event.request_draw_data;
                                             // TODO: do something with the result.
                                             try self.event_dispatcher.dispatch(event, client);
                                         },
@@ -517,6 +547,8 @@ pub const Application = struct {
     }
 };
 
+pub const DrawDataMessage = jsonrpc.Response(kisa.DrawData, jsonrpc.Value);
+
 pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
@@ -545,6 +577,7 @@ pub const Client = struct {
             try transport.connectToUnixSocket(address),
         );
         var request_buf: [transport.max_method_size]u8 = undefined;
+        // TODO: use waitForResponse
         const response = (try self.server.recv(jsonrpc.SimpleResponse, &request_buf)).?;
         assert(response.result().Bool);
         const message_id = self.nextMessageId();
@@ -574,7 +607,43 @@ pub const Client = struct {
         try self.waitForResponse(id);
     }
 
-    pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
+    // It only returns `DrawData` for testing purposes, probably should be `void` instead.
+    pub fn edit(self: *Client, path: []const u8) !kisa.DrawData {
+        try self.openFile(path);
+        return try self.requestDrawData();
+    }
+
+    fn openFile(self: *Client, path: []const u8) !void {
+        const id = @intCast(i64, self.nextMessageId());
+        const event_params = [_]jsonrpc.Value{ .{ .String = "open_file" }, .{ .String = path } };
+        const message = jsonrpc.SimpleRequest.init(
+            jsonrpc.IdValue{ .Integer = id },
+            "fire_event",
+            &event_params,
+        );
+        try self.server.send(message);
+        try self.waitForResponse(jsonrpc.IdValue{ .Integer = id });
+    }
+
+    fn requestDrawData(self: *Client) !kisa.DrawData {
+        const id = @intCast(i64, self.nextMessageId());
+        const event_params = [_]jsonrpc.Value{.{ .String = "request_draw_data" }};
+        const message = jsonrpc.SimpleRequest.init(
+            jsonrpc.IdValue{ .Integer = id },
+            "fire_event",
+            &event_params,
+        );
+        try self.server.send(message);
+        return try self.receiveDrawData(jsonrpc.IdValue{ .Integer = id });
+    }
+
+    fn receiveDrawData(self: *Client, id: ?jsonrpc.IdValue) !kisa.DrawData {
+        var message_buf: [transport.max_message_size]u8 = undefined;
+        const response = try self.receiveResponse(id, DrawDataMessage, &message_buf);
+        return response.result();
+    }
+
+    fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
         var message_buf: [transport.max_message_size]u8 = undefined;
         const response = (try self.server.recv(
             jsonrpc.SimpleResponse,
@@ -582,6 +651,25 @@ pub const Client = struct {
         )) orelse return error.ServerClosedConnection;
         switch (response) {
             .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
+            .Error => return error.ErrorResponse,
+        }
+    }
+
+    fn receiveResponse(
+        self: *Self,
+        id: ?jsonrpc.IdValue,
+        comptime Message: type,
+        message_buf: []u8,
+    ) !Message {
+        const response = (try self.server.recv(
+            Message,
+            message_buf,
+        )) orelse return error.ServerClosedConnection;
+        switch (response) {
+            .Result => {
+                if (!std.meta.eql(id, response.id())) return error.InvalidResponseId;
+                return response;
+            },
             .Error => return error.ErrorResponse,
         }
     }
@@ -596,13 +684,21 @@ test "main: start application threaded via socket" {
     if (try Application.start(testing.allocator, .threaded)) |*app| {
         defer app.deinit();
         var client = app.client;
-        client.edit("/home/grfork/reps/kisa/kisarc.zzz");
+        const draw_data = try client.edit("/home/grfork/reps/kisa/kisarc.zzz");
+        try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
+        try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
+        try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
     }
 }
 
 test "fork/socket: start application forked via socket" {
     if (try Application.start(testing.allocator, .forked)) |*app| {
         defer app.deinit();
+        var client = app.client;
+        const draw_data = try client.edit("/home/grfork/reps/kisa/kisarc.zzz");
+        try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
+        try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
+        try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
     }
 }
 

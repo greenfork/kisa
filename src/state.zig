@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
 const assert = std.debug.assert;
+const kisa = @import("kisa");
 
 /// How Server sees a Client.
 pub const Client = struct {
@@ -165,7 +166,7 @@ pub const Workspace = struct {
         }
     }
 
-    pub fn checkInit(self: Self) void {
+    fn checkInit(self: Self) void {
         var text_buffer = self.text_buffers.first;
         while (text_buffer) |tb| {
             text_buffer = tb.next;
@@ -219,6 +220,18 @@ pub const Workspace = struct {
             .display_window_id = display_window.data.id,
             .window_pane_id = window_pane.data.id,
             .window_tab_id = window_tab.data.id,
+        };
+    }
+
+    // TODO: rewrite
+    pub fn getDrawData(self: Self, active_display_state: ActiveDisplayState) kisa.DrawData {
+        _ = self;
+        _ = active_display_state;
+        return kisa.DrawData{
+            .lines = &[_]kisa.DrawData.Line{.{
+                .number = 1,
+                .contents = "hello",
+            }},
         };
     }
 

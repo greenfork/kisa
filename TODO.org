@@ -1,0 +1,5 @@
+* TODO Wrap jsonrpc into generic rpc module
+* TODO Use Watcher on client
+* TODO Find out the test strategy for the data which client receives from the server
+* TODO Decide whether Commands should outsource sending data to client into a separate module
+* TODO Unicode in text buffers

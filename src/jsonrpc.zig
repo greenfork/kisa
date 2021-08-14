@@ -3,6 +3,8 @@ const json = std.json;
 const mem = std.mem;
 const testing = std.testing;
 
+// TODO: move partial parsing of method and id to top-level functions.
+
 pub const jsonrpc_version = "2.0";
 const default_parse_options = json.ParseOptions{
     .allocator = null,
@@ -207,6 +209,31 @@ pub fn Request(comptime ParamsShape: type) type {
             var fba = std.heap.FixedBufferAllocator.init(buf);
             var ally = &fba.allocator;
             return try parseMethodAlloc(ally, string);
+        }
+
+        /// Parses an `id` of a Request object from `string`. Caller owns the memory.
+        pub fn parseIdAlloc(ally: ?*std.mem.Allocator, string: []const u8) !?IdValue {
+            const RequestId = struct { id: ?IdValue };
+            const parse_options = json.ParseOptions{
+                .allocator = ally,
+                .duplicate_field_behavior = .Error,
+                .ignore_unknown_fields = true,
+                .allow_trailing_data = false,
+            };
+            var token_stream = json.TokenStream.init(string);
+            const parsed = try json.parse(RequestId, &token_stream, parse_options);
+            return parsed.id;
+        }
+
+        /// Parses an `id` of a Request object from `string`.
+        pub fn parseId(buf: ?[]u8, string: []const u8) !?IdValue {
+            if (buf) |b| {
+                var fba = std.heap.FixedBufferAllocator.init(b);
+                var ally = &fba.allocator;
+                return try parseIdAlloc(ally, string);
+            } else {
+                return try parseIdAlloc(null, string);
+            }
         }
     };
 }
@@ -1193,6 +1220,23 @@ test "jsonrpc: parse request and only return a method" {
     var buf: [32]u8 = undefined;
     const method = try SimpleRequest.parseMethod(&buf, jsonrpc_string);
     try testing.expectEqualStrings("startParty", method);
+}
+
+test "jsonrpc: parse request and only return a string ID" {
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":"uuid-85"}
+    ;
+    var buf: [32]u8 = undefined;
+    const id = try SimpleRequest.parseId(&buf, jsonrpc_string);
+    try testing.expectEqualStrings("uuid-85", id.?.String);
+}
+
+test "jsonrpc: parse request and only return an integer ID" {
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
+    ;
+    const id = try SimpleRequest.parseId(null, jsonrpc_string);
+    try testing.expectEqual(@as(?IdValue, IdValue{ .Integer = 63 }), id);
 }
 
 test "jsonrpc: must return an error if jsonrpc has missing field" {
