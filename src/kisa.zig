@@ -1,4 +1,4 @@
-//! Storage for common data reused by various components such as data structures.
+//! Common data structures and functionality used by various components of this application.
 
 const std = @import("std");
 

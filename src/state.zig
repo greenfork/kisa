@@ -1,3 +1,10 @@
+//! All components and data structures which are considered to be the "state" of a text editor.
+//! Does not include communication-specific state, mostly this module is concerned with
+//! editing and displaying of the text.
+//! Should be an isolated component which doesn't know anything but the things it is concerned
+//! about, meaning that this module must not interact with other code and just provide the
+//! interface for others to use.
+
 const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
