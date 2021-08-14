@@ -21,13 +21,14 @@ pub fn build(b: *std.build.Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const test_step = b.step("test", "Run tests");
+    const test_all = b.step("test", "Run tests");
     const test_main = b.step("test-main", "Run tests in main");
     const test_main_nofork = b.step("test-main-nofork", "Run tests in main without forking");
     const test_state = b.step("test-state", "Run tests in state");
     const test_config = b.step("test-config", "Run tests in config");
     const test_jsonrpc = b.step("test-jsonrpc", "Run tests in jsonrpc");
     const test_transport = b.step("test-transport", "Run tests in transport");
+    const test_rpc = b.step("test-rpc", "Run tests in rpc");
 
     {
         var test_cases = b.addTest("src/main.zig");
@@ -37,7 +38,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_main.dependOn(&test_cases.step);
         test_main_nofork.dependOn(&test_cases.step);
     }
@@ -51,7 +52,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_main.dependOn(&test_cases.step);
     }
 
@@ -63,7 +64,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_state.dependOn(&test_cases.step);
     }
 
@@ -75,7 +76,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_config.dependOn(&test_cases.step);
     }
 
@@ -84,7 +85,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setFilter("jsonrpc:");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_jsonrpc.dependOn(&test_cases.step);
     }
 
@@ -94,7 +95,7 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_transport.dependOn(&test_cases.step);
     }
 
@@ -104,7 +105,16 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
-        test_step.dependOn(&test_cases.step);
+        test_all.dependOn(&test_cases.step);
         test_transport.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/rpc.zig");
+        test_cases.setFilter("myrpc:");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_all.dependOn(&test_cases.step);
+        test_rpc.dependOn(&test_cases.step);
     }
 }
