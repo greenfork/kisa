@@ -338,12 +338,19 @@ pub const Server = struct {
                             // TODO: check if active display state is empty but we try to do something.
                             var client = self.findClient(polled_data.id) orelse return error.ClientNotFound;
                             const packet = (try client.readPacket(&packet_buf)).?;
-                            const request_id = try jsonrpc.SimpleRequest.parseId(null, packet);
-                            client.last_request_id = if (request_id) |id| blk: {
-                                break :blk @intCast(u32, id.Integer);
-                            } else {
-                                unreachable;
-                            };
+                            if (jsonrpc.SimpleRequest.parseId(null, packet)) |request_id| {
+                                client.last_request_id = if (request_id) |id| blk: {
+                                    break :blk @intCast(u32, id.Integer);
+                                } else {
+                                    // We don't send IDs equal to `null`.
+                                    unreachable;
+                                };
+                            } else |err| {
+                                // Could be a notification with absent ID.
+                                if (err != error.MissingField) {
+                                    return err;
+                                }
+                            }
                             const method_str = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
                             const method = std.meta.stringToEnum(
                                 ClientMessageMethod,
