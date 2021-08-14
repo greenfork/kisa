@@ -6,13 +6,16 @@ There are 2 main options to consider in the design.
 
 ### Server knows about wrapping
 Server calculates correct positions of wrapping lines and sends them with
-other line data.
+other line data. This generalizes to other use cases, such as:
+- Displaying of small context windows like autocompletion candidates
 
 Advantages:
 - Calculating the necessary amount of data to send is easier, server will
   not send excessive data.
 - With soft wrapping of lines moving the cursor up and down is implemented
-  on the server, it is easier for clients.
+  on the server, it is easier for clients. This is a hard problem to solve
+  since proper handling of wrapping requires interpreting of unicode symbols
+  and considering their width which can be different from amount of bytes.
 
 ### Server doesn't know about wrapping
 Client is responsible for asking the correct number of lines and draws them.
