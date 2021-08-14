@@ -171,81 +171,6 @@ pub const Commands = struct {
     }
 };
 
-pub const Client = struct {
-    ally: *mem.Allocator,
-    ui: UI,
-    server: ServerForClient,
-    last_message_id: u32 = 0,
-
-    const Self = @This();
-
-    pub fn init(ally: *mem.Allocator, ui: UI) Self {
-        return Self{
-            .ally = ally,
-            .ui = ui,
-            .server = undefined,
-        };
-    }
-
-    pub fn deinit(self: *Self) void {
-        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
-        self.server.send(message) catch {};
-        self.server.deinitComms();
-    }
-
-    pub fn register(self: *Self, address: *net.Address) !void {
-        defer self.ally.destroy(address);
-        self.server = ServerForClient.initWithUnixSocket(
-            try transport.connectToUnixSocket(address),
-        );
-        var request_buf: [transport.max_method_size]u8 = undefined;
-        const response = (try self.server.recv(jsonrpc.SimpleResponse, &request_buf)).?;
-        assert(response.result().Bool);
-        const message_id = self.nextMessageId();
-        const message = Server.InitClientRequest.init(
-            jsonrpc.IdValue{ .Integer = message_id },
-            "initialize",
-            Server.ClientRepresentation.InitParams{
-                .path = "/home/grfork/reps/kisa/kisarc.zzz",
-                .readonly = false,
-                .text_area_rows = 80,
-                .text_area_cols = 24,
-            },
-        );
-        try self.server.send(message);
-        try self.waitForResponse(jsonrpc.IdValue{ .Integer = message_id });
-    }
-
-    pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
-        const id = @intCast(i64, self.nextMessageId());
-        const message = KeypressRequest.init(
-            .{ .Integer = id },
-            "keypress",
-            key,
-        );
-        try message.writeTo(self.server.writer());
-        try self.server.writeEndByte();
-        try self.waitForResponse(id);
-    }
-
-    pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
-        var message_buf: [transport.max_message_size]u8 = undefined;
-        const response = (try self.server.recv(
-            jsonrpc.SimpleResponse,
-            &message_buf,
-        )) orelse return error.ServerClosedConnection;
-        switch (response) {
-            .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
-            .Error => return error.ErrorResponse,
-        }
-    }
-
-    pub fn nextMessageId(self: *Self) u32 {
-        self.last_message_id += 1;
-        return self.last_message_id;
-    }
-};
-
 pub const ClientMessageMethod = enum {
     /// Params has information about the key.
     keypress,
@@ -458,7 +383,7 @@ pub const Server = struct {
                                             break;
                                         }
                                     }
-                                    // TODO: id could be null.
+                                    // TODO: id could be unreachable.
                                     const response = jsonrpc.SimpleResponse.initResult(
                                         message.id(),
                                         .{ .Bool = true },
@@ -592,9 +517,86 @@ pub const Application = struct {
     }
 };
 
+pub const Client = struct {
+    ally: *mem.Allocator,
+    ui: UI,
+    server: ServerForClient,
+    last_message_id: u32 = 0,
+
+    const Self = @This();
+
+    pub fn init(ally: *mem.Allocator, ui: UI) Self {
+        return Self{
+            .ally = ally,
+            .ui = ui,
+            .server = undefined,
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
+        self.server.send(message) catch {};
+        self.server.deinitComms();
+    }
+
+    pub fn register(self: *Self, address: *net.Address) !void {
+        defer self.ally.destroy(address);
+        self.server = ServerForClient.initWithUnixSocket(
+            try transport.connectToUnixSocket(address),
+        );
+        var request_buf: [transport.max_method_size]u8 = undefined;
+        const response = (try self.server.recv(jsonrpc.SimpleResponse, &request_buf)).?;
+        assert(response.result().Bool);
+        const message_id = self.nextMessageId();
+        const message = Server.InitClientRequest.init(
+            jsonrpc.IdValue{ .Integer = message_id },
+            "initialize",
+            Server.ClientRepresentation.InitParams{
+                .path = "/home/grfork/reps/kisa/kisarc.zzz",
+                .readonly = false,
+                .text_area_rows = 80,
+                .text_area_cols = 24,
+            },
+        );
+        try self.server.send(message);
+        try self.waitForResponse(jsonrpc.IdValue{ .Integer = message_id });
+    }
+
+    pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
+        const id = @intCast(i64, self.nextMessageId());
+        const message = KeypressRequest.init(
+            .{ .Integer = id },
+            "keypress",
+            key,
+        );
+        try message.writeTo(self.server.writer());
+        try self.server.writeEndByte();
+        try self.waitForResponse(id);
+    }
+
+    pub fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
+        var message_buf: [transport.max_message_size]u8 = undefined;
+        const response = (try self.server.recv(
+            jsonrpc.SimpleResponse,
+            &message_buf,
+        )) orelse return error.ServerClosedConnection;
+        switch (response) {
+            .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
+            .Error => return error.ErrorResponse,
+        }
+    }
+
+    pub fn nextMessageId(self: *Self) u32 {
+        self.last_message_id += 1;
+        return self.last_message_id;
+    }
+};
+
 test "main: start application threaded via socket" {
     if (try Application.start(testing.allocator, .threaded)) |*app| {
         defer app.deinit();
+        var client = app.client;
+        client.edit("/home/grfork/reps/kisa/kisarc.zzz");
     }
 }
 
