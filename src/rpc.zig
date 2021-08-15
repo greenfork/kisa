@@ -4,10 +4,85 @@ const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
 const jsonrpc = @import("jsonrpc.zig");
+const kisa = @import("kisa");
 
-pub const RpcKind = enum { jsonrpc };
+pub const EmptyResponse = ResponseType(rpcImplementation, bool);
+pub const EmptyRequest = RequestType(rpcImplementation, []bool);
+pub const DrawDataResponse = ResponseType(rpcImplementation, kisa.DrawData);
+pub const InitClientRequest = RequestType(rpcImplementation, kisa.ClientInitParams);
 
-pub fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
+pub fn ackResponse(id: ?u32) EmptyResponse {
+    return EmptyResponse.initSuccess(id, true);
+}
+pub const ResponseError = error{
+    AccessDenied,
+};
+pub fn errorResponse(id: ?u32, err: ResponseError) EmptyResponse {
+    switch (err) {
+        error.AccessDenied => return EmptyResponse.initError(id, 13, "Permission denied"),
+    }
+    unreachable;
+}
+
+pub fn request(
+    comptime ParamsShape: type,
+    id: ?u32,
+    method: []const u8,
+    params: ?ParamsShape,
+) RequestType(rpcImplementation, ParamsShape) {
+    return RequestType(rpcImplementation, ParamsShape).init(id, method, params);
+}
+
+pub fn response(
+    comptime ResultShape: type,
+    id: ?u32,
+    result: ResultShape,
+) ResponseType(rpcImplementation, ResultShape) {
+    return ResponseType(rpcImplementation, ResultShape).initSuccess(id, result);
+}
+
+pub fn parseRequest(
+    comptime ParamsShape: type,
+    buf: []u8,
+    string: []const u8,
+) !RequestType(rpcImplementation, ParamsShape) {
+    return try RequestType(rpcImplementation, ParamsShape).parse(buf, string);
+}
+
+pub fn parseResponse(
+    comptime ResultShape: type,
+    buf: []u8,
+    string: []const u8,
+) !ResponseType(rpcImplementation, ResultShape) {
+    return try ResponseType(rpcImplementation, ResultShape).parse(buf, string);
+}
+
+pub fn parseId(string: []const u8) !?u32 {
+    switch (rpcImplementation) {
+        .jsonrpc => {
+            const id_value = try jsonrpc.SimpleRequest.parseId(null, string);
+            if (id_value) |id| {
+                return @intCast(u32, id.Integer);
+            } else {
+                return null;
+            }
+        },
+    }
+    unreachable;
+}
+
+pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
+    switch (rpcImplementation) {
+        .jsonrpc => {
+            return try jsonrpc.SimpleRequest.parseMethod(buf, string);
+        },
+    }
+}
+
+const RpcKind = enum { jsonrpc };
+const rpcImplementation = RpcKind.jsonrpc;
+
+fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
     return struct {
         /// Identification of a message, when ID is `null`, it means there's no response expected.
         id: ?u32,
@@ -52,7 +127,6 @@ pub fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
                     const jsonrpc_message = try RequestImpl.parse(buf, string);
                     switch (jsonrpc_message) {
                         .Request => |s| {
-                            assert(s.id.? == .Integer);
                             return Self{
                                 .id = @intCast(u32, s.id.?.Integer),
                                 .method = s.method,
@@ -60,7 +134,6 @@ pub fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
                             };
                         },
                         .RequestNoParams => |s| {
-                            assert(s.id.? == .Integer);
                             return Self{
                                 .id = @intCast(u32, s.id.?.Integer),
                                 .method = s.method,
@@ -89,7 +162,7 @@ pub fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
     };
 }
 
-pub fn ResponseType(comptime kind: RpcKind, comptime ResultShape: type) type {
+fn ResponseType(comptime kind: RpcKind, comptime ResultShape: type) type {
     return union(enum) {
         Success: struct {
             /// Identification of a message, must be same as the ID of the request.
@@ -172,7 +245,6 @@ pub fn ResponseType(comptime kind: RpcKind, comptime ResultShape: type) type {
                     switch (jsonrpc_message) {
                         .Result => |r| {
                             if (r.id) |id| {
-                                assert(id == .Integer);
                                 return Self{ .Success = .{
                                     .id = @intCast(u32, id.Integer),
                                     .result = r.result,
@@ -186,7 +258,6 @@ pub fn ResponseType(comptime kind: RpcKind, comptime ResultShape: type) type {
                         },
                         .Error => |e| {
                             if (e.id) |id| {
-                                assert(id == .Integer);
                                 return Self{ .Error = .{
                                     .id = @intCast(u32, id.Integer),
                                     .code = jsonrpc_message.errorCode(),
@@ -310,6 +381,15 @@ test "myrpc: jsonrpc generates and parses a request string" {
         const parsed = try PersonRequest.parse(&parse_buf, want);
         try testPersonRequest(message, parsed);
     }
+    {
+        const message = request([]const u32, 1, "startParty", &[_]u32{18});
+        const want =
+            \\{"jsonrpc":"2.0","method":"startParty","id":1,"params":[18]}
+        ;
+        try testing.expectEqualStrings(want, try message.generate(&generate_buf));
+        const parsed = try parseRequest([]const u32, &parse_buf, want);
+        try testMyRequest(message, parsed);
+    }
 }
 
 test "myrpc: jsonrpc generates and parses a response string" {
@@ -358,6 +438,15 @@ test "myrpc: jsonrpc generates and parses a response string" {
         ;
         try testing.expectEqualStrings(want, try message.generate(&generate_buf));
         const parsed = try MyResponse.parse(&parse_buf, want);
+        try testMyResponse(message, parsed);
+    }
+    {
+        const message = response([]const u32, 1, &[_]u32{18});
+        const want =
+            \\{"jsonrpc":"2.0","id":1,"result":[18]}
+        ;
+        try testing.expectEqualStrings(want, try message.generate(&generate_buf));
+        const parsed = try parseResponse([]const u32, &parse_buf, want);
         try testMyResponse(message, parsed);
     }
 }

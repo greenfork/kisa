@@ -6,6 +6,7 @@ const mem = std.mem;
 const net = std.net;
 const assert = std.debug.assert;
 const kisa = @import("kisa");
+const rpc = @import("rpc.zig");
 const state = @import("state.zig");
 const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
@@ -167,19 +168,12 @@ pub const Commands = struct {
                 .content = null,
             },
         );
-        const message = jsonrpc.SimpleResponse.initResult(
-            jsonrpc.IdValue{ .Integer = client.last_request_id },
-            jsonrpc.Value{ .Bool = true },
-        );
-        try client.send(message);
+        try client.send(rpc.ackResponse(client.last_request_id));
     }
 
     pub fn sendDrawData(self: Self, client: Server.ClientRepresentation) !void {
         const draw_data = self.workspace.getDrawData(client.state.active_display_state);
-        const message = DrawDataMessage.initResult(
-            jsonrpc.IdValue{ .Integer = client.last_request_id },
-            draw_data,
-        );
+        const message = rpc.DrawDataResponse.initSuccess(client.last_request_id, draw_data);
         try client.send(message);
     }
 
@@ -214,22 +208,13 @@ pub const Server = struct {
 
     const Self = @This();
 
-    const ClientRepresentation = struct {
+    pub const ClientRepresentation = struct {
         comms: transport.CommunicationResources,
         state: *state.Client,
         last_request_id: u32 = 0,
 
-        /// Parameters necessary to create new state in workspace and get `active_display_state`.
-        const InitParams = struct {
-            path: []const u8,
-            readonly: bool,
-            text_area_rows: u32,
-            text_area_cols: u32,
-        };
-
         pub usingnamespace transport.CommunicationMixin(@This());
     };
-    const InitClientRequest = jsonrpc.Request(ClientRepresentation.InitParams);
 
     /// `initDynamic` must be called right after `init`.
     pub fn init(ally: *mem.Allocator, address: *net.Address) !Self {
@@ -331,27 +316,21 @@ pub const Server = struct {
                                 state.ActiveDisplayState.empty,
                             );
                             errdefer self.removeClient(client_id);
-                            const message = jsonrpc.SimpleResponse.initResult(null, .{ .Bool = true });
-                            try client.send(message);
+                            try client.send(rpc.ackResponse(client.last_request_id));
                         },
                         .connection_socket => {
                             // TODO: check if active display state is empty but we try to do something.
                             var client = self.findClient(polled_data.id) orelse return error.ClientNotFound;
-                            const packet = (try client.readPacket(&packet_buf)).?;
-                            if (jsonrpc.SimpleRequest.parseId(null, packet)) |request_id| {
-                                client.last_request_id = if (request_id) |id| blk: {
-                                    break :blk @intCast(u32, id.Integer);
-                                } else {
-                                    // We don't send IDs equal to `null`.
-                                    unreachable;
-                                };
+                            const packet = (try client.readPacket(&packet_buf)) orelse return error.EmptyPacket;
+                            if (rpc.parseId(packet)) |request_id| {
+                                client.last_request_id = request_id orelse return error.NullIdInRequest;
                             } else |err| {
                                 // Could be a notification with absent ID.
                                 if (err != error.MissingField) {
                                     return err;
                                 }
                             }
-                            const method_str = try jsonrpc.SimpleRequest.parseMethod(&method_buf, packet);
+                            const method_str = try rpc.parseMethod(&method_buf, packet);
                             const method = std.meta.stringToEnum(
                                 ClientMessageMethod,
                                 method_str,
@@ -365,13 +344,8 @@ pub const Server = struct {
                                     std.debug.print("keypress_message: {}\n", .{keypress_message});
                                 },
                                 .fire_event => {
-                                    const message = try jsonrpc.SimpleRequest.parse(&message_buf, packet);
-                                    if (message == .RequestNoParams or
-                                        message == .NotificationNoParams)
-                                    {
-                                        @panic("No params in message");
-                                    }
-                                    const params = message.params();
+                                    const message = try rpc.parseRequest([]jsonrpc.Value, &message_buf, packet);
+                                    const params = message.params orelse @panic("No params in message");
                                     if (params.len == 0) {
                                         @panic("Command must not have an empty array as argument");
                                     }
@@ -401,8 +375,8 @@ pub const Server = struct {
                                 },
                                 .initialize => {
                                     // TODO: error handling.
-                                    const message = try InitClientRequest.parse(&message_buf, packet);
-                                    const client_init_params = message.params();
+                                    const message = try rpc.InitClientRequest.parse(&message_buf, packet);
+                                    const client_init_params = message.params.?;
                                     for (self.clients.items) |*c| {
                                         if (client.state.id == c.id) {
                                             c.active_display_state = try self.workspace.new(
@@ -420,12 +394,7 @@ pub const Server = struct {
                                             break;
                                         }
                                     }
-                                    // TODO: id could be unreachable.
-                                    const response = jsonrpc.SimpleResponse.initResult(
-                                        message.id(),
-                                        .{ .Bool = true },
-                                    );
-                                    try client.send(response);
+                                    try client.send(rpc.ackResponse(message.id));
                                 },
                                 .quitted => {
                                     self.removeClient(polled_data.id);
@@ -554,8 +523,6 @@ pub const Application = struct {
     }
 };
 
-pub const DrawDataMessage = jsonrpc.Response(kisa.DrawData, jsonrpc.Value);
-
 pub const Client = struct {
     ally: *mem.Allocator,
     ui: UI,
@@ -573,8 +540,10 @@ pub const Client = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        const message = jsonrpc.SimpleRequest.initNotification("quitted", null);
+        const message = rpc.EmptyRequest.init(null, "quitted", null);
         self.server.send(message) catch {};
+        // TEST: Check for race conditions.
+        // std.time.sleep(std.time.ns_per_s * 1);
         self.server.deinitComms();
     }
 
@@ -585,13 +554,13 @@ pub const Client = struct {
         );
         var request_buf: [transport.max_method_size]u8 = undefined;
         // TODO: use waitForResponse
-        const response = (try self.server.recv(jsonrpc.SimpleResponse, &request_buf)).?;
-        assert(response.result().Bool);
+        const response = (try self.server.recv(rpc.EmptyResponse, &request_buf)).?;
+        assert(response == .Success);
         const message_id = self.nextMessageId();
-        const message = Server.InitClientRequest.init(
-            jsonrpc.IdValue{ .Integer = message_id },
+        const message = rpc.InitClientRequest.init(
+            message_id,
             "initialize",
-            Server.ClientRepresentation.InitParams{
+            kisa.ClientInitParams{
                 .path = "/home/grfork/reps/kisa/kisarc.zzz",
                 .readonly = false,
                 .text_area_rows = 80,
@@ -599,11 +568,11 @@ pub const Client = struct {
             },
         );
         try self.server.send(message);
-        try self.waitForResponse(jsonrpc.IdValue{ .Integer = message_id });
+        try self.waitForResponse(message_id);
     }
 
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
-        const id = @intCast(i64, self.nextMessageId());
+        const id = self.nextMessageId();
         const message = KeypressRequest.init(
             .{ .Integer = id },
             "keypress",
@@ -621,7 +590,7 @@ pub const Client = struct {
     }
 
     fn openFile(self: *Client, path: []const u8) !void {
-        const id = @intCast(i64, self.nextMessageId());
+        const id = self.nextMessageId();
         const event_params = [_]jsonrpc.Value{ .{ .String = "open_file" }, .{ .String = path } };
         const message = jsonrpc.SimpleRequest.init(
             jsonrpc.IdValue{ .Integer = id },
@@ -629,7 +598,7 @@ pub const Client = struct {
             &event_params,
         );
         try self.server.send(message);
-        try self.waitForResponse(jsonrpc.IdValue{ .Integer = id });
+        try self.waitForResponse(id);
     }
 
     fn requestDrawData(self: *Client) !kisa.DrawData {
@@ -641,30 +610,36 @@ pub const Client = struct {
             &event_params,
         );
         try self.server.send(message);
-        return try self.receiveDrawData(jsonrpc.IdValue{ .Integer = id });
+        return try self.receiveDrawData(@intCast(u32, id));
     }
 
-    fn receiveDrawData(self: *Client, id: ?jsonrpc.IdValue) !kisa.DrawData {
+    fn receiveDrawData(self: *Client, id: u32) !kisa.DrawData {
         var message_buf: [transport.max_message_size]u8 = undefined;
-        const response = try self.receiveResponse(id, DrawDataMessage, &message_buf);
-        return response.result();
+        const response = try self.receiveResponse(id, rpc.DrawDataResponse, &message_buf);
+        return response.Success.result;
     }
 
-    fn waitForResponse(self: *Self, id: ?jsonrpc.IdValue) !void {
+    fn waitForResponse(self: *Self, id: u32) !void {
         var message_buf: [transport.max_message_size]u8 = undefined;
         const response = (try self.server.recv(
-            jsonrpc.SimpleResponse,
+            rpc.EmptyResponse,
             &message_buf,
         )) orelse return error.ServerClosedConnection;
         switch (response) {
-            .Result => if (!std.meta.eql(id, response.id())) return error.InvalidResponseId,
+            .Success => |s| {
+                if (s.id) |response_id| {
+                    if (!std.meta.eql(id, response_id)) return error.InvalidResponseId;
+                } else {
+                    return error.ReceivedNullId;
+                }
+            },
             .Error => return error.ErrorResponse,
         }
     }
 
     fn receiveResponse(
         self: *Self,
-        id: ?jsonrpc.IdValue,
+        id: u32,
         comptime Message: type,
         message_buf: []u8,
     ) !Message {
@@ -673,8 +648,8 @@ pub const Client = struct {
             message_buf,
         )) orelse return error.ServerClosedConnection;
         switch (response) {
-            .Result => {
-                if (!std.meta.eql(id, response.id())) return error.InvalidResponseId;
+            .Success => |s| {
+                if (!std.meta.eql(id, s.id.?)) return error.InvalidResponseId;
                 return response;
             },
             .Error => return error.ErrorResponse,

@@ -1,7 +1,10 @@
 //! Common data structures and functionality used by various components of this application.
 
 const std = @import("std");
+const rpc = @import("rpc.zig");
+const Server = @import("main.zig").Server;
 
+/// Data sent to Client which represents the data to draw on the screen.
 pub const DrawData = struct {
     lines: []const Line,
 
@@ -36,4 +39,12 @@ pub const DrawData = struct {
             try out_stream.writeAll(std.meta.tagName(value));
         }
     };
+};
+
+/// Parameters necessary to create new state in workspace and get `active_display_state`.
+pub const ClientInitParams = struct {
+    path: []const u8,
+    readonly: bool,
+    text_area_rows: u32,
+    text_area_cols: u32,
 };
