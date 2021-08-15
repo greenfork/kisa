@@ -60,7 +60,7 @@ pub fn parseResponse(
 pub fn parseId(string: []const u8) !?u32 {
     switch (rpcImplementation) {
         .jsonrpc => {
-            const id_value = try jsonrpc.SimpleRequest.parseId(null, string);
+            const id_value = try jsonrpc.parseId(null, string);
             if (id_value) |id| {
                 return @intCast(u32, id.Integer);
             } else {
@@ -74,7 +74,7 @@ pub fn parseId(string: []const u8) !?u32 {
 pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
     switch (rpcImplementation) {
         .jsonrpc => {
-            return try jsonrpc.SimpleRequest.parseMethod(buf, string);
+            return try jsonrpc.parseMethod(buf, string);
         },
     }
 }

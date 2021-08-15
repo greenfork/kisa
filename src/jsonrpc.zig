@@ -27,7 +27,10 @@ pub const Value = union(enum) {
     Integer: i64,
     Float: f64,
     String: []const u8,
-    Array: []const Value,
+    // Recursive definition of structs for JSON does not work yet.
+    // See https://github.com/ziglang/zig/pull/9307
+    // After fixing it, please also enable a commented test case.
+    // Array: []const Value,
 };
 
 /// Id can be a number, a string or null.
@@ -36,6 +39,56 @@ pub const IdValue = union(enum) {
     Float: f64,
     String: []const u8,
 };
+
+/// Parses a `method` of a Request object from `string`. Caller owns the memory.
+/// Only works for `Request`, throws error otherwise.
+pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
+    const RequestMethod = struct { method: []u8 };
+    const parse_options = json.ParseOptions{
+        .allocator = ally,
+        .duplicate_field_behavior = .Error,
+        .ignore_unknown_fields = true,
+        .allow_trailing_data = false,
+    };
+    var token_stream = json.TokenStream.init(string);
+    const parsed = try json.parse(RequestMethod, &token_stream, parse_options);
+    return parsed.method;
+}
+
+/// Parses a `method` of a Request object from `string`.
+/// Only works for `Request`, throws error otherwise.
+pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
+    var fba = std.heap.FixedBufferAllocator.init(buf);
+    var ally = &fba.allocator;
+    return try parseMethodAlloc(ally, string);
+}
+
+/// Parses an `id` of a Request object from `string`. Caller owns the memory.
+/// Does not work for `Notification`, throws error.
+pub fn parseIdAlloc(ally: ?*std.mem.Allocator, string: []const u8) !?IdValue {
+    const RequestId = struct { id: ?IdValue };
+    const parse_options = json.ParseOptions{
+        .allocator = ally,
+        .duplicate_field_behavior = .Error,
+        .ignore_unknown_fields = true,
+        .allow_trailing_data = false,
+    };
+    var token_stream = json.TokenStream.init(string);
+    const parsed = try json.parse(RequestId, &token_stream, parse_options);
+    return parsed.id;
+}
+
+/// Parses an `id` of a Request object from `string`.
+/// Does not work for `Notification`, throws error.
+pub fn parseId(buf: ?[]u8, string: []const u8) !?IdValue {
+    if (buf) |b| {
+        var fba = std.heap.FixedBufferAllocator.init(b);
+        var ally = &fba.allocator;
+        return try parseIdAlloc(ally, string);
+    } else {
+        return try parseIdAlloc(null, string);
+    }
+}
 
 pub const RequestKind = enum { Request, RequestNoParams, Notification, NotificationNoParams };
 
@@ -192,52 +245,6 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Writes a string representation of a Request object to a specified `stream`.
         pub fn writeTo(self: Self, stream: anytype) !void {
             try json.stringify(self, .{}, stream);
-        }
-
-        /// Parses a `method` of a Request object from `string`. Caller owns the memory.
-        pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
-            const RequestMethod = struct { method: []u8 };
-            const parse_options = json.ParseOptions{
-                .allocator = ally,
-                .duplicate_field_behavior = .Error,
-                .ignore_unknown_fields = true,
-                .allow_trailing_data = false,
-            };
-            var token_stream = json.TokenStream.init(string);
-            const parsed = try json.parse(RequestMethod, &token_stream, parse_options);
-            return parsed.method;
-        }
-
-        /// Parses a `method` of a Request object from `string`.
-        pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
-            var fba = std.heap.FixedBufferAllocator.init(buf);
-            var ally = &fba.allocator;
-            return try parseMethodAlloc(ally, string);
-        }
-
-        /// Parses an `id` of a Request object from `string`. Caller owns the memory.
-        pub fn parseIdAlloc(ally: ?*std.mem.Allocator, string: []const u8) !?IdValue {
-            const RequestId = struct { id: ?IdValue };
-            const parse_options = json.ParseOptions{
-                .allocator = ally,
-                .duplicate_field_behavior = .Error,
-                .ignore_unknown_fields = true,
-                .allow_trailing_data = false,
-            };
-            var token_stream = json.TokenStream.init(string);
-            const parsed = try json.parse(RequestId, &token_stream, parse_options);
-            return parsed.id;
-        }
-
-        /// Parses an `id` of a Request object from `string`.
-        pub fn parseId(buf: ?[]u8, string: []const u8) !?IdValue {
-            if (buf) |b| {
-                var fba = std.heap.FixedBufferAllocator.init(b);
-                var ally = &fba.allocator;
-                return try parseIdAlloc(ally, string);
-            } else {
-                return try parseIdAlloc(null, string);
-            }
         }
     };
 }
@@ -866,20 +873,21 @@ test "jsonrpc: parse error response with data" {
     parsed.parseFree(testing.allocator);
 }
 
-test "jsonrpc: parse array response" {
-    const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
-    const array_data = .{ .Array = std.mem.span(&data) };
-    const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, array_data);
-    const jsonrpc_string =
-        \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
-    ;
-    const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
-    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
-    try testing.expectEqual(response.result().Array[0].Integer, parsed.result().Array[0].Integer);
-    try testing.expectEqualStrings(response.result().Array[1].String, parsed.result().Array[1].String);
-    try testing.expectEqual(response.id(), parsed.id());
-    parsed.parseFree(testing.allocator);
-}
+// TODO: enable after the issue with Array type is fixed.
+// test "jsonrpc: parse array response" {
+//     const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
+//     const array_data = .{ .Array = std.mem.span(&data) };
+//     const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, array_data);
+//     const jsonrpc_string =
+//         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
+//     ;
+//     const parsed = try SimpleResponse.parseAlloc(testing.allocator, jsonrpc_string);
+//     try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+//     try testing.expectEqual(response.result().Array[0].Integer, parsed.result().Array[0].Integer);
+//     try testing.expectEqualStrings(response.result().Array[1].String, parsed.result().Array[1].String);
+//     try testing.expectEqual(response.id(), parsed.id());
+//     parsed.parseFree(testing.allocator);
+// }
 
 test "jsonrpc: parse complex response" {
     const reverse_attr = [_][]const u8{"reverse"};
@@ -1212,7 +1220,7 @@ test "jsonrpc: parse request and only return a method" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
-    const method = try SimpleRequest.parseMethodAlloc(testing.allocator, jsonrpc_string);
+    const method = try parseMethodAlloc(testing.allocator, jsonrpc_string);
     try testing.expectEqualStrings("startParty", method);
     testing.allocator.free(method);
 }
@@ -1222,7 +1230,7 @@ test "jsonrpc: parse request and only return a method" {
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
     var buf: [32]u8 = undefined;
-    const method = try SimpleRequest.parseMethod(&buf, jsonrpc_string);
+    const method = try parseMethod(&buf, jsonrpc_string);
     try testing.expectEqualStrings("startParty", method);
 }
 
@@ -1231,7 +1239,7 @@ test "jsonrpc: parse request and only return a string ID" {
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":"uuid-85"}
     ;
     var buf: [32]u8 = undefined;
-    const id = try SimpleRequest.parseId(&buf, jsonrpc_string);
+    const id = try parseId(&buf, jsonrpc_string);
     try testing.expectEqualStrings("uuid-85", id.?.String);
 }
 
@@ -1239,7 +1247,7 @@ test "jsonrpc: parse request and only return an integer ID" {
     const jsonrpc_string =
         \\{"jsonrpc":"2.0","method":"startParty","params":["Bob","Alice",10],"id":63}
     ;
-    const id = try SimpleRequest.parseId(null, jsonrpc_string);
+    const id = try parseId(null, jsonrpc_string);
     try testing.expectEqual(@as(?IdValue, IdValue{ .Integer = 63 }), id);
 }
 
