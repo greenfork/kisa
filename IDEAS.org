@@ -1,0 +1,23 @@
+* Rainbow delimiters
+  - https://github.com/luochen1990/rainbow
+  - https://www.emacswiki.org/emacs/RainbowDelimiters
+* Context coloring
+  - Nesting
+  - Arguments of a function, local variables
+  - Imported symbols
+  - Types
+  - Error handling
+  - Memory handling
+  - Public/private functions, variables
+  - https://www.crockford.com/contextcoloring.html
+  - https://buttondown.email/hillelwayne/archive/46a17205-e38c-44f9-b048-793c180c6e84
+* Tests integration
+  - Jump to failed test
+  - Color failed test line or specific arguments
+  - Contextual help for explanation of an error
+* Highlighting in general
+** VSCode 
+   - https://code.visualstudio.com/api/language-extensions/semantic-highlight-guide
+** TextMate
+   - https://macromates.com/manual/en/language_grammars
+   - https://www.apeth.com/nonblog/stories/textmatebundle.html
