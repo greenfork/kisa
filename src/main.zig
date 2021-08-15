@@ -451,7 +451,9 @@ pub const ServerForClient = struct {
 pub const Application = struct {
     client: Client,
     /// In threaded mode we call `join` on `deinit`. In not threaded mode this field is `null`.
-    server_thread: ?std.Thread = null,
+    server_thread: ?*std.Thread = null,
+    // This is post 0.8 version.
+    // server_thread: ?std.Thread = null,
 
     const Self = @This();
 
@@ -482,7 +484,9 @@ pub const Application = struct {
                     os.close(io.getStdIn().handle);
                     os.close(io.getStdOut().handle);
 
-                    try startServer(ally, address);
+                    // This is post 0.8 version.
+                    // try startServer(ally, address);
+                    try startServer(.{ .ally = ally, .address = address });
                     return null;
                 } else {
                     // Client
@@ -494,7 +498,9 @@ pub const Application = struct {
                 }
             },
             .threaded => {
-                const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
+                // This is post 0.8 version.
+                // const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
+                const server_thread = try std.Thread.spawn(startServer, .{ .ally = ally, .address = address });
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
                 var client = Client.init(ally, ui);
@@ -507,8 +513,8 @@ pub const Application = struct {
         unreachable;
     }
 
-    fn startServer(ally: *mem.Allocator, address: *net.Address) !void {
-        var server = try Server.init(ally, address);
+    fn startServer(arg: struct { ally: *mem.Allocator, address: *net.Address }) !void {
+        var server = try Server.init(arg.ally, arg.address);
         server.initDynamic();
         errdefer server.deinit();
         try server.loop();
@@ -517,7 +523,9 @@ pub const Application = struct {
     pub fn deinit(self: *Self) void {
         self.client.deinit();
         if (self.server_thread) |server_thread| {
-            server_thread.join();
+            // This is post 0.8 version.
+            // server_thread.join();
+            server_thread.wait();
             self.server_thread = null;
         }
     }
