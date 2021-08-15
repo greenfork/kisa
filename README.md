@@ -223,7 +223,8 @@ https://greenfork.github.io/kisa/
 Editors written in other than C languages such as Go ([micro], [qedit])
 or Rust ([helix], [amp]) use their own library which implements terminal
 display routines. C/C++ based editors largely use [ncurses] library
-([kakoune], [vis], [neovim]). Since this editor's language of choice is Zig,
+([vis], [neovim]), but there's a good exception to this rule
+which is [kakoune]. Since this editor's language of choice is Zig,
 there are 2 choices: port ncurses library and write our own. I tried to
 [port the ncurses library] but eventually gave up because of infinite confusion
 with it. The code is also quite and quite hard to understand, there's an
