@@ -54,3 +54,29 @@ Advantages:
   Making implementation client-specific adds more configurability and more
   choices to the implementators of clients which might make it more
   appealing to develop a third-party frontend.
+
+## Communicating changes to the server
+
+Client will send each key press to the server and wait for response back.
+This might seem slow and inefficient but there's no way to implement some
+features without it like autocompletion. Nowadays computers should be
+fast enough to handle it. It is also the way how remote terminals work
+in some implementations.
+
+This can make it unusable for network editing when the server is somewhere
+on the internet. And it can also make a difference for low-end hardware,
+where the problem could be a visible lag between key presses.
+
+For now this problem is out of scope because solving it involves some real
+complexity:
+* We need asynchronous communication from the client to the server, so
+  that client doesn't have to wait from the server to respond immediately
+* We need Operational Transformation or CRDT or another smart word to
+  resolve the difference between the changes the client has made so far
+  with the data that the server knows about
+
+It is wise to structure the client and the server in a way which will
+allow to eventually switch to this approach but right now it is definitely
+not the right time to implement it.
+
+See [xi editor revelations](https://github.com/xi-editor/xi-editor/issues/1187#issuecomment-491473599).

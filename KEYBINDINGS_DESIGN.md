@@ -31,6 +31,13 @@ activate mini-modes must be mnemonic as opposed to keys which do just a single
 action - these keys are generally learned and it is only beneficial to make
 them mnemonic for learning purposes.
 
+Examples of a mini-mode keybindings (not necessarily used in this editor),
+where consequent key presses are divided with minus `-`:
+* b-n - switch to next buffer
+* b-p - switch to previous buffer
+* space-w-l - switch to left window
+* space-w-h - switch to right window
+
 **I don't have information regarding the validity of the following claim,
 only empirical evidence**.
 There are expected to be a lot of 2-key combination for commands from the
@@ -90,6 +97,7 @@ Will be assigned a single key press.
 ## Not so frequent actions
 Will be grouped together into a mini-mode where possible, used with a Shift
 modifier or assigned one of ~!@#$%^&*()_+ buttons (also with Shift :) ).
+And also anything that requires press the Space first.
 
 * Move cursor to the end of line
 * Move cursor to the start of line

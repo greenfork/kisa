@@ -6,6 +6,16 @@ Kisa is in its early stage and it is not usable at the moment.
 
 Further are design ideas and philosophy behind this editor.
 
+In addition to ramblings below there's a growing set of design documents
+which are supposed to provide a more structured and thought through
+ideas, beware most of it is not implemented:
+* [Cursor design](CURSOR_DESIGN.md)
+* [Client architecture design](CLIENT_ARCHITECTURE_DESIGN.md)
+* [Configuration design](CONFIGURATION_DESIGN.md)
+* [Highlighting design](HIGHLIGHTING_DESIGN.md)
+* [Keybindings design](KEYBINDINGS_DESIGN.md)
+* [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
+
 ## Purpose
 
 I, greenfork, the one who started this project, would like to have a

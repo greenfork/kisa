@@ -239,3 +239,11 @@ class Cookie
   end
 end
 ```
+ *
+
+## Architecture
+
+TODO
+
+- https://lobste.rs/s/jembrx
+- https://xi-editor.io/docs/rope_science_11.html
