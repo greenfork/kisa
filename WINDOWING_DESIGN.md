@@ -65,3 +65,56 @@ themselves.
 There's also a choice whether the server needs to know about windows or
 if the windows should be fully offloaded to the client. This is likely
 to be determined during implementation, TODO.
+
+There are several types of interactions we would like to have with the
+windows, let's enumerate them.
+
+### Consistent windows with information
+
+Consistent windows are only closed when the user specifically issues
+a command to close the window. Examples:
+* Another window for editing and opening files
+* grep search buffer
+* git diff
+* Help buffer
+
+These are just usual windows which don't require any specific functionality.
+
+### Temporary info windows
+
+Temporary info windows appear and close based on some events happening
+in the editor. Examples:
+* Compilation errors
+* Test failures
+
+These windows will have to be somehow identified and remembered when they
+are created and later closed as a consequence of processing events on the
+server. Most of the complexity of implementing these windows lies in
+the event processing but should be doable.
+
+### Temporary prompt windows
+
+Temporary prompt windows require some user action before they are closed,
+typically the result of an action is then somehow used. Examples:
+* Fuzzy search with a third-party utility like [fzf] or [skim] and then
+  opening of a file
+* Writing commit messages with version control tool
+
+[fzf]: https://github.com/junegunn/fzf
+[skim]: https://github.com/lotabout/skim
+
+The window should be opened which gives full control to the third-party tool
+and the result is later piped into the editor and used appropriately. This
+is the most complicated implementation but at the same time it should be
+worth it. Alternative implementations have to either [rely on
+extension language], they have to be [overly complicated] or they
+have to use [scary bash scripts]. Every option seems subpar for such a common
+workflow.
+
+[rely on extension language]: https://git.sr.ht/~mcepl/vis-fzf-open/tree/master/item/init.lua
+[overly complicated]: https://github.com/andreyorst/fzf.kak/blob/master/rc/fzf.kak
+[scary bash scripts]: https://github.com/greenfork/dotfiles/blob/efeeda144639cbbd11e3fe68d3e78145080be47a/.config/kak/kakrc#L180-L188
+
+It suffices to say that [fzf] and similar programs provide quite a core
+workflow of finding specific files in the project either by content or
+by filename.
