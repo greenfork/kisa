@@ -15,6 +15,7 @@ ideas, beware most of it is not implemented:
 * [Highlighting design](HIGHLIGHTING_DESIGN.md)
 * [Keybindings design](KEYBINDINGS_DESIGN.md)
 * [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
+* [Windowing design](WINDOWING_ARCHITECTURE_DESIGN.md)
 
 ## Purpose
 

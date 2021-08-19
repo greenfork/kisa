@@ -21,3 +21,6 @@
 ** TextMate
    - https://macromates.com/manual/en/language_grammars
    - https://www.apeth.com/nonblog/stories/textmatebundle.html
+* Incremental parsing
+  - https://www.cs.umd.edu/~hammer/adapton/adapton-pldi2014.pdf
+  - https://tree-sitter.github.io/tree-sitter/
