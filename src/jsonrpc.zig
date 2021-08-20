@@ -7,8 +7,6 @@ const json = std.json;
 const mem = std.mem;
 const testing = std.testing;
 
-// TODO: move partial parsing of method and id to top-level functions.
-
 pub const jsonrpc_version = "2.0";
 const default_parse_options = json.ParseOptions{
     .allocator = null,
@@ -27,9 +25,9 @@ pub const Value = union(enum) {
     Integer: i64,
     Float: f64,
     String: []const u8,
-    // Recursive definition of structs for JSON does not work yet.
+    // Recursive definition of structs for JSON does not work yet, waiting for new release.
     // See https://github.com/ziglang/zig/pull/9307
-    // After fixing it, please also enable a commented test case.
+    // After fixing it, please also enable and fix the commented test case.
     // Array: []const Value,
 };
 
@@ -205,7 +203,7 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Parses a string into a Request object. Requires `allocator` if
-        /// any of the `Request` values are arrays/pointers/slices; pass `null` otherwise.
+        /// any of the `Request` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
         pub fn parseAlloc(allocator: *std.mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
@@ -368,7 +366,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         }
 
         /// Parses a string into a `Response` object. Requires `allocator` if
-        /// any of the `Response` values are arrays/pointers/slices; pass `null` otherwise.
+        /// any of the `Response` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
         pub fn parseAlloc(allocator: ?*std.mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
@@ -888,6 +886,21 @@ test "jsonrpc: parse error response with data" {
 //     try testing.expectEqual(response.id(), parsed.id());
 //     parsed.parseFree(testing.allocator);
 // }
+
+test "jsonrpc: parse custom array response" {
+    const CustomArrayResponse = Response([2]u32, Value);
+    const array_data = [_]u32{ 58, 67 };
+    const response = CustomArrayResponse.initResult(IdValue{ .Integer = 63 }, array_data);
+    const jsonrpc_string =
+        \\{"jsonrpc":"2.0","result":[58,67],"id":63}
+    ;
+    const parsed = try CustomArrayResponse.parseAlloc(testing.allocator, jsonrpc_string);
+    try testing.expectEqualStrings(response.jsonrpc(), parsed.jsonrpc());
+    try testing.expectEqual(response.result()[0], parsed.result()[0]);
+    try testing.expectEqual(response.result()[1], parsed.result()[1]);
+    try testing.expectEqual(response.id(), parsed.id());
+    parsed.parseFree(testing.allocator);
+}
 
 test "jsonrpc: parse complex response" {
     const reverse_attr = [_][]const u8{"reverse"};
