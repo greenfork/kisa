@@ -40,7 +40,7 @@ pub const IdValue = union(enum) {
 
 /// Parses a `method` of a Request object from `string`. Caller owns the memory.
 /// Only works for `Request`, throws error otherwise.
-pub fn parseMethodAlloc(ally: *std.mem.Allocator, string: []const u8) ![]u8 {
+pub fn parseMethodAlloc(ally: *mem.Allocator, string: []const u8) ![]u8 {
     const RequestMethod = struct { method: []u8 };
     const parse_options = json.ParseOptions{
         .allocator = ally,
@@ -63,7 +63,7 @@ pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
 
 /// Parses an `id` of a Request object from `string`. Caller owns the memory.
 /// Does not work for `Notification`, throws error.
-pub fn parseIdAlloc(ally: ?*std.mem.Allocator, string: []const u8) !?IdValue {
+pub fn parseIdAlloc(ally: ?*mem.Allocator, string: []const u8) !?IdValue {
     const RequestId = struct { id: ?IdValue };
     const parse_options = json.ParseOptions{
         .allocator = ally,
@@ -205,7 +205,7 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Parses a string into a Request object. Requires `allocator` if
         /// any of the `Request` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
-        pub fn parseAlloc(allocator: *std.mem.Allocator, string: []const u8) !Self {
+        pub fn parseAlloc(allocator: *mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
@@ -215,7 +215,7 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Frees memory from call to `parseAlloc`.
-        pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
+        pub fn parseFree(self: Self, allocator: *mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
@@ -228,7 +228,7 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Generates a string representation of a Request object. Caller owns the memory.
-        pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: *mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
             try self.writeTo(result.writer());
             return result.toOwnedSlice();
@@ -368,7 +368,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         /// Parses a string into a `Response` object. Requires `allocator` if
         /// any of the `Response` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
-        pub fn parseAlloc(allocator: ?*std.mem.Allocator, string: []const u8) !Self {
+        pub fn parseAlloc(allocator: ?*mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
@@ -378,7 +378,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         }
 
         /// Frees memory from `parseAlloc` call.
-        pub fn parseFree(self: Self, allocator: *std.mem.Allocator) void {
+        pub fn parseFree(self: Self, allocator: *mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
@@ -391,7 +391,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         }
 
         /// Generates a string representation of a Response object. Caller owns the memory.
-        pub fn generateAlloc(self: Self, allocator: *std.mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: *mem.Allocator) ![]u8 {
             var rs = std.ArrayList(u8).init(allocator);
             try self.writeTo(rs.writer());
             return rs.toOwnedSlice();
@@ -453,7 +453,7 @@ test "jsonrpc: parse request" {
 const Face = struct {
     fg: []const u8,
     bg: []const u8,
-    attributes: []const []const u8 = std.mem.span(&empty_attr),
+    attributes: []const []const u8 = mem.span(&empty_attr),
 
     const empty_attr = [_][]const u8{};
 };
@@ -476,7 +476,7 @@ fn expectEqualSpans(expected: Span, actual: Span) !void {
     try testing.expectEqualStrings(expected.contents, actual.contents);
 }
 
-fn removeSpaces(allocator: *std.mem.Allocator, str: []const u8) ![]u8 {
+fn removeSpaces(allocator: *mem.Allocator, str: []const u8) ![]u8 {
     var result = std.ArrayList(u8).init(allocator);
     var inside_string = false;
     for (str) |ch| {
@@ -510,7 +510,7 @@ test "jsonrpc: parse complex request" {
 
     const first_line_array = [_]Span{
         Span{
-            .face = Face{ .fg = "default", .bg = "default", .attributes = std.mem.span(&reverse_attr) },
+            .face = Face{ .fg = "default", .bg = "default", .attributes = mem.span(&reverse_attr) },
             .contents = " 1",
         },
         Span{
@@ -518,7 +518,7 @@ test "jsonrpc: parse complex request" {
             .contents = " ",
         },
         Span{
-            .face = Face{ .fg = "black", .bg = "white", .attributes = std.mem.span(&final_attr) },
+            .face = Face{ .fg = "black", .bg = "white", .attributes = mem.span(&final_attr) },
             .contents = "*",
         },
         Span{
@@ -537,11 +537,11 @@ test "jsonrpc: parse complex request" {
         },
     };
     const lines_array = [_][]const Span{
-        std.mem.span(&first_line_array),
-        std.mem.span(&second_line_array),
+        mem.span(&first_line_array),
+        mem.span(&second_line_array),
     };
     const params = [_]Parameter{
-        .{ .lines = std.mem.span(&lines_array) },
+        .{ .lines = mem.span(&lines_array) },
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
@@ -689,7 +689,7 @@ test "jsonrpc: generate complex request" {
 
     const first_line_array = [_]Span{
         Span{
-            .face = Face{ .fg = "default", .bg = "default", .attributes = std.mem.span(&reverse_attr) },
+            .face = Face{ .fg = "default", .bg = "default", .attributes = mem.span(&reverse_attr) },
             .contents = " 1",
         },
         Span{
@@ -697,7 +697,7 @@ test "jsonrpc: generate complex request" {
             .contents = " ",
         },
         Span{
-            .face = Face{ .fg = "black", .bg = "white", .attributes = std.mem.span(&final_attr) },
+            .face = Face{ .fg = "black", .bg = "white", .attributes = mem.span(&final_attr) },
             .contents = "*",
         },
         Span{
@@ -716,11 +716,11 @@ test "jsonrpc: generate complex request" {
         },
     };
     const lines_array = [_][]const Span{
-        std.mem.span(&first_line_array),
-        std.mem.span(&second_line_array),
+        mem.span(&first_line_array),
+        mem.span(&second_line_array),
     };
     const params = [_]Parameter{
-        .{ .lines = std.mem.span(&lines_array) },
+        .{ .lines = mem.span(&lines_array) },
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
@@ -874,7 +874,7 @@ test "jsonrpc: parse error response with data" {
 // TODO: enable after the issue with Array type is fixed.
 // test "jsonrpc: parse array response" {
 //     const data = [_]Value{ .{ .Integer = 42 }, .{ .String = "The Answer" } };
-//     const array_data = .{ .Array = std.mem.span(&data) };
+//     const array_data = .{ .Array = mem.span(&data) };
 //     const response = SimpleResponse.initResult(IdValue{ .Integer = 63 }, array_data);
 //     const jsonrpc_string =
 //         \\{"jsonrpc":"2.0","result":[42,"The Answer"],"id":63}
@@ -914,7 +914,7 @@ test "jsonrpc: parse complex response" {
 
     const first_line_array = [_]Span{
         Span{
-            .face = Face{ .fg = "default", .bg = "default", .attributes = std.mem.span(&reverse_attr) },
+            .face = Face{ .fg = "default", .bg = "default", .attributes = mem.span(&reverse_attr) },
             .contents = " 1",
         },
         Span{
@@ -922,7 +922,7 @@ test "jsonrpc: parse complex response" {
             .contents = " ",
         },
         Span{
-            .face = Face{ .fg = "black", .bg = "white", .attributes = std.mem.span(&final_attr) },
+            .face = Face{ .fg = "black", .bg = "white", .attributes = mem.span(&final_attr) },
             .contents = "*",
         },
         Span{
@@ -941,15 +941,15 @@ test "jsonrpc: parse complex response" {
         },
     };
     const lines_array = [_][]const Span{
-        std.mem.span(&first_line_array),
-        std.mem.span(&second_line_array),
+        mem.span(&first_line_array),
+        mem.span(&second_line_array),
     };
     const params = [_]Parameter{
-        .{ .lines = std.mem.span(&lines_array) },
+        .{ .lines = mem.span(&lines_array) },
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
-    const params_array = std.mem.span(&params);
+    const params_array = mem.span(&params);
     const response = MyResponse.initResult(IdValue{ .Integer = 98 }, params_array);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
@@ -1107,7 +1107,7 @@ test "jsonrpc: generate complex response" {
 
     const first_line_array = [_]Span{
         Span{
-            .face = Face{ .fg = "default", .bg = "default", .attributes = std.mem.span(&reverse_attr) },
+            .face = Face{ .fg = "default", .bg = "default", .attributes = mem.span(&reverse_attr) },
             .contents = " 1",
         },
         Span{
@@ -1115,7 +1115,7 @@ test "jsonrpc: generate complex response" {
             .contents = " ",
         },
         Span{
-            .face = Face{ .fg = "black", .bg = "white", .attributes = std.mem.span(&final_attr) },
+            .face = Face{ .fg = "black", .bg = "white", .attributes = mem.span(&final_attr) },
             .contents = "*",
         },
         Span{
@@ -1134,15 +1134,15 @@ test "jsonrpc: generate complex response" {
         },
     };
     const lines_array = [_][]const Span{
-        std.mem.span(&first_line_array),
-        std.mem.span(&second_line_array),
+        mem.span(&first_line_array),
+        mem.span(&second_line_array),
     };
     const params = [_]Parameter{
-        .{ .lines = std.mem.span(&lines_array) },
+        .{ .lines = mem.span(&lines_array) },
         .{ .face = Face{ .fg = "default", .bg = "default" } },
         .{ .face = Face{ .fg = "blue", .bg = "default" } },
     };
-    const params_array = std.mem.span(&params);
+    const params_array = mem.span(&params);
     const response = MyResponse.initResult(IdValue{ .Integer = 98 }, params_array);
     // Taken from Kakoune editor and modified.
     const jsonrpc_string =
