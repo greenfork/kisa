@@ -48,13 +48,13 @@ pub const ClientInitParams = struct {
     text_area_cols: u32,
 };
 
-pub const EventKind = enum {
+pub const CommandKind = enum {
     nop,
     /// Params has information about the key.
     keypress,
     /// Sent by client when it quits.
     quitted,
-    /// First value in params is the event kind, others are arguments to this event.
+    /// First value in params is the command kind, others are arguments to this command.
     initialize,
     quit,
     save,
@@ -69,18 +69,18 @@ pub const EventKind = enum {
     open_file,
 };
 
-/// Event is a generic notion of an action happenning on the server, usually as a response to
+/// Command is a generic notion of an action happenning on the server, usually as a response to
 /// client actions.
-pub const Event = union(EventKind) {
+pub const Command = union(CommandKind) {
     nop,
     /// Params has information about the key.
     keypress,
     /// Sent by client when it quits.
     quitted,
-    /// Provide initial parameters to initialize a client.
-    initialize: ClientInitParams,
     quit,
     save,
+    /// Provide initial parameters to initialize a client.
+    initialize: ClientInitParams,
     request_draw_data,
     /// Value is inserted character.
     insert_character: u8,

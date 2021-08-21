@@ -248,12 +248,12 @@ pub const Server = struct {
                             }
                             const method_str = try rpc.parseMethod(&method_buf, packet);
                             const method = std.meta.stringToEnum(
-                                kisa.EventKind,
+                                kisa.CommandKind,
                                 method_str,
                             ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
                             switch (method) {
                                 .keypress => {
-                                    // TODO: change event and handling in general
+                                    // TODO: change command and handling in general
                                     const keypress_message = try rpc.KeypressRequest.parse(
                                         &message_buf,
                                         packet,
@@ -261,15 +261,15 @@ pub const Server = struct {
                                     std.debug.print("keypress_message: {}\n", .{keypress_message});
                                 },
                                 .open_file => {
-                                    const event = try rpc.parseEventFromRequest(
+                                    const command = try rpc.parseCommandFromRequest(
                                         .open_file,
                                         &message_buf,
                                         packet,
                                     );
-                                    try self.commands.openFile(client, event.open_file.path);
+                                    try self.commands.openFile(client, command.open_file.path);
                                 },
                                 .request_draw_data => {
-                                    _ = try rpc.parseEventFromRequest(
+                                    _ = try rpc.parseCommandFromRequest(
                                         .request_draw_data,
                                         &message_buf,
                                         packet,
@@ -278,12 +278,12 @@ pub const Server = struct {
                                 },
                                 .initialize => {
                                     // TODO: error handling.
-                                    const event = try rpc.parseEventFromRequest(
+                                    const command = try rpc.parseCommandFromRequest(
                                         .initialize,
                                         &message_buf,
                                         packet,
                                     );
-                                    const client_init_params = event.initialize;
+                                    const client_init_params = command.initialize;
                                     for (self.clients.items) |*c| {
                                         if (client.state.id == c.id) {
                                             c.active_display_state = try self.workspace.new(
@@ -473,7 +473,7 @@ pub const Client = struct {
         const response = (try self.server.recv(rpc.EmptyResponse, &request_buf)).?;
         assert(response == .Success);
         const message_id = self.nextMessageId();
-        const message = rpc.eventRequest(
+        const message = rpc.commandRequest(
             .initialize,
             message_id,
             .{
@@ -507,14 +507,14 @@ pub const Client = struct {
 
     fn openFile(self: *Client, path: []const u8) !void {
         const id = self.nextMessageId();
-        const message = rpc.eventRequest(.open_file, id, .{ .path = path });
+        const message = rpc.commandRequest(.open_file, id, .{ .path = path });
         try self.server.send(message);
         try self.waitForResponse(id);
     }
 
     fn requestDrawData(self: *Client) !kisa.DrawData {
         const id = self.nextMessageId();
-        const message = rpc.emptyEventRequest(.request_draw_data, id);
+        const message = rpc.emptyCommandRequest(.request_draw_data, id);
         try self.server.send(message);
         return try self.receiveDrawData(@intCast(u32, id));
     }

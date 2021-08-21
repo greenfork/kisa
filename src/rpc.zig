@@ -43,21 +43,21 @@ pub fn request(
     return Request(ParamsShape).init(id, method, params);
 }
 
-pub fn eventRequest(
-    comptime event_kind: kisa.EventKind,
+pub fn commandRequest(
+    comptime command_kind: kisa.CommandKind,
     id: ?u32,
-    params: meta.TagPayload(kisa.Event, event_kind),
-) Request(meta.TagPayload(kisa.Event, event_kind)) {
+    params: meta.TagPayload(kisa.Command, command_kind),
+) Request(meta.TagPayload(kisa.Command, command_kind)) {
     return request(
-        meta.TagPayload(kisa.Event, event_kind),
+        meta.TagPayload(kisa.Command, command_kind),
         id,
-        comptime meta.tagName(event_kind),
+        comptime meta.tagName(command_kind),
         params,
     );
 }
 
-pub fn emptyEventRequest(comptime event_kind: kisa.EventKind, id: ?u32) EmptyRequest {
-    return EmptyRequest.init(id, comptime meta.tagName(event_kind), null);
+pub fn emptyCommandRequest(comptime command_kind: kisa.CommandKind, id: ?u32) EmptyRequest {
+    return EmptyRequest.init(id, comptime meta.tagName(command_kind), null);
 }
 
 pub fn emptyNotification(
@@ -90,20 +90,20 @@ pub fn parseResponse(
     return try Response(ResultShape).parse(buf, string);
 }
 
-pub fn parseEventFromRequest(
-    comptime event_kind: kisa.EventKind,
+pub fn parseCommandFromRequest(
+    comptime command_kind: kisa.CommandKind,
     buf: []u8,
     string: []const u8,
-) !kisa.Event {
-    const Payload = meta.TagPayload(kisa.Event, event_kind);
+) !kisa.Command {
+    const Payload = meta.TagPayload(kisa.Command, command_kind);
     switch (@typeInfo(Payload)) {
         .Void => {
             _ = try EmptyRequest.parse(buf, string);
-            return @unionInit(kisa.Event, comptime meta.tagName(event_kind), {});
+            return @unionInit(kisa.Command, comptime meta.tagName(command_kind), {});
         },
         else => {
             const req = try Request(Payload).parse(buf, string);
-            return @unionInit(kisa.Event, comptime meta.tagName(event_kind), req.params.?);
+            return @unionInit(kisa.Command, comptime meta.tagName(command_kind), req.params.?);
         },
     }
 }
