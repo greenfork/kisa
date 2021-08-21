@@ -7,9 +7,18 @@ const jsonrpc = @import("jsonrpc.zig");
 const kisa = @import("kisa");
 const Keys = @import("main.zig").Keys;
 
-pub const EmptyResponse = ResponseType(rpcImplementation, bool);
-pub const EmptyRequest = RequestType(rpcImplementation, []bool);
-pub const DrawDataResponse = ResponseType(rpcImplementation, kisa.DrawData);
+const RpcKind = enum { jsonrpc };
+const rpcImplementation = RpcKind.jsonrpc;
+
+pub fn Request(comptime ParamsShape: type) type {
+    return RequestType(rpcImplementation, ParamsShape);
+}
+pub fn Response(comptime ResultShape: type) type {
+    return ResponseType(rpcImplementation, ResultShape);
+}
+
+pub const EmptyResponse = Response(bool);
+pub const EmptyRequest = Request([]bool);
 pub const KeypressRequest = jsonrpc.Request(Keys.Key);
 
 pub fn ackResponse(id: ?u32) EmptyResponse {
@@ -30,15 +39,15 @@ pub fn request(
     id: ?u32,
     method: []const u8,
     params: ?ParamsShape,
-) RequestType(rpcImplementation, ParamsShape) {
-    return RequestType(rpcImplementation, ParamsShape).init(id, method, params);
+) Request(ParamsShape) {
+    return Request(ParamsShape).init(id, method, params);
 }
 
 pub fn eventRequest(
     comptime event_kind: kisa.EventKind,
     id: ?u32,
     params: meta.TagPayload(kisa.Event, event_kind),
-) RequestType(rpcImplementation, meta.TagPayload(kisa.Event, event_kind)) {
+) Request(meta.TagPayload(kisa.Event, event_kind)) {
     return request(
         meta.TagPayload(kisa.Event, event_kind),
         id,
@@ -53,32 +62,32 @@ pub fn emptyEventRequest(comptime event_kind: kisa.EventKind, id: ?u32) EmptyReq
 
 pub fn emptyNotification(
     method: []const u8,
-) RequestType(rpcImplementation, []bool) {
-    return RequestType(rpcImplementation, []bool).init(null, method, null);
+) Request([]bool) {
+    return Request([]bool).init(null, method, null);
 }
 
 pub fn response(
     comptime ResultShape: type,
     id: ?u32,
     result: ResultShape,
-) ResponseType(rpcImplementation, ResultShape) {
-    return ResponseType(rpcImplementation, ResultShape).initSuccess(id, result);
+) Response(ResultShape) {
+    return Response(ResultShape).initSuccess(id, result);
 }
 
 pub fn parseRequest(
     comptime ParamsShape: type,
     buf: []u8,
     string: []const u8,
-) !RequestType(rpcImplementation, ParamsShape) {
-    return try RequestType(rpcImplementation, ParamsShape).parse(buf, string);
+) !Request(ParamsShape) {
+    return try Request(ParamsShape).parse(buf, string);
 }
 
 pub fn parseResponse(
     comptime ResultShape: type,
     buf: []u8,
     string: []const u8,
-) !ResponseType(rpcImplementation, ResultShape) {
-    return try ResponseType(rpcImplementation, ResultShape).parse(buf, string);
+) !Response(ResultShape) {
+    return try Response(ResultShape).parse(buf, string);
 }
 
 pub fn parseEventFromRequest(
@@ -93,7 +102,7 @@ pub fn parseEventFromRequest(
             return @unionInit(kisa.Event, comptime meta.tagName(event_kind), {});
         },
         else => {
-            const req = try RequestType(rpcImplementation, Payload).parse(buf, string);
+            const req = try Request(Payload).parse(buf, string);
             return @unionInit(kisa.Event, comptime meta.tagName(event_kind), req.params.?);
         },
     }
@@ -120,9 +129,6 @@ pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
         },
     }
 }
-
-const RpcKind = enum { jsonrpc };
-const rpcImplementation = RpcKind.jsonrpc;
 
 fn RequestType(comptime kind: RpcKind, comptime ParamsShape: type) type {
     return struct {

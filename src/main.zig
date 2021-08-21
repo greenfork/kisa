@@ -286,6 +286,7 @@ pub const Server = struct {
                             ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
                             switch (method) {
                                 .keypress => {
+                                    // TODO: change event and handling in general
                                     const keypress_message = try rpc.KeypressRequest.parse(
                                         &message_buf,
                                         packet,
@@ -310,12 +311,12 @@ pub const Server = struct {
                                 },
                                 .initialize => {
                                     // TODO: error handling.
-                                    const message = try rpc.parseRequest(
-                                        kisa.ClientInitParams,
+                                    const event = try rpc.parseEventFromRequest(
+                                        .initialize,
                                         &message_buf,
                                         packet,
                                     );
-                                    const client_init_params = message.params.?;
+                                    const client_init_params = event.initialize;
                                     for (self.clients.items) |*c| {
                                         if (client.state.id == c.id) {
                                             c.active_display_state = try self.workspace.new(
@@ -333,7 +334,7 @@ pub const Server = struct {
                                             break;
                                         }
                                     }
-                                    try client.send(rpc.ackResponse(message.id));
+                                    try client.send(rpc.ackResponse(client.last_request_id));
                                 },
                                 .quitted => {
                                     self.removeClient(polled_data.id);
@@ -505,10 +506,9 @@ pub const Client = struct {
         const response = (try self.server.recv(rpc.EmptyResponse, &request_buf)).?;
         assert(response == .Success);
         const message_id = self.nextMessageId();
-        const message = rpc.request(
-            kisa.ClientInitParams,
+        const message = rpc.eventRequest(
+            .initialize,
             message_id,
-            "initialize",
             .{
                 .path = "/home/grfork/reps/kisa/kisarc.zzz",
                 .readonly = false,
@@ -554,7 +554,8 @@ pub const Client = struct {
 
     fn receiveDrawData(self: *Client, id: u32) !kisa.DrawData {
         var message_buf: [transport.max_message_size]u8 = undefined;
-        const response = try self.receiveResponse(id, rpc.DrawDataResponse, &message_buf);
+        // TODO: better API for response construction
+        const response = try self.receiveResponse(id, rpc.Response(kisa.DrawData), &message_buf);
         return response.Success.result;
     }
 

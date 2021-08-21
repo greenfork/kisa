@@ -78,7 +78,7 @@ pub const Event = union(EventKind) {
     /// Sent by client when it quits.
     quitted,
     /// Provide initial parameters to initialize a client.
-    initialize,
+    initialize: ClientInitParams,
     quit,
     save,
     request_draw_data,
