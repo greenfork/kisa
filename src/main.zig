@@ -220,95 +220,18 @@ pub const Server = struct {
                 .success => |polled_data| {
                     switch (polled_data.ty) {
                         .listen_socket => {
-                            const accepted_socket = try os.accept(polled_data.fd, null, null, 0);
-                            const client_id = self.nextClientId();
-                            const client = try self.addClient(
-                                client_id,
-                                accepted_socket,
-                                // This `empty` is similar to `undefined`, we can't use it and have
-                                // to initialize first. With `empty` errors should be better. We can
-                                // also make it nullable but it's a pain to always account for a
-                                // nullable field.
-                                state.ActiveDisplayState.empty,
-                            );
-                            errdefer self.removeClient(client_id);
-                            try client.send(rpc.ackResponse(client.last_request_id));
+                            try self.processNewConnection(polled_data.fd);
                         },
                         .connection_socket => {
-                            // TODO: check if active display state is empty but we try to do something.
-                            var client = self.findClient(polled_data.id) orelse return error.ClientNotFound;
-                            const packet = (try client.readPacket(&packet_buf)) orelse return error.EmptyPacket;
-                            if (rpc.parseId(packet)) |request_id| {
-                                client.last_request_id = request_id orelse return error.NullIdInRequest;
-                            } else |err| {
-                                // Could be a notification with absent ID.
-                                if (err != error.MissingField) {
-                                    return err;
-                                } else {
-                                    client.last_request_id = 0;
-                                }
-                            }
-                            const method_str = try rpc.parseMethod(&method_buf, packet);
-                            const method = std.meta.stringToEnum(
-                                kisa.CommandKind,
-                                method_str,
-                            ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
-                            switch (method) {
-                                .keypress => {
-                                    // TODO: change command and handling in general
-                                    const keypress_message = try rpc.KeypressRequest.parse(
-                                        &message_buf,
-                                        packet,
-                                    );
-                                    std.debug.print("keypress_message: {}\n", .{keypress_message});
-                                },
-                                .open_file => {
-                                    const command = try rpc.parseCommandFromRequest(
-                                        .open_file,
-                                        &message_buf,
-                                        packet,
-                                    );
-                                    try self.commands.openFile(client, command.open_file.path);
-                                },
-                                .redraw => {
-                                    try self.commands.redraw(client);
-                                },
-                                .initialize => {
-                                    // TODO: error handling.
-                                    const command = try rpc.parseCommandFromRequest(
-                                        .initialize,
-                                        &message_buf,
-                                        packet,
-                                    );
-                                    const client_init_params = command.initialize;
-                                    for (self.clients.items) |*c| {
-                                        if (client.state.id == c.id) {
-                                            c.active_display_state = try self.workspace.new(
-                                                state.TextBuffer.InitParams{
-                                                    .content = null,
-                                                    .path = client_init_params.path,
-                                                    .name = client_init_params.path,
-                                                    .readonly = client_init_params.readonly,
-                                                },
-                                                state.WindowPane.InitParams{
-                                                    .text_area_rows = client_init_params.text_area_rows,
-                                                    .text_area_cols = client_init_params.text_area_cols,
-                                                },
-                                            );
-                                            break;
-                                        }
-                                    }
-                                    try client.send(rpc.ackResponse(client.last_request_id));
-                                },
-                                .quitted => {
-                                    self.removeClient(polled_data.id);
-                                    if (self.watcher.fds.len == 1) {
-                                        self.deinit();
-                                        break;
-                                    }
-                                },
-                                else => @panic("Not implemented"),
-                            }
+                            self.processClientRequest(
+                                polled_data.id,
+                                &packet_buf,
+                                &method_buf,
+                                &message_buf,
+                            ) catch |err| switch (err) {
+                                error.ShouldQuit => break,
+                                else => return err,
+                            };
                         },
                     }
                 },
@@ -320,6 +243,105 @@ pub const Server = struct {
                     }
                 },
             }
+        }
+    }
+
+    fn processNewConnection(self: *Self, polled_fd: os.socket_t) !void {
+        const accepted_socket = try os.accept(polled_fd, null, null, 0);
+        const client_id = self.nextClientId();
+        const client = try self.addClient(
+            client_id,
+            accepted_socket,
+            // This `empty` is similar to `undefined`, we can't use it and have
+            // to initialize first. With `empty` errors should be better. We can
+            // also make it nullable but it's a pain to always account for a
+            // nullable field.
+            state.ActiveDisplayState.empty,
+        );
+        errdefer self.removeClient(client_id);
+        try client.send(rpc.ackResponse(client.last_request_id));
+    }
+
+    fn processClientRequest(
+        self: *Self,
+        client_id: state.Workspace.Id,
+        packet_buf: []u8,
+        method_buf: []u8,
+        message_buf: []u8,
+    ) !void {
+        // TODO: check if active display state is empty but we try to do something.
+        var client = self.findClient(client_id) orelse return error.ClientNotFound;
+        const packet = (try client.readPacket(packet_buf)) orelse return error.EmptyPacket;
+        if (rpc.parseId(packet)) |request_id| {
+            client.last_request_id = request_id orelse return error.NullIdInRequest;
+        } else |err| {
+            // Could be a notification with absent ID.
+            if (err != error.MissingField) {
+                return err;
+            } else {
+                client.last_request_id = 0;
+            }
+        }
+        const method_str = try rpc.parseMethod(method_buf, packet);
+        const method = std.meta.stringToEnum(
+            kisa.CommandKind,
+            method_str,
+        ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
+        switch (method) {
+            .keypress => {
+                // TODO: change command and handling in general
+                const keypress_message = try rpc.KeypressRequest.parse(
+                    message_buf,
+                    packet,
+                );
+                std.debug.print("keypress_message: {}\n", .{keypress_message});
+            },
+            .open_file => {
+                const command = try rpc.parseCommandFromRequest(
+                    .open_file,
+                    message_buf,
+                    packet,
+                );
+                try self.commands.openFile(client, command.open_file.path);
+            },
+            .redraw => {
+                try self.commands.redraw(client);
+            },
+            .initialize => {
+                // TODO: error handling.
+                const command = try rpc.parseCommandFromRequest(
+                    .initialize,
+                    message_buf,
+                    packet,
+                );
+                const client_init_params = command.initialize;
+                for (self.clients.items) |*c| {
+                    if (client.state.id == c.id) {
+                        c.active_display_state = try self.workspace.new(
+                            state.TextBuffer.InitParams{
+                                .content = null,
+                                .path = client_init_params.path,
+                                .name = client_init_params.path,
+                                .readonly = client_init_params.readonly,
+                            },
+                            state.WindowPane.InitParams{
+                                .text_area_rows = client_init_params.text_area_rows,
+                                .text_area_cols = client_init_params.text_area_cols,
+                            },
+                        );
+                        break;
+                    }
+                }
+                try client.send(rpc.ackResponse(client.last_request_id));
+            },
+            .quitted => {
+                self.removeClient(client_id);
+                if (self.watcher.fds.len == 1) {
+                    self.deinit();
+                    return error.ShouldQuit;
+                }
+            },
+            else => @panic("Not implemented"),
         }
     }
 
