@@ -1,5 +1,4 @@
 //! Messages which are used by Client and Server to communicate via `transport` module.
-
 const std = @import("std");
 const meta = std.meta;
 const testing = std.testing;

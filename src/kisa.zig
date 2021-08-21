@@ -1,5 +1,4 @@
 //! Common data structures and functionality used by various components of this application.
-
 const std = @import("std");
 const rpc = @import("rpc.zig");
 const Server = @import("main.zig").Server;

@@ -1,7 +1,6 @@
 //! JSON-RPC 2.0 implementation. Does not explicitly implement batches, batches
 //! should be handled by the user of this library.
 //! https://www.jsonrpc.org/specification
-
 const std = @import("std");
 const json = std.json;
 const mem = std.mem;

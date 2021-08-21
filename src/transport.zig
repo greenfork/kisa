@@ -1,5 +1,4 @@
 //! Communication of Client and Server, also communication of operating system and this application.
-
 const std = @import("std");
 const os = std.os;
 const net = std.net;

@@ -1,6 +1,5 @@
 //! Editor configuration. Contains data structures corresponding to configuration and operations on
 //! configuration files.
-
 const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;

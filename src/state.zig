@@ -4,7 +4,6 @@
 //! Should be an isolated component which doesn't know anything but the things it is concerned
 //! about, meaning that this module must not interact with other code and just provide the
 //! interface for others to use.
-
 const std = @import("std");
 const testing = std.testing;
 const mem = std.mem;
