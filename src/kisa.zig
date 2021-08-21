@@ -40,14 +40,6 @@ pub const DrawData = struct {
     };
 };
 
-/// Parameters necessary to create new state in workspace and get `active_display_state`.
-pub const ClientInitParams = struct {
-    path: []const u8,
-    readonly: bool,
-    text_area_rows: u32,
-    text_area_cols: u32,
-};
-
 pub const CommandKind = enum {
     nop,
     /// Params has information about the key.
@@ -69,8 +61,7 @@ pub const CommandKind = enum {
     open_file,
 };
 
-/// Command is a generic notion of an action happenning on the server, usually as a response to
-/// client actions.
+/// Command is a an action issued by client to be executed on the server.
 pub const Command = union(CommandKind) {
     nop,
     /// Params has information about the key.
@@ -79,23 +70,29 @@ pub const Command = union(CommandKind) {
     quitted,
     quit,
     save,
+    redraw,
     /// Provide initial parameters to initialize a client.
     initialize: ClientInitParams,
-    redraw,
     /// Value is inserted character.
     insert_character: u8,
-    /// Value is multiplier.
-    cursor_move_down: u32,
-    /// Value is multiplier.
-    cursor_move_left: u32,
-    /// Value is multiplier.
-    cursor_move_up: u32,
-    /// Value is multiplier.
-    cursor_move_right: u32,
-    /// Value is multiplier.
-    delete_word: u32,
-    /// Value is multiplier.
-    delete_line: u32,
+    cursor_move_down: Multiplier,
+    cursor_move_left: Multiplier,
+    cursor_move_up: Multiplier,
+    cursor_move_right: Multiplier,
+    delete_word: Multiplier,
+    delete_line: Multiplier,
     /// Value is absolute file path.
     open_file: struct { path: []const u8 },
+
+    /// Parameters necessary to create new state in workspace and get `active_display_state`.
+    pub const ClientInitParams = struct {
+        path: []const u8,
+        readonly: bool,
+        text_area_rows: u32,
+        text_area_cols: u32,
+    };
+
+    /// Different editing operations accept a numeric multiplier which specifies the number of
+    /// times the operation should be executed.
+    pub const Multiplier = struct { multiplier: u32 = 1 };
 };
