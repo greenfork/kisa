@@ -29,6 +29,7 @@ pub fn build(b: *std.build.Builder) void {
     const test_jsonrpc = b.step("test-jsonrpc", "Run tests in jsonrpc");
     const test_transport = b.step("test-transport", "Run tests in transport");
     const test_rpc = b.step("test-rpc", "Run tests in rpc");
+    const test_keys = b.step("test-keys", "Run tests in keys");
 
     {
         var test_cases = b.addTest("src/main.zig");
@@ -116,5 +117,14 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setBuildMode(mode);
         test_all.dependOn(&test_cases.step);
         test_rpc.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/keys.zig");
+        test_cases.setFilter("keys:");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_all.dependOn(&test_cases.step);
+        test_keys.dependOn(&test_cases.step);
     }
 }

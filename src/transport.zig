@@ -266,11 +266,12 @@ pub const Watcher = struct {
         self.fds.swapRemove(index);
     }
 
-    /// Returns a readable file descriptor. Assumes that we don't have any other descriptors
+    /// Returns a readable file descriptor or `null` if timeout has expired. If timeout is -1,
+    /// always returns non-null result. Assumes that we don't have any other descriptors
     /// other than readable and that this will block if no readable file descriptors are
     /// available.
-    pub fn pollReadable(self: *Self) !PollResult {
-        try self.poll();
+    pub fn pollReadable(self: *Self, timeout: i32) !?PollResult {
+        if ((try self.poll(timeout)) == 0) return null;
 
         const pollfds = self.fds.items(.pollfd);
         const ids = self.fds.items(.id);
@@ -303,12 +304,12 @@ pub const Watcher = struct {
     }
 
     /// Fills current `fds` array with result events which can be inspected.
-    fn poll(self: *Self) !void {
+    fn poll(self: *Self, timeout: i32) !usize {
         if (self.pending_events_count == 0) {
-            self.pending_events_count = try os.poll(self.fds.items(.pollfd), -1);
-            assert(self.pending_events_count > 0);
+            self.pending_events_count = try os.poll(self.fds.items(.pollfd), timeout);
             self.pending_events_cursor = 0;
         }
+        return self.pending_events_count;
     }
 };
 
@@ -372,7 +373,7 @@ test "transport/fork2: client and server both poll events with watcher" {
         try watcher.addListenSocket(listen_socket, 0);
         var cnt: u8 = 3;
         while (cnt > 0) : (cnt -= 1) {
-            switch (try watcher.pollReadable()) {
+            switch ((try watcher.pollReadable(-1)).?) {
                 .success => |polled_data| {
                     switch (polled_data.ty) {
                         .listen_socket => {
@@ -404,7 +405,7 @@ test "transport/fork2: client and server both poll events with watcher" {
         var watcher = Watcher.init(testing.allocator);
         defer watcher.deinit();
         try watcher.addConnectionSocket(socket, 0);
-        switch (try watcher.pollReadable()) {
+        switch ((try watcher.pollReadable(-1)).?) {
             .success => |polled_data| {
                 var buf: [256]u8 = undefined;
                 const bytes_read = try os.recv(polled_data.fd, &buf, 0);

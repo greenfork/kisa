@@ -6,7 +6,6 @@ const testing = std.testing;
 const EditorMode = @import("state.zig").EditorMode;
 const zzz = @import("zzz");
 const kisa = @import("kisa");
-const Keys = @import("main.zig").Keys;
 
 // TODO: display errors from config parsing.
 
@@ -40,9 +39,9 @@ pub const Config = struct {
 
     pub const Keymap = std.AutoHashMap(EditorMode, Bindings);
     pub const KeysToActions = std.HashMap(
-        Keys.Key,
+        kisa.Key,
         Actions,
-        Keys.Key.HashMapContext,
+        kisa.Key.HashMapContext,
         std.hash_map.default_max_load_percentage,
     );
 
@@ -151,17 +150,28 @@ pub const Config = struct {
         }
     }
 
-    fn parseKeyDefinition(string: []const u8) !Keys.Key {
+    pub fn resolveKey(self: Self, key: kisa.Key) kisa.Command {
+        const actions = self.keymap.get(.normal).?.keys.get(key) orelse self.keymap.get(.normal).?.default;
+        // TODO: different actions and proper casting with this type system.
+        switch (actions.items[0]) {
+            .cursor_move_down => {
+                return @unionInit(kisa.Command, "cursor_move_down", {});
+            },
+            else => @panic("Not implemented"),
+        }
+    }
+
+    fn parseKeyDefinition(string: []const u8) !kisa.Key {
         if (string.len == 1) {
-            return Keys.Key.ascii(string[0]);
+            return kisa.Key.ascii(string[0]);
         } else if (special_keycode_map.get(string)) |keycode| {
-            return Keys.Key{ .code = keycode };
+            return kisa.Key{ .code = keycode };
         } else {
-            var key = Keys.Key{ .code = undefined };
+            var key = kisa.Key{ .code = undefined };
             var it = mem.split(string, "-");
             while (it.next()) |part| {
                 if (part.len == 1) {
-                    key.code = Keys.Key.ascii(part[0]).code;
+                    key.code = kisa.Key.ascii(part[0]).code;
                     return key;
                 } else if (special_keycode_map.get(part)) |keycode| {
                     key.code = keycode;
@@ -182,7 +192,7 @@ pub const Config = struct {
         }
     }
 
-    const special_keycode_map = std.ComptimeStringMap(Keys.KeyCode, .{
+    const special_keycode_map = std.ComptimeStringMap(kisa.keys.KeyCode, .{
         .{ "arrow_up", .{ .keysym = .arrow_up } },
         .{ "arrow_down", .{ .keysym = .arrow_down } },
         .{ "arrow_left", .{ .keysym = .arrow_left } },
@@ -292,13 +302,13 @@ test "config: add default config" {
     const nkeys = normal.keys;
     const insert = config.keymap.get(.insert).?;
     const ikeys = insert.keys;
-    const key_arrow_up = Keys.Key{ .code = .{ .keysym = .arrow_up } };
+    const key_arrow_up = kisa.Key{ .code = .{ .keysym = .arrow_up } };
     const key_super_arrow_up = blk: {
-        var key = Keys.Key{ .code = .{ .keysym = .arrow_up } };
+        var key = kisa.Key{ .code = .{ .keysym = .arrow_up } };
         key.addSuper();
         break :blk key;
     };
-    var ctrl_alt_c = Keys.Key.ascii('c');
+    var ctrl_alt_c = kisa.Key.ascii('c');
     ctrl_alt_c.addCtrl();
     ctrl_alt_c.addAlt();
 
@@ -308,24 +318,24 @@ test "config: add default config" {
 
     try testing.expectEqual(@as(usize, 1), normal.default.items.len);
     try testing.expectEqual(kisa.CommandKind.nop, normal.default.items[0]);
-    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('h')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_left, nkeys.get(Keys.Key.ascii('h')).?.items[0]);
-    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('j')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_down, nkeys.get(Keys.Key.ascii('j')).?.items[0]);
-    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('k')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_up, nkeys.get(Keys.Key.ascii('k')).?.items[0]);
-    try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('l')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_right, nkeys.get(Keys.Key.ascii('l')).?.items[0]);
-    try testing.expectEqual(@as(usize, 2), nkeys.get(Keys.Key.ascii('n')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_down, nkeys.get(Keys.Key.ascii('n')).?.items[0]);
-    try testing.expectEqual(kisa.CommandKind.cursor_move_right, nkeys.get(Keys.Key.ascii('n')).?.items[1]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(kisa.Key.ascii('h')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_left, nkeys.get(kisa.Key.ascii('h')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(kisa.Key.ascii('j')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_down, nkeys.get(kisa.Key.ascii('j')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(kisa.Key.ascii('k')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_up, nkeys.get(kisa.Key.ascii('k')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), nkeys.get(kisa.Key.ascii('l')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_right, nkeys.get(kisa.Key.ascii('l')).?.items[0]);
+    try testing.expectEqual(@as(usize, 2), nkeys.get(kisa.Key.ascii('n')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_down, nkeys.get(kisa.Key.ascii('n')).?.items[0]);
+    try testing.expectEqual(kisa.CommandKind.cursor_move_right, nkeys.get(kisa.Key.ascii('n')).?.items[1]);
 
     try testing.expectEqual(@as(usize, 1), insert.default.items.len);
     try testing.expectEqual(kisa.CommandKind.insert_character, insert.default.items[0]);
-    try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.ctrl('s')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.save, ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
-    try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.shift('d')).?.items.len);
-    try testing.expectEqual(kisa.CommandKind.delete_word, ikeys.get(Keys.Key.shift('d')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(kisa.Key.ctrl('s')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.save, ikeys.get(kisa.Key.ctrl('s')).?.items[0]);
+    try testing.expectEqual(@as(usize, 1), ikeys.get(kisa.Key.shift('d')).?.items.len);
+    try testing.expectEqual(kisa.CommandKind.delete_word, ikeys.get(kisa.Key.shift('d')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_arrow_up).?.items.len);
     try testing.expectEqual(kisa.CommandKind.cursor_move_up, ikeys.get(key_arrow_up).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_super_arrow_up).?.items.len);
