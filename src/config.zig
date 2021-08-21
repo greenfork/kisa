@@ -6,13 +6,13 @@ const mem = std.mem;
 const testing = std.testing;
 const EditorMode = @import("state.zig").EditorMode;
 const zzz = @import("zzz");
-const EventKind = @import("main.zig").EventKind;
+const kisa = @import("kisa");
 const Keys = @import("main.zig").Keys;
 
 // TODO: display errors from config parsing.
 
-pub const allowed_keypress_events = [_]EventKind{
-    .noop,
+pub const allowed_keypress_events = [_]kisa.EventKind{
+    .nop,
     .insert_character,
     .cursor_move_down,
     .cursor_move_left,
@@ -52,7 +52,7 @@ pub const Config = struct {
         keys: KeysToActions,
     };
 
-    pub const Actions = std.ArrayList(EventKind);
+    pub const Actions = std.ArrayList(kisa.EventKind);
 
     const Self = @This();
 
@@ -124,9 +124,12 @@ pub const Config = struct {
                                 switch (action.value) {
                                     .String => |val| {
                                         const event_kind = std.meta.stringToEnum(
-                                            EventKind,
+                                            kisa.EventKind,
                                             val,
-                                        ) orelse return error.UnknownKeyAction;
+                                        ) orelse {
+                                            std.debug.print("Unknown key action: {s}\n", .{val});
+                                            return error.UnknownKeyAction;
+                                        };
                                         for (allowed_keypress_events) |allowed_event_kind| {
                                             if (event_kind == allowed_event_kind) {
                                                 try key_binding.append(event_kind);
@@ -272,7 +275,7 @@ test "config: add default config" {
         \\    n:
         \\      cursor_move_down
         \\      cursor_move_right
-        \\    default: noop
+        \\    default: nop
         \\  insert:
         \\    default: insert_character
         \\    ctrl-alt-c: quit
@@ -305,29 +308,29 @@ test "config: add default config" {
     try testing.expectEqual(@as(usize, 5), ikeys.count());
 
     try testing.expectEqual(@as(usize, 1), normal.default.items.len);
-    try testing.expectEqual(EventKind.noop, normal.default.items[0]);
+    try testing.expectEqual(kisa.EventKind.nop, normal.default.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('h')).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_left, nkeys.get(Keys.Key.ascii('h')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_left, nkeys.get(Keys.Key.ascii('h')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('j')).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('j')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('j')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('k')).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_up, nkeys.get(Keys.Key.ascii('k')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_up, nkeys.get(Keys.Key.ascii('k')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), nkeys.get(Keys.Key.ascii('l')).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('l')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('l')).?.items[0]);
     try testing.expectEqual(@as(usize, 2), nkeys.get(Keys.Key.ascii('n')).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('n')).?.items[0]);
-    try testing.expectEqual(EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('n')).?.items[1]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_down, nkeys.get(Keys.Key.ascii('n')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_right, nkeys.get(Keys.Key.ascii('n')).?.items[1]);
 
     try testing.expectEqual(@as(usize, 1), insert.default.items.len);
-    try testing.expectEqual(EventKind.insert_character, insert.default.items[0]);
+    try testing.expectEqual(kisa.EventKind.insert_character, insert.default.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.ctrl('s')).?.items.len);
-    try testing.expectEqual(EventKind.save, ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.save, ikeys.get(Keys.Key.ctrl('s')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(Keys.Key.shift('d')).?.items.len);
-    try testing.expectEqual(EventKind.delete_word, ikeys.get(Keys.Key.shift('d')).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.delete_word, ikeys.get(Keys.Key.shift('d')).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_arrow_up).?.items.len);
-    try testing.expectEqual(EventKind.cursor_move_up, ikeys.get(key_arrow_up).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.cursor_move_up, ikeys.get(key_arrow_up).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(key_super_arrow_up).?.items.len);
-    try testing.expectEqual(EventKind.delete_line, ikeys.get(key_super_arrow_up).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.delete_line, ikeys.get(key_super_arrow_up).?.items[0]);
     try testing.expectEqual(@as(usize, 1), ikeys.get(ctrl_alt_c).?.items.len);
-    try testing.expectEqual(EventKind.quit, ikeys.get(ctrl_alt_c).?.items[0]);
+    try testing.expectEqual(kisa.EventKind.quit, ikeys.get(ctrl_alt_c).?.items[0]);
 }

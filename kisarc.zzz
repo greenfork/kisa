@@ -7,7 +7,7 @@ keymap:
     n:
       cursor_move_down
       cursor_move_right
-    default: noop
+    default: nop
   insert:
     default: insert_character
     ctrl-alt-c: quit

@@ -8,7 +8,6 @@ const assert = std.debug.assert;
 const kisa = @import("kisa");
 const rpc = @import("rpc.zig");
 const state = @import("state.zig");
-const jsonrpc = @import("jsonrpc.zig");
 const Config = @import("config.zig").Config;
 const transport = @import("transport.zig");
 
@@ -78,46 +77,6 @@ pub const UI = struct {
     }
 };
 
-pub const EventKind = enum {
-    noop,
-    quit,
-    save,
-    request_draw_data,
-    insert_character,
-    cursor_move_down,
-    cursor_move_left,
-    cursor_move_up,
-    cursor_move_right,
-    delete_word,
-    delete_line,
-    open_file,
-};
-
-/// Event is a generic notion of an action happenning on the server, usually as a response to
-/// client actions.
-pub const Event = union(EventKind) {
-    noop,
-    quit,
-    save,
-    request_draw_data,
-    /// Value is inserted character.
-    insert_character: u8,
-    /// Value is multiplier.
-    cursor_move_down: u32,
-    /// Value is multiplier.
-    cursor_move_left: u32,
-    /// Value is multiplier.
-    cursor_move_up: u32,
-    /// Value is multiplier.
-    cursor_move_right: u32,
-    /// Value is multiplier.
-    delete_word: u32,
-    /// Value is multiplier.
-    delete_line: u32,
-    /// Value is absolute file path.
-    open_file: []const u8,
-};
-
 /// Event dispatcher processes any events happening on the server. The result is usually
 /// mutation of state, firing of registered hooks if any, and sending response back to client.
 pub const EventDispatcher = struct {
@@ -125,9 +84,9 @@ pub const EventDispatcher = struct {
 
     const Self = @This();
 
-    pub fn dispatch(self: *Self, event: Event, client: Server.ClientRepresentation) !void {
+    pub fn dispatch(self: *Self, event: kisa.Event, client: Server.ClientRepresentation) !void {
         switch (event) {
-            .noop => @panic("Not implemented"),
+            .nop => @panic("Not implemented"),
             .quit => @panic("Not implemented"),
             .save => @panic("Not implemented"),
             .insert_character => @panic("Not implemented"),
@@ -137,12 +96,13 @@ pub const EventDispatcher = struct {
             .cursor_move_right => @panic("Not implemented"),
             .delete_word => @panic("Not implemented"),
             .delete_line => @panic("Not implemented"),
-            .open_file => |path| {
-                try self.commands.openFile(client, path);
+            .open_file => |of| {
+                try self.commands.openFile(client, of.path);
             },
             .request_draw_data => {
                 try self.commands.sendDrawData(client);
             },
+            else => @panic("Not implemented"),
         }
     }
 };
@@ -173,7 +133,7 @@ pub const Commands = struct {
 
     pub fn sendDrawData(self: Self, client: Server.ClientRepresentation) !void {
         const draw_data = self.workspace.getDrawData(client.state.active_display_state);
-        const message = rpc.DrawDataResponse.initSuccess(client.last_request_id, draw_data);
+        const message = rpc.response(kisa.DrawData, client.last_request_id, draw_data);
         try client.send(message);
     }
 
@@ -183,17 +143,6 @@ pub const Commands = struct {
         defer file.close();
         return try file.readToEndAlloc(ally, std.math.maxInt(usize));
     }
-};
-
-pub const ClientMessageMethod = enum {
-    /// Params has information about the key.
-    keypress,
-    /// Sent by client when it quits.
-    quitted,
-    /// First value in params is the event kind, others are arguments to this event.
-    fire_event,
-    /// Provide initial parameters to initialize a client.
-    initialize,
 };
 
 pub const Server = struct {
@@ -332,50 +281,40 @@ pub const Server = struct {
                             }
                             const method_str = try rpc.parseMethod(&method_buf, packet);
                             const method = std.meta.stringToEnum(
-                                ClientMessageMethod,
+                                kisa.EventKind,
                                 method_str,
-                            ) orelse @panic("Unknown jsonrpc method from client");
+                            ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
                             switch (method) {
                                 .keypress => {
-                                    const keypress_message = try KeypressRequest.parse(
+                                    const keypress_message = try rpc.KeypressRequest.parse(
                                         &message_buf,
                                         packet,
                                     );
                                     std.debug.print("keypress_message: {}\n", .{keypress_message});
                                 },
-                                .fire_event => {
-                                    const message = try rpc.parseRequest([]jsonrpc.Value, &message_buf, packet);
-                                    const params = message.params orelse @panic("No params in message");
-                                    if (params.len == 0) {
-                                        @panic("Command must not have an empty array as argument");
-                                    }
-                                    if (params[0] != .String) {
-                                        @panic("First params of a command must be a string");
-                                    }
-                                    const event_kind = std.meta.stringToEnum(
-                                        EventKind,
-                                        params[0].String,
-                                    ) orelse @panic("Unknown event kind in a command");
-                                    switch (event_kind) {
-                                        .open_file => {
-                                            if (params.len != 2) @panic("Must have at least 1 argument");
-                                            if (params[1] != .String) @panic("Argument must be a string");
-                                            const event = Event{ .open_file = params[1].String };
-                                            // TODO: do something with the result.
-                                            try self.event_dispatcher.dispatch(event, client);
-                                        },
-                                        .request_draw_data => {
-                                            if (params.len != 1) @panic("Must have no arguments");
-                                            const event = Event.request_draw_data;
-                                            // TODO: do something with the result.
-                                            try self.event_dispatcher.dispatch(event, client);
-                                        },
-                                        else => @panic("Command not implemented"),
-                                    }
+                                .open_file => {
+                                    const event = try rpc.parseEventFromRequest(
+                                        .open_file,
+                                        &message_buf,
+                                        packet,
+                                    );
+                                    try self.event_dispatcher.dispatch(event, client);
+                                },
+                                .request_draw_data => {
+                                    const event = try rpc.parseEventFromRequest(
+                                        .request_draw_data,
+                                        &message_buf,
+                                        packet,
+                                    );
+                                    try self.event_dispatcher.dispatch(event, client);
                                 },
                                 .initialize => {
                                     // TODO: error handling.
-                                    const message = try rpc.InitClientRequest.parse(&message_buf, packet);
+                                    const message = try rpc.parseRequest(
+                                        kisa.ClientInitParams,
+                                        &message_buf,
+                                        packet,
+                                    );
                                     const client_init_params = message.params.?;
                                     for (self.clients.items) |*c| {
                                         if (client.state.id == c.id) {
@@ -403,6 +342,7 @@ pub const Server = struct {
                                         break;
                                     }
                                 },
+                                else => @panic("Not implemented"),
                             }
                         },
                     }
@@ -548,7 +488,7 @@ pub const Client = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        const message = rpc.EmptyRequest.init(null, "quitted", null);
+        const message = rpc.emptyNotification("quitted");
         self.server.send(message) catch {};
         // TEST: Check for race conditions.
         // std.time.sleep(std.time.ns_per_s * 1);
@@ -565,10 +505,11 @@ pub const Client = struct {
         const response = (try self.server.recv(rpc.EmptyResponse, &request_buf)).?;
         assert(response == .Success);
         const message_id = self.nextMessageId();
-        const message = rpc.InitClientRequest.init(
+        const message = rpc.request(
+            kisa.ClientInitParams,
             message_id,
             "initialize",
-            kisa.ClientInitParams{
+            .{
                 .path = "/home/grfork/reps/kisa/kisarc.zzz",
                 .readonly = false,
                 .text_area_rows = 80,
@@ -581,7 +522,7 @@ pub const Client = struct {
 
     pub fn sendKeypress(self: *Client, key: Keys.Key) !void {
         const id = self.nextMessageId();
-        const message = KeypressRequest.init(
+        const message = rpc.KeypressRequest.init(
             .{ .Integer = id },
             "keypress",
             key,
@@ -599,24 +540,14 @@ pub const Client = struct {
 
     fn openFile(self: *Client, path: []const u8) !void {
         const id = self.nextMessageId();
-        const event_params = [_]jsonrpc.Value{ .{ .String = "open_file" }, .{ .String = path } };
-        const message = jsonrpc.SimpleRequest.init(
-            jsonrpc.IdValue{ .Integer = id },
-            "fire_event",
-            &event_params,
-        );
+        const message = rpc.eventRequest(.open_file, id, .{ .path = path });
         try self.server.send(message);
         try self.waitForResponse(id);
     }
 
     fn requestDrawData(self: *Client) !kisa.DrawData {
-        const id = @intCast(i64, self.nextMessageId());
-        const event_params = [_]jsonrpc.Value{.{ .String = "request_draw_data" }};
-        const message = jsonrpc.SimpleRequest.init(
-            jsonrpc.IdValue{ .Integer = id },
-            "fire_event",
-            &event_params,
-        );
+        const id = self.nextMessageId();
+        const message = rpc.emptyEventRequest(.request_draw_data, id);
         try self.server.send(message);
         return try self.receiveDrawData(@intCast(u32, id));
     }
@@ -732,8 +663,6 @@ pub fn main() anyerror!void {
         }
     }
 }
-
-pub const KeypressRequest = jsonrpc.Request(Keys.Key);
 
 /// Representation of a frontend-agnostic "key" which is supposed to encode any possible key
 /// unambiguously. All UI frontends are supposed to provide a `Key` struct out of their `next_key`

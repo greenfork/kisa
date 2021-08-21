@@ -1,15 +1,17 @@
 //! Messages which are used by Client and Server to communicate via `transport` module.
 
 const std = @import("std");
+const meta = std.meta;
 const testing = std.testing;
 const assert = std.debug.assert;
 const jsonrpc = @import("jsonrpc.zig");
 const kisa = @import("kisa");
+const Keys = @import("main.zig").Keys;
 
 pub const EmptyResponse = ResponseType(rpcImplementation, bool);
 pub const EmptyRequest = RequestType(rpcImplementation, []bool);
 pub const DrawDataResponse = ResponseType(rpcImplementation, kisa.DrawData);
-pub const InitClientRequest = RequestType(rpcImplementation, kisa.ClientInitParams);
+pub const KeypressRequest = jsonrpc.Request(Keys.Key);
 
 pub fn ackResponse(id: ?u32) EmptyResponse {
     return EmptyResponse.initSuccess(id, true);
@@ -31,6 +33,29 @@ pub fn request(
     params: ?ParamsShape,
 ) RequestType(rpcImplementation, ParamsShape) {
     return RequestType(rpcImplementation, ParamsShape).init(id, method, params);
+}
+
+pub fn eventRequest(
+    comptime event_kind: kisa.EventKind,
+    id: ?u32,
+    params: meta.TagPayload(kisa.Event, event_kind),
+) RequestType(rpcImplementation, meta.TagPayload(kisa.Event, event_kind)) {
+    return request(
+        meta.TagPayload(kisa.Event, event_kind),
+        id,
+        comptime meta.tagName(event_kind),
+        params,
+    );
+}
+
+pub fn emptyEventRequest(comptime event_kind: kisa.EventKind, id: ?u32) EmptyRequest {
+    return EmptyRequest.init(id, comptime meta.tagName(event_kind), null);
+}
+
+pub fn emptyNotification(
+    method: []const u8,
+) RequestType(rpcImplementation, []bool) {
+    return RequestType(rpcImplementation, []bool).init(null, method, null);
 }
 
 pub fn response(
@@ -55,6 +80,24 @@ pub fn parseResponse(
     string: []const u8,
 ) !ResponseType(rpcImplementation, ResultShape) {
     return try ResponseType(rpcImplementation, ResultShape).parse(buf, string);
+}
+
+pub fn parseEventFromRequest(
+    comptime event_kind: kisa.EventKind,
+    buf: []u8,
+    string: []const u8,
+) !kisa.Event {
+    const Payload = meta.TagPayload(kisa.Event, event_kind);
+    switch (@typeInfo(Payload)) {
+        .Void => {
+            _ = try EmptyRequest.parse(buf, string);
+            return @unionInit(kisa.Event, comptime meta.tagName(event_kind), {});
+        },
+        else => {
+            const req = try RequestType(rpcImplementation, Payload).parse(buf, string);
+            return @unionInit(kisa.Event, comptime meta.tagName(event_kind), req.params.?);
+        },
+    }
 }
 
 pub fn parseId(string: []const u8) !?u32 {
