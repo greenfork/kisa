@@ -58,7 +58,7 @@ pub const CommandKind = enum {
     initialize,
     quit,
     save,
-    request_draw_data,
+    redraw,
     insert_character,
     cursor_move_down,
     cursor_move_left,
@@ -81,7 +81,7 @@ pub const Command = union(CommandKind) {
     save,
     /// Provide initial parameters to initialize a client.
     initialize: ClientInitParams,
-    request_draw_data,
+    redraw,
     /// Value is inserted character.
     insert_character: u8,
     /// Value is multiplier.

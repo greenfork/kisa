@@ -101,7 +101,7 @@ pub const Commands = struct {
         try client.send(rpc.ackResponse(client.last_request_id));
     }
 
-    pub fn sendDrawData(self: Self, client: Server.ClientRepresentation) !void {
+    pub fn redraw(self: Self, client: Server.ClientRepresentation) !void {
         const draw_data = self.workspace.getDrawData(client.state.active_display_state);
         const message = rpc.response(kisa.DrawData, client.last_request_id, draw_data);
         try client.send(message);
@@ -268,13 +268,13 @@ pub const Server = struct {
                                     );
                                     try self.commands.openFile(client, command.open_file.path);
                                 },
-                                .request_draw_data => {
+                                .redraw => {
                                     _ = try rpc.parseCommandFromRequest(
-                                        .request_draw_data,
+                                        .redraw,
                                         &message_buf,
                                         packet,
                                     );
-                                    try self.commands.sendDrawData(client);
+                                    try self.commands.redraw(client);
                                 },
                                 .initialize => {
                                     // TODO: error handling.
@@ -514,7 +514,7 @@ pub const Client = struct {
 
     fn requestDrawData(self: *Client) !kisa.DrawData {
         const id = self.nextMessageId();
-        const message = rpc.emptyCommandRequest(.request_draw_data, id);
+        const message = rpc.emptyCommandRequest(.redraw, id);
         try self.server.send(message);
         return try self.receiveDrawData(@intCast(u32, id));
     }
