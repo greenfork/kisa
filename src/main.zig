@@ -77,36 +77,6 @@ pub const UI = struct {
     }
 };
 
-/// Event dispatcher processes any events happening on the server. The result is usually
-/// mutation of state, firing of registered hooks if any, and sending response back to client.
-pub const EventDispatcher = struct {
-    commands: *Commands,
-
-    const Self = @This();
-
-    pub fn dispatch(self: *Self, event: kisa.Event, client: Server.ClientRepresentation) !void {
-        switch (event) {
-            .nop => @panic("Not implemented"),
-            .quit => @panic("Not implemented"),
-            .save => @panic("Not implemented"),
-            .insert_character => @panic("Not implemented"),
-            .cursor_move_down => @panic("Not implemented"),
-            .cursor_move_left => @panic("Not implemented"),
-            .cursor_move_up => @panic("Not implemented"),
-            .cursor_move_right => @panic("Not implemented"),
-            .delete_word => @panic("Not implemented"),
-            .delete_line => @panic("Not implemented"),
-            .open_file => |of| {
-                try self.commands.openFile(client, of.path);
-            },
-            .request_draw_data => {
-                try self.commands.sendDrawData(client);
-            },
-            else => @panic("Not implemented"),
-        }
-    }
-};
-
 /// Commands and occasionally queries is a general interface for interacting with the State
 /// of a text editor.
 pub const Commands = struct {
@@ -149,7 +119,6 @@ pub const Server = struct {
     ally: *mem.Allocator,
     config: Config,
     watcher: transport.Watcher,
-    event_dispatcher: EventDispatcher,
     workspace: state.Workspace,
     clients: std.ArrayList(state.Client),
     commands: Commands,
@@ -179,7 +148,6 @@ pub const Server = struct {
             .watcher = watcher,
             .workspace = workspace,
             .clients = std.ArrayList(state.Client).init(ally),
-            .event_dispatcher = undefined,
             .commands = undefined,
         };
     }
@@ -189,7 +157,6 @@ pub const Server = struct {
     /// Must be called right after `init`.
     pub fn initDynamic(self: *Self) void {
         self.commands = Commands{ .workspace = &self.workspace };
-        self.event_dispatcher = EventDispatcher{ .commands = &self.commands };
     }
 
     pub fn deinit(self: *Self) void {
@@ -299,15 +266,15 @@ pub const Server = struct {
                                         &message_buf,
                                         packet,
                                     );
-                                    try self.event_dispatcher.dispatch(event, client);
+                                    try self.commands.openFile(client, event.open_file.path);
                                 },
                                 .request_draw_data => {
-                                    const event = try rpc.parseEventFromRequest(
+                                    _ = try rpc.parseEventFromRequest(
                                         .request_draw_data,
                                         &message_buf,
                                         packet,
                                     );
-                                    try self.event_dispatcher.dispatch(event, client);
+                                    try self.commands.sendDrawData(client);
                                 },
                                 .initialize => {
                                     // TODO: error handling.
