@@ -244,6 +244,8 @@ pub const Server = struct {
                                 // Could be a notification with absent ID.
                                 if (err != error.MissingField) {
                                     return err;
+                                } else {
+                                    client.last_request_id = 0;
                                 }
                             }
                             const method_str = try rpc.parseMethod(&method_buf, packet);
@@ -269,11 +271,6 @@ pub const Server = struct {
                                     try self.commands.openFile(client, command.open_file.path);
                                 },
                                 .redraw => {
-                                    _ = try rpc.parseCommandFromRequest(
-                                        .redraw,
-                                        &message_buf,
-                                        packet,
-                                    );
                                     try self.commands.redraw(client);
                                 },
                                 .initialize => {
