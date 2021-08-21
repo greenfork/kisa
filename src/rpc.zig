@@ -26,10 +26,67 @@ pub fn ackResponse(id: ?u32) EmptyResponse {
 }
 pub const ResponseError = error{
     AccessDenied,
+    BadPathName,
+    DeviceBusy,
+    EmptyPacket,
+    FileNotFound,
+    FileTooBig,
+    InputOutput,
+    InvalidParams,
+    InvalidRequest,
+    InvalidUtf8,
+    IsDir,
+    MethodNotFound,
+    NameTooLong,
+    NoDevice,
+    NoSpaceLeft,
+    NotOpenForReading,
+    NullIdInRequest,
+    OperationAborted,
+    ParseError,
+    ProcessFdQuotaExceeded,
+    SharingViolation,
+    SymLinkLoop,
+    SystemFdQuotaExceeded,
+    SystemResources,
+    Unexpected,
+    UninitializedClient,
 };
 pub fn errorResponse(id: ?u32, err: ResponseError) EmptyResponse {
     switch (err) {
+        // JSON-RPC 2.0 errors
+        error.EmptyPacket => return EmptyResponse.initError(id, -32700, "Parse error: empty packet"),
+        error.InvalidRequest => return EmptyResponse.initError(id, -32600, "Invalid request"),
+        error.NullIdInRequest => return EmptyResponse.initError(id, -32600, "Invalid request: Id can't be null"),
+        error.ParseError => return EmptyResponse.initError(id, -32700, "Parse error"),
+        error.MethodNotFound => return EmptyResponse.initError(id, -32601, "Method not found"),
+        error.InvalidParams => return EmptyResponse.initError(id, -32602, "Invalid params"),
+
+        // Unix-style issues
         error.AccessDenied => return EmptyResponse.initError(id, 13, "Permission denied"),
+        error.SharingViolation => return EmptyResponse.initError(id, 37, "Sharing violation"),
+        error.SymLinkLoop => return EmptyResponse.initError(id, 40, "Too many levels of symbolic links"),
+        error.ProcessFdQuotaExceeded => return EmptyResponse.initError(id, 24, "Too many open files"),
+        error.SystemFdQuotaExceeded => return EmptyResponse.initError(id, 23, "Too many open files in system"),
+        error.FileNotFound => return EmptyResponse.initError(id, 2, "No such file or directory"),
+        error.SystemResources => return EmptyResponse.initError(id, 104, "Connection reset by peer"),
+        error.NameTooLong => return EmptyResponse.initError(id, 36, "File name too long"),
+        error.NoDevice => return EmptyResponse.initError(id, 19, "No such device"),
+        error.DeviceBusy => return EmptyResponse.initError(id, 16, "Device or resource busy"),
+        error.FileTooBig => return EmptyResponse.initError(id, 27, "File too large"),
+        error.NoSpaceLeft => return EmptyResponse.initError(id, 28, "No space left on device"),
+        error.IsDir => return EmptyResponse.initError(id, 21, "Is a directory"),
+        error.NotOpenForReading => return EmptyResponse.initError(id, 77, "File descriptor in bad state, not open for reading"),
+        error.InputOutput => return EmptyResponse.initError(id, 5, "Input/output error"),
+
+        // Other OS-specific issues
+        error.BadPathName => return EmptyResponse.initError(id, 1001, "On Windows, file paths cannot contain these characters: '/', '*', '?', '\"', '<', '>', '|'"),
+        error.InvalidUtf8 => return EmptyResponse.initError(id, 1002, "On Windows, file paths must be valid Unicode."),
+        error.OperationAborted => return EmptyResponse.initError(id, 1003, "Operation aborted"),
+        error.Unexpected => return EmptyResponse.initError(id, 999, "Unexpected error, language-level bug"),
+
+        // Application errors
+        error.UninitializedClient => return EmptyResponse.initError(id, 2001, "Client is not initialized"),
     }
     unreachable;
 }
@@ -98,11 +155,14 @@ pub fn parseCommandFromRequest(
     const Payload = meta.TagPayload(kisa.Command, command_kind);
     switch (@typeInfo(Payload)) {
         .Void => {
-            _ = try EmptyRequest.parse(buf, string);
+            _ = EmptyRequest.parse(buf, string) catch return error.InvalidRequest;
             return @unionInit(kisa.Command, comptime meta.tagName(command_kind), {});
         },
         else => {
-            const req = try Request(Payload).parse(buf, string);
+            const req = Request(Payload).parse(buf, string) catch |err| switch (err) {
+                error.MissingField => return error.InvalidParams,
+                else => return error.InvalidRequest,
+            };
             return @unionInit(kisa.Command, comptime meta.tagName(command_kind), req.params.?);
         },
     }
@@ -111,7 +171,10 @@ pub fn parseCommandFromRequest(
 pub fn parseId(string: []const u8) !?u32 {
     switch (rpcImplementation) {
         .jsonrpc => {
-            const id_value = try jsonrpc.parseId(null, string);
+            const id_value = jsonrpc.parseId(null, string) catch |err| switch (err) {
+                error.MissingField => return error.MissingField,
+                else => return error.ParseError,
+            };
             if (id_value) |id| {
                 return @intCast(u32, id.Integer);
             } else {
@@ -125,7 +188,10 @@ pub fn parseId(string: []const u8) !?u32 {
 pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
     switch (rpcImplementation) {
         .jsonrpc => {
-            return try jsonrpc.parseMethod(buf, string);
+            return jsonrpc.parseMethod(buf, string) catch |err| switch (err) {
+                error.MissingField => return error.MethodNotFound,
+                else => return error.ParseError,
+            };
         },
     }
 }

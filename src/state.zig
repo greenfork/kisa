@@ -254,7 +254,7 @@ pub const Workspace = struct {
             text_buffer.data.id,
         ) catch |err| switch (err) {
             error.TextBufferNotFound => unreachable,
-            else => return err,
+            else => |e| return e,
         };
     }
 
@@ -309,7 +309,7 @@ pub const Workspace = struct {
             window_pane.data.id,
         ) catch |err| switch (err) {
             error.WindowPaneNotFound => unreachable,
-            else => return err,
+            else => |e| return e,
         };
     }
 
@@ -665,9 +665,54 @@ pub const TextBuffer = struct {
             if (init_params.content) |cont| {
                 break :blk try workspace.ally.dupe(u8, cont);
             } else if (init_params.path) |p| {
-                var file = try std.fs.openFileAbsolute(p, .{});
+                var file = std.fs.openFileAbsolute(
+                    p,
+                    .{},
+                ) catch |err| switch (err) {
+                    error.PipeBusy => unreachable,
+                    error.NotDir => unreachable,
+                    error.PathAlreadyExists => unreachable,
+                    error.WouldBlock => unreachable,
+                    error.FileLocksNotSupported => unreachable,
+                    error.SharingViolation,
+                    error.AccessDenied,
+                    error.SymLinkLoop,
+                    error.ProcessFdQuotaExceeded,
+                    error.SystemFdQuotaExceeded,
+                    error.FileNotFound,
+                    error.SystemResources,
+                    error.NameTooLong,
+                    error.NoDevice,
+                    error.DeviceBusy,
+                    error.FileTooBig,
+                    error.NoSpaceLeft,
+                    error.IsDir,
+                    error.BadPathName,
+                    error.InvalidUtf8,
+                    error.Unexpected,
+                    => |e| return e,
+                };
+
                 defer file.close();
-                break :blk try file.readToEndAlloc(workspace.ally, std.math.maxInt(usize));
+                break :blk file.readToEndAlloc(
+                    workspace.ally,
+                    std.math.maxInt(usize),
+                ) catch |err| switch (err) {
+                    error.WouldBlock => unreachable,
+                    error.BrokenPipe => unreachable,
+                    error.ConnectionResetByPeer => unreachable,
+                    error.ConnectionTimedOut => unreachable,
+                    error.FileTooBig,
+                    error.SystemResources,
+                    error.IsDir,
+                    error.OutOfMemory,
+                    error.OperationAborted,
+                    error.NotOpenForReading,
+                    error.AccessDenied,
+                    error.InputOutput,
+                    error.Unexpected,
+                    => |e| return e,
+                };
             } else {
                 return error.InitParamsMustHaveEitherPathOrContent;
             }

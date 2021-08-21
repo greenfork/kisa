@@ -86,32 +86,48 @@ pub const Commands = struct {
 
     pub fn openFile(
         self: Self,
-        client: Server.ClientRepresentation,
+        client: *Server.ClientRepresentation,
         path: []const u8,
     ) !void {
         // TODO: open existing text buffer.
-        client.state.active_display_state = try self.workspace.newTextBuffer(
+        client.state.active_display_state = self.workspace.newTextBuffer(
             client.state.active_display_state,
             state.TextBuffer.InitParams{
                 .path = path,
                 .name = path,
                 .content = null,
             },
-        );
+        ) catch |err| switch (err) {
+            error.InitParamsMustHaveEitherPathOrContent => return error.InvalidParams,
+            error.SharingViolation,
+            error.OutOfMemory,
+            error.OperationAborted,
+            error.NotOpenForReading,
+            error.InputOutput,
+            error.AccessDenied,
+            error.SymLinkLoop,
+            error.ProcessFdQuotaExceeded,
+            error.SystemFdQuotaExceeded,
+            error.FileNotFound,
+            error.SystemResources,
+            error.NameTooLong,
+            error.NoDevice,
+            error.DeviceBusy,
+            error.FileTooBig,
+            error.NoSpaceLeft,
+            error.IsDir,
+            error.BadPathName,
+            error.InvalidUtf8,
+            error.Unexpected,
+            => |e| return e,
+        };
         try client.send(rpc.ackResponse(client.last_request_id));
     }
 
-    pub fn redraw(self: Self, client: Server.ClientRepresentation) !void {
+    pub fn redraw(self: Self, client: *Server.ClientRepresentation) !void {
         const draw_data = self.workspace.getDrawData(client.state.active_display_state);
         const message = rpc.response(kisa.DrawData, client.last_request_id, draw_data);
         try client.send(message);
-    }
-
-    /// Caller owns the memory.
-    fn openFileAndRead(ally: *mem.Allocator, path: []const u8) ![]u8 {
-        var file = try std.fs.openFileAbsolute(path, .{});
-        defer file.close();
-        return try file.readToEndAlloc(ally, std.math.maxInt(usize));
     }
 };
 
@@ -209,7 +225,6 @@ pub const Server = struct {
         }
     }
 
-    // TODO: send errors to client.
     /// Main loop of the server, listens for requests and sends responses.
     pub fn loop(self: *Self) !void {
         var packet_buf: [transport.max_packet_size]u8 = undefined;
@@ -223,14 +238,78 @@ pub const Server = struct {
                             try self.processNewConnection(polled_data.fd);
                         },
                         .connection_socket => {
+                            var client = self.findClient(polled_data.id).?;
                             self.processClientRequest(
-                                polled_data.id,
+                                &client,
                                 &packet_buf,
                                 &method_buf,
                                 &message_buf,
                             ) catch |err| switch (err) {
                                 error.ShouldQuit => break,
-                                else => return err,
+                                // Some errors are programming errors.
+                                // We don't send non-blocking responses to clients, always block.
+                                error.WouldBlock,
+                                error.MessageTooBig,
+                                // XXX: This error is caught inside Commands, probably a bug that
+                                // compiler complains about it not being caught here.
+                                error.InitParamsMustHaveEitherPathOrContent,
+                                => unreachable,
+                                // For these errors the client is probably wrong and we can send
+                                // an error message explaining why.
+                                error.EmptyPacket,
+                                error.NullIdInRequest,
+                                error.ParseError,
+                                error.InvalidRequest,
+                                error.MethodNotFound,
+                                error.InvalidParams,
+                                error.InvalidUtf8,
+                                error.BadPathName,
+                                error.NoSpaceLeft,
+                                error.DeviceBusy,
+                                error.NoDevice,
+                                error.NameTooLong,
+                                error.FileNotFound,
+                                error.SystemFdQuotaExceeded,
+                                error.ProcessFdQuotaExceeded,
+                                error.SymLinkLoop,
+                                error.SharingViolation,
+                                error.InputOutput,
+                                error.NotOpenForReading,
+                                error.OperationAborted,
+                                error.IsDir,
+                                error.FileTooBig,
+                                error.UninitializedClient,
+                                => |e| {
+                                    client.send(rpc.errorResponse(client.state.id, e)) catch {
+                                        std.debug.print(
+                                            "Failed to send error response to client ID {d}: {s}",
+                                            .{ client.state.id, @errorName(err) },
+                                        );
+                                    };
+                                },
+                                // These errors indicate that we can't use this socket connection.
+                                error.BrokenPipe,
+                                error.ConnectionResetByPeer,
+                                error.AccessDenied,
+                                error.NetworkSubsystemFailed,
+                                error.SocketNotConnected,
+                                error.SocketNotBound,
+                                error.ConnectionRefused,
+                                => {
+                                    self.removeClient(polled_data.id);
+                                    if (self.watcher.fds.len == 1) {
+                                        self.deinit();
+                                        break;
+                                    }
+                                },
+                                // Some errors are unrecoverable or seem impossible.
+                                error.FastOpenAlreadyInProgress,
+                                error.SystemResources,
+                                error.FileDescriptorNotASocket,
+                                error.NetworkUnreachable,
+                                error.Unexpected,
+                                error.OutOfMemory,
+                                => return err,
                             };
                         },
                     }
@@ -264,38 +343,34 @@ pub const Server = struct {
 
     fn processClientRequest(
         self: *Self,
-        client_id: state.Workspace.Id,
+        client: *ClientRepresentation,
         packet_buf: []u8,
         method_buf: []u8,
         message_buf: []u8,
     ) !void {
-        // TODO: check if active display state is empty but we try to do something.
-        var client = self.findClient(client_id) orelse return error.ClientNotFound;
         const packet = (try client.readPacket(packet_buf)) orelse return error.EmptyPacket;
         if (rpc.parseId(packet)) |request_id| {
             client.last_request_id = request_id orelse return error.NullIdInRequest;
-        } else |err| {
+        } else |err| switch (err) {
             // Could be a notification with absent ID.
-            if (err != error.MissingField) {
-                return err;
-            } else {
-                client.last_request_id = 0;
-            }
+            error.MissingField => client.last_request_id = 0,
+            error.ParseError => return error.ParseError,
         }
+
         const method_str = try rpc.parseMethod(method_buf, packet);
         const method = std.meta.stringToEnum(
             kisa.CommandKind,
             method_str,
-        ) orelse std.debug.panic("Unknown rpc method from client: {s}\n", .{method_str});
+        ) orelse {
+            std.debug.print("Unknown rpc method from client: {s}\n", .{method_str});
+            return error.MethodNotFound;
+        };
+        if (method != .initialize and
+            std.meta.eql(client.state.active_display_state, state.ActiveDisplayState.empty))
+        {
+            return error.UninitializedClient;
+        }
         switch (method) {
-            .keypress => {
-                // TODO: change command and handling in general
-                const keypress_message = try rpc.KeypressRequest.parse(
-                    message_buf,
-                    packet,
-                );
-                std.debug.print("keypress_message: {}\n", .{keypress_message});
-            },
             .open_file => {
                 const command = try rpc.parseCommandFromRequest(
                     .open_file,
@@ -308,7 +383,6 @@ pub const Server = struct {
                 try self.commands.redraw(client);
             },
             .initialize => {
-                // TODO: error handling.
                 const command = try rpc.parseCommandFromRequest(
                     .initialize,
                     message_buf,
@@ -335,7 +409,7 @@ pub const Server = struct {
                 try client.send(rpc.ackResponse(client.last_request_id));
             },
             .quitted => {
-                self.removeClient(client_id);
+                self.removeClient(client.state.id);
                 if (self.watcher.fds.len == 1) {
                     self.deinit();
                     return error.ShouldQuit;
