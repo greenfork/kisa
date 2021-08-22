@@ -732,7 +732,6 @@ pub const TextBuffer = struct {
             .name = name,
             .readonly = init_params.readonly,
         };
-        result.countMetrics();
         return result;
     }
 
@@ -762,51 +761,6 @@ pub const TextBuffer = struct {
                 return;
             }
         }
-    }
-
-    fn countMetrics(self: *Self) void {
-        self.max_line_number = 1;
-        for (self.content.items) |ch| {
-            if (ch == '\n') self.max_line_number += 1;
-        }
-    }
-
-    pub fn toLineSlice(self: Self, first_line_number: u32, last_line_number: u32) ![]const u8 {
-        var line_number: u32 = 1;
-        var start_offset: usize = std.math.maxInt(usize);
-        var end_offset: usize = std.math.maxInt(usize);
-        const slice = self.content.items;
-        for (slice) |ch, idx| {
-            if (start_offset == std.math.maxInt(usize) and first_line_number == line_number) {
-                start_offset = idx;
-            }
-            if (end_offset == std.math.maxInt(usize) and last_line_number == line_number) {
-                end_offset = idx;
-                break;
-            }
-            if (ch == '\n') line_number += 1;
-        } else {
-            // Screen height is more than we have text available
-            end_offset = slice.len;
-        }
-        if (start_offset == std.math.maxInt(usize) or end_offset == std.math.maxInt(usize)) {
-            std.debug.print(
-                "first_line: {d}, last_line: {d}, line_num: {d}, start: {d}, end: {d}\n",
-                .{ first_line_number, last_line_number, line_number, start_offset, end_offset },
-            );
-            return Error.LineOutOfRange;
-        }
-        return slice[start_offset..end_offset];
-    }
-
-    pub fn append(self: *Self, character: u8) !void {
-        try self.content.append(character);
-        self.countMetrics();
-    }
-
-    pub fn insert(self: *Self, index: usize, character: u8) !void {
-        try self.content.insert(index, character);
-        self.countMetrics();
     }
 };
 
@@ -851,23 +805,6 @@ pub const DisplayWindow = struct {
     /// current display window.
     pub fn textBuffer(self: Self) ?*Workspace.TextBufferNode {
         self.workspace.findTextBuffer(self.text_buffer_id);
-    }
-
-    pub fn renderTextArea(self: *Self) !jsonrpc.SimpleRequest {
-        const last_line_number = self.first_line_number + self.rows;
-        const slice = try self.text_buffer.toLineSlice(self.first_line_number, last_line_number);
-        const params = try self.text_buffer.ally.create([3]jsonrpc.Value);
-        params.* = [_]jsonrpc.Value{
-            .{ .String = slice },
-            .{ .Integer = self.first_line_number },
-            .{ .Integer = last_line_number },
-        };
-        return jsonrpc.SimpleRequest{
-            .jsonrpc = jsonrpc.jsonrpc_version,
-            .id = null,
-            .method = "draw",
-            .params = .{ .Array = params[0..] },
-        };
     }
 };
 

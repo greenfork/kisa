@@ -31,24 +31,11 @@ pub const UI = struct {
         return .{ .frontend = frontend };
     }
 
-    // TODO: rewrite this to not use "cc" functions
     pub fn draw(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
-        try self.frontend.ccHideCursor();
-        try self.frontend.clear();
-        var w = self.frontend.writer();
-        var line_count = first_line_number;
-        const max_line_number_width = numberWidth(max_line_number);
-        var line_it = mem.split(string, "\n");
-        while (line_it.next()) |line| : (line_count += 1) {
-            // When there's a trailing newline, we don't display the very last row.
-            if (line_count == max_line_number and line.len == 0) break;
-
-            try w.writeByteNTimes(' ', max_line_number_width - numberWidth(line_count));
-            try w.print("{d} {s}\n", .{ line_count, line });
-        }
-        try self.frontend.ccMoveCursor(1, 1);
-        try self.frontend.ccShowCursor();
-        try self.frontend.refresh();
+        _ = self;
+        _ = string;
+        _ = first_line_number;
+        _ = max_line_number;
     }
 
     pub inline fn textAreaRows(self: Self) u32 {
