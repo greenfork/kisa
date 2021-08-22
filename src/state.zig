@@ -9,6 +9,7 @@ const testing = std.testing;
 const mem = std.mem;
 const assert = std.debug.assert;
 const kisa = @import("kisa");
+const TextBufferImplementation = @import("text_buffer_array.zig");
 
 /// How Server sees a Client.
 pub const Client = struct {
@@ -131,14 +132,14 @@ pub const Workspace = struct {
         const debug_buffer = try self.createTextBuffer(TextBuffer.InitParams{
             .path = null,
             .name = "*debug*",
-            .content = "Debug buffer for error messages and debug information",
+            .contents = "Debug buffer for error messages and debug information",
             .readonly = true,
         });
         errdefer self.destroyTextBuffer(debug_buffer.data.id);
         const scratch_buffer = try self.createTextBuffer(TextBuffer.InitParams{
             .path = null,
             .name = "*scratch*",
-            .content = "Scratch buffer for notes and drafts",
+            .contents = "Scratch buffer for notes and drafts",
         });
         errdefer self.destroyTextBuffer(scratch_buffer.data.id);
         assert(debug_buffer.data.id == debug_buffer_id);
@@ -488,7 +489,7 @@ test "state: new workspace" {
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello",
+        .contents = "hello",
         .path = null,
         .name = "name",
     };
@@ -510,14 +511,14 @@ test "state: new text buffer" {
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
     const old_text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello",
+        .contents = "hello",
         .path = null,
         .name = "name",
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(old_text_buffer_init_params, window_pane_init_params);
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello2",
+        .contents = "hello2",
         .path = null,
         .name = "name2",
     };
@@ -541,7 +542,7 @@ test "state: open existing text buffer" {
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello",
+        .contents = "hello",
         .path = null,
         .name = "name",
     };
@@ -567,7 +568,7 @@ test "state: handle failing conditions" {
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
-    const text_buffer_init_params = TextBuffer.InitParams{ .content = "hello", .path = null, .name = "name" };
+    const text_buffer_init_params = TextBuffer.InitParams{ .contents = "hello", .path = null, .name = "name" };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
     try testing.expectError(error.OutOfMemory, workspace.openTextBuffer(
@@ -583,7 +584,7 @@ test "state: new window pane" {
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello",
+        .contents = "hello",
         .path = null,
         .name = "name",
     };
@@ -609,7 +610,7 @@ test "state: close window pane when there are several window panes on window tab
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
     const text_buffer_init_params = TextBuffer.InitParams{
-        .content = "hello",
+        .contents = "hello",
         .path = null,
         .name = "name",
     };
@@ -634,145 +635,151 @@ test "state: close window pane when there are several window panes on window tab
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-/// Manages the content of an opened file on a filesystem or of a virtual file
+/// Manages the contents of an opened file on a filesystem or of a virtual file
 /// and provides an interface for querying and modifying it.
-pub const TextBuffer = struct {
-    workspace: *Workspace,
-    id: Workspace.Id = 0,
-    display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
-    content: std.ArrayList(u8),
-    /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
-    path: ?[]u8,
-    /// A textual representation of the buffer name, either path or name for virtual buffer.
-    name: []u8,
-    readonly: bool,
-    // metrics
-    max_line_number: u32 = 0,
+pub const TextBuffer = TextBufferWithImplementation(TextBufferImplementation);
+pub fn TextBufferWithImplementation(comptime impl: anytype) type {
+    assert(std.meta.trait.hasFunctions(impl, .{"Behavior"}));
+    assert(std.meta.trait.hasDecls(impl, .{"Contents"}));
+    const dummy_impl = impl.Behavior(struct {
+        contents: impl.Contents,
+        metrics: kisa.TextBufferMetrics,
+    });
+    assert(std.meta.trait.hasFunctions(dummy_impl, .{
+        "initContentsWithFile",
+        "initContentsWithText",
+        "deinitContents",
+    }));
 
-    const Self = @This();
+    return struct {
+        workspace: *Workspace,
+        id: Workspace.Id = 0,
+        display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
+        contents: impl.Contents,
+        /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
+        path: ?[]u8,
+        /// A textual representation of the buffer name, either path or name for virtual buffer.
+        name: []u8,
+        readonly: bool,
+        metrics: kisa.TextBufferMetrics,
 
-    pub const InitParams = struct {
-        path: ?[]const u8,
-        name: []const u8,
-        content: ?[]const u8,
-        readonly: bool = false,
-    };
+        pub usingnamespace impl.Behavior(Self);
 
-    /// Takes ownership of `path` and `content`, they must be allocated with `workspaces` allocator.
-    pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
-        // TODO: file reading should be done in text buffer backend.
-        const content = blk: {
-            if (init_params.content) |cont| {
-                break :blk try workspace.ally.dupe(u8, cont);
-            } else if (init_params.path) |p| {
-                var file = std.fs.openFileAbsolute(
-                    p,
-                    .{},
-                ) catch |err| switch (err) {
-                    error.PipeBusy => unreachable,
-                    error.NotDir => unreachable,
-                    error.PathAlreadyExists => unreachable,
-                    error.WouldBlock => unreachable,
-                    error.FileLocksNotSupported => unreachable,
-                    error.SharingViolation,
-                    error.AccessDenied,
-                    error.SymLinkLoop,
-                    error.ProcessFdQuotaExceeded,
-                    error.SystemFdQuotaExceeded,
-                    error.FileNotFound,
-                    error.SystemResources,
-                    error.NameTooLong,
-                    error.NoDevice,
-                    error.DeviceBusy,
-                    error.FileTooBig,
-                    error.NoSpaceLeft,
-                    error.IsDir,
-                    error.BadPathName,
-                    error.InvalidUtf8,
-                    error.Unexpected,
-                    => |e| return e,
-                };
+        const Self = @This();
 
-                defer file.close();
-                break :blk file.readToEndAlloc(
-                    workspace.ally,
-                    std.math.maxInt(usize),
-                ) catch |err| switch (err) {
-                    error.WouldBlock => unreachable,
-                    error.BrokenPipe => unreachable,
-                    error.ConnectionResetByPeer => unreachable,
-                    error.ConnectionTimedOut => unreachable,
-                    error.FileTooBig,
-                    error.SystemResources,
-                    error.IsDir,
-                    error.OutOfMemory,
-                    error.OperationAborted,
-                    error.NotOpenForReading,
-                    error.AccessDenied,
-                    error.InputOutput,
-                    error.Unexpected,
-                    => |e| return e,
-                };
-            } else {
-                return error.InitParamsMustHaveEitherPathOrContent;
-            }
+        pub const InitParams = struct {
+            path: ?[]const u8,
+            name: []const u8,
+            contents: ?[]const u8,
+            readonly: bool = false,
         };
-        const path = blk: {
-            if (init_params.path) |p| {
-                break :blk try workspace.ally.dupe(u8, p);
-            } else {
-                break :blk null;
-            }
-        };
-        const name = try workspace.ally.dupe(u8, init_params.name);
-        var result = Self{
-            .workspace = workspace,
-            .content = std.ArrayList(u8).fromOwnedSlice(workspace.ally, content),
-            .path = path,
-            .name = name,
-            .readonly = init_params.readonly,
-        };
-        return result;
-    }
 
-    pub fn deinit(self: Self) void {
-        var display_window_id = self.display_window_ids.first;
-        while (display_window_id) |dw_id| {
-            display_window_id = dw_id.next;
-            self.workspace.ally.destroy(dw_id);
+        /// Takes ownership of `path` and `contents`, they must be allocated with `workspaces` allocator.
+        pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
+            const contents = blk: {
+                if (init_params.contents) |cont| {
+                    break :blk try initContentsWithText(workspace.ally, cont);
+                } else if (init_params.path) |p| {
+                    var file = std.fs.openFileAbsolute(
+                        p,
+                        .{},
+                    ) catch |err| switch (err) {
+                        error.PipeBusy => unreachable,
+                        error.NotDir => unreachable,
+                        error.PathAlreadyExists => unreachable,
+                        error.WouldBlock => unreachable,
+                        error.FileLocksNotSupported => unreachable,
+                        error.SharingViolation,
+                        error.AccessDenied,
+                        error.SymLinkLoop,
+                        error.ProcessFdQuotaExceeded,
+                        error.SystemFdQuotaExceeded,
+                        error.FileNotFound,
+                        error.SystemResources,
+                        error.NameTooLong,
+                        error.NoDevice,
+                        error.DeviceBusy,
+                        error.FileTooBig,
+                        error.NoSpaceLeft,
+                        error.IsDir,
+                        error.BadPathName,
+                        error.InvalidUtf8,
+                        error.Unexpected,
+                        => |e| return e,
+                    };
+
+                    defer file.close();
+                    break :blk try initContentsWithFile(workspace.ally, file);
+                } else {
+                    return error.InitParamsMustHaveEitherPathOrContent;
+                }
+            };
+            const path = blk: {
+                if (init_params.path) |p| {
+                    break :blk try workspace.ally.dupe(u8, p);
+                } else {
+                    break :blk null;
+                }
+            };
+            const name = try workspace.ally.dupe(u8, init_params.name);
+            var result = Self{
+                .workspace = workspace,
+                .contents = contents,
+                .path = path,
+                .name = name,
+                .readonly = init_params.readonly,
+                .metrics = kisa.TextBufferMetrics{},
+            };
+            return result;
         }
-        self.content.deinit();
-        if (self.path) |p| self.workspace.ally.free(p);
-        self.workspace.ally.free(self.name);
-    }
 
-    pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
-        var display_window_id = try self.workspace.ally.create(Workspace.IdNode);
-        display_window_id.data = id;
-        self.display_window_ids.append(display_window_id);
-    }
-
-    pub fn removeDisplayWindowId(self: *Self, id: Workspace.Id) void {
-        var display_window_id = self.display_window_ids.first;
-        while (display_window_id) |dw_id| : (display_window_id = dw_id.next) {
-            if (dw_id.data == id) {
-                self.display_window_ids.remove(dw_id);
+        pub fn deinit(self: Self) void {
+            var display_window_id = self.display_window_ids.first;
+            while (display_window_id) |dw_id| {
+                display_window_id = dw_id.next;
                 self.workspace.ally.destroy(dw_id);
-                return;
+            }
+            self.deinitContents();
+            if (self.path) |p| self.workspace.ally.free(p);
+            self.workspace.ally.free(self.name);
+        }
+
+        pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
+            var display_window_id = try self.workspace.ally.create(Workspace.IdNode);
+            display_window_id.data = id;
+            self.display_window_ids.append(display_window_id);
+        }
+
+        pub fn removeDisplayWindowId(self: *Self, id: Workspace.Id) void {
+            var display_window_id = self.display_window_ids.first;
+            while (display_window_id) |dw_id| : (display_window_id = dw_id.next) {
+                if (dw_id.data == id) {
+                    self.display_window_ids.remove(dw_id);
+                    self.workspace.ally.destroy(dw_id);
+                    return;
+                }
             }
         }
-    }
-};
+    };
+}
 
-/// `Cursor` represents the current position of a cursor in a display window. `line` and `column`
-/// are absolute values inside a file whereas `x` and `y` are relative coordinates to the
-/// upper-left corner of the window.
-pub const Cursor = struct {
-    /// Absolute line position inside text buffer.
-    line: u32,
-    /// Absolute column position inside text buffer.
-    column: u32,
-};
+test "state: init text buffer with file descriptor" {
+    var file = try std.fs.cwd().openFile("kisarc.zzz", .{});
+    defer file.close();
+    const text_buffer = try TextBuffer.initContentsWithFile(
+        testing.allocator,
+        file,
+    );
+    defer text_buffer.deinit();
+}
+
+test "state: init text buffer with text" {
+    const text_buffer = try TextBuffer.initContentsWithText(
+        testing.allocator,
+        "Hello",
+    );
+    defer text_buffer.deinit();
+}
 
 /// Manages the data of what the user sees on the screen. Sends all the necessary data
 /// to UI to display it on the screen. Also keeps the state of the opened window such
@@ -782,7 +789,6 @@ pub const DisplayWindow = struct {
     id: Workspace.Id = 0,
     window_pane_id: Workspace.Id = 0,
     text_buffer_id: Workspace.Id = 0,
-    cursor: Cursor,
     first_line_number: u32,
     mode: EditorMode,
 
@@ -791,7 +797,6 @@ pub const DisplayWindow = struct {
     pub fn init(workspace: *Workspace) Self {
         return Self{
             .workspace = workspace,
-            .cursor = Cursor{ .line = 1, .column = 1 },
             .first_line_number = 1,
             .mode = .normal,
         };

@@ -1,5 +1,24 @@
 # Cursor design
 
+Cursor is always a part of a selection, where cursor is at the head of a
+selection and anchor is at the end of a selection. There's always at least
+a single selection present, called "primary" selection. Selection is
+a range of characters between the cursor and the anchor. In the simplest
+case cursor and anchor are at the same position, so the selection is only
+1 character.
+
+Here `&` is an anchor, `|` is a cursor, `.` are any characters in between them:
+```
+&...|
+^ anchor
+    ^ cursor
+^~~~~ selection of 5 characters
+```
+ *
+
+Initially cursor and anchor are at the same position and move together but the
+selection can be "anchored", then only cursor's position is updated.
+
 ## Movement
 
 Moving up and down one line should do what is says if there's a character

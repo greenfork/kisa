@@ -100,3 +100,12 @@ pub const Command = union(CommandKind) {
     /// times the operation should be executed.
     pub const Keypress = struct { key: Key, multiplier: u32 };
 };
+
+pub const TextBufferMetrics = struct {
+    max_line_number: u32 = 0,
+};
+
+pub const Selection = struct {
+    anchor: usize,
+    cursor: usize,
+};
