@@ -230,7 +230,7 @@ pub const Workspace = struct {
     }
 
     // TODO: rewrite
-    pub fn getDrawData(self: Self, active_display_state: ActiveDisplayState) kisa.DrawData {
+    pub fn draw(self: Self, active_display_state: ActiveDisplayState) kisa.DrawData {
         _ = self;
         _ = active_display_state;
         return kisa.DrawData{

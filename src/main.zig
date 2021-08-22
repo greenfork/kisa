@@ -126,7 +126,7 @@ pub const Commands = struct {
 
     // TODO: draw real data.
     pub fn redraw(self: Self, client: *Server.ClientRepresentation) !void {
-        const draw_data = self.workspace.getDrawData(client.state.active_display_state);
+        const draw_data = self.workspace.draw(client.state.active_display_state);
         const message = rpc.response(kisa.DrawData, client.last_request_id, draw_data);
         try client.send(message);
     }
@@ -135,9 +135,7 @@ pub const Commands = struct {
     // TODO: draw real data.
     pub fn cursorMoveDown(self: Self, client: *Server.ClientRepresentation, multiplier: u32) !void {
         _ = multiplier;
-        const draw_data = self.workspace.getDrawData(client.state.active_display_state);
-        const message = rpc.response(kisa.DrawData, client.last_request_id, draw_data);
-        try client.send(message);
+        try self.redraw(client);
     }
 };
 
