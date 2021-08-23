@@ -16,6 +16,7 @@ ideas, beware most of it is not implemented:
 * [Keybindings design](KEYBINDINGS_DESIGN.md)
 * [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
 * [Windowing design](WINDOWING_ARCHITECTURE_DESIGN.md)
+* [Search design](SEARCH_DESIGN.md)
 
 ## How to build
 
