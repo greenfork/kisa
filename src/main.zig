@@ -82,7 +82,7 @@ pub const Commands = struct {
             state.TextBuffer.InitParams{
                 .path = path,
                 .name = path,
-                .content = null,
+                .contents = null,
             },
         ) catch |err| switch (err) {
             error.InitParamsMustHaveEitherPathOrContent => return error.InvalidParams,
@@ -390,7 +390,7 @@ pub const Server = struct {
                     if (client.state.id == c.id) {
                         c.active_display_state = try self.workspace.new(
                             state.TextBuffer.InitParams{
-                                .content = null,
+                                .contents = null,
                                 .path = client_init_params.path,
                                 .name = client_init_params.path,
                                 .readonly = client_init_params.readonly,
@@ -740,35 +740,15 @@ pub fn main() anyerror!void {
         if (arg_it.next(ally)) |file_name_delimited| {
             break :blk try std.fs.cwd().realpathAlloc(ally, try file_name_delimited);
         } else {
-            return error.FileNotSupplied;
+            break :blk null;
         }
     };
-
-    if (try Application.start(ally, .threaded)) |app| {
-        var client = app.client;
-        try client.ui.setup();
-        defer client.ui.teardown();
-
-        try client.sendFileToOpen(filename);
-        try client.acceptText();
-
-        while (true) {
-            if (client.ui.nextKey()) |key| {
-                switch (key.code) {
-                    .unicode_codepoint => {
-                        if (key.isCtrl('c')) {
-                            break;
-                        }
-                        try client.sendKeypress(key);
-                    },
-                    else => {
-                        std.debug.print("Unrecognized key type: {}\r\n", .{key});
-                        std.os.exit(1);
-                    },
-                }
-            }
-        }
+    if (filename) |fname| {
+        std.debug.print("Supplied filename: {s}\n", .{fname});
+    } else {
+        std.debug.print("No filename Supplied\n", .{});
     }
+    std.debug.print("So far nothing in `main`, try `zig build test`\n", .{});
 }
 
 /// UI frontent. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities

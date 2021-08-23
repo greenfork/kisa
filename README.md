@@ -17,6 +17,26 @@ ideas, beware most of it is not implemented:
 * [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
 * [Windowing design](WINDOWING_ARCHITECTURE_DESIGN.md)
 
+## How to build
+
+Currently it is only relevant for the development, there's no usable
+text editor (just yet).
+
+Requirements:
+- Zig version 0.8.0, download [here](https://ziglang.org/download/) as a single binary
+- git
+
+```
+$ git clone --recurse-submodules https://github.com/greenfork/kisa
+$ cd kisa
+$ zig build test
+$ zig build run
+```
+
+You can also run individual tests for files, for example for `main.zig` I often
+only run `zig build test-main-nofork`, similar commands can be found in
+[build.zig](build.zig).
+
 ## Purpose
 
 I, greenfork, the one who started this project, would like to have a
@@ -29,7 +49,18 @@ my steps and eventually let them lead me instead of simply being led.
 ## Zen
 
 * Programmer must be able to perfect their tool.
-* Choice is a burden.
+* Programmer must learn to use the tool, not try to shoehorn it.
+* Choice is burden.
+* Choice is freedom.
+
+## Goals
+
+* Identify common workflows and set them in stone
+* Adhere to hybrid Unix/Apple philosophy
+* Infinitely extensible by design, no hard assumptions
+* ...
+
+TODO: elaborate on goals and add new goals
 
 ## Requirements
 
@@ -38,8 +69,6 @@ my steps and eventually let them lead me instead of simply being led.
 Following features should make the editor usable.
 
 * Modal editing, convenient key bindings
-* File finder, project-wide grepping, in-file searching
-* Syntax highlighting
 
 ### Nice-to-haves
 
@@ -53,6 +82,9 @@ Features not used by everyone but which provide more pleasant experience.
 * Mouse integration
 * Autocompletion
 * Clipboard integration
+* Grepping
+* File finder
+* Syntax highlighting
 
 ### Out of scope
 
@@ -69,10 +101,7 @@ limited ability to hack on them. With [Emacs] although I do enjoy writing Lisp
 code, the Emacs-Lisp never sat right with me, it's Lisp-2 and I'm more of a
 Schemer, so maybe this is the reason. With [Kakoune] I don't want to deal
 neither with C++ to edit the source code, nor with Bash to write scripting
-extensions. Writing a non-trivial extension in a language of choice is
-something I'm afraid to look at, writing something from scratch seems as
-a better option than spending hours on learning the code to understand
-the limitations and get disappointed, though there's also a happy scenario.
+extensions.
 
 ## Hackable
 
