@@ -42,7 +42,7 @@ pub fn Behavior(comptime Self: type) type {
             self.contents.deinit();
         }
 
-        pub fn countMetrics(self: *Self) void {
+        pub fn detectFeaturesAndMetrics(self: *Self) void {
             self.metrics.max_line_number += 1;
         }
     };

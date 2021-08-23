@@ -662,6 +662,7 @@ pub fn TextBufferWithImplementation(comptime impl: anytype) type {
         name: []u8,
         readonly: bool,
         metrics: kisa.TextBufferMetrics,
+        line_ending: kisa.TextBufferLineEnding,
 
         pub usingnamespace impl.Behavior(Self);
 
@@ -729,6 +730,7 @@ pub fn TextBufferWithImplementation(comptime impl: anytype) type {
                 .name = name,
                 .readonly = init_params.readonly,
                 .metrics = kisa.TextBufferMetrics{},
+                .line_ending = .unix,
             };
             return result;
         }

@@ -105,6 +105,13 @@ pub const TextBufferMetrics = struct {
     max_line_number: u32 = 0,
 };
 
+pub const TextBufferLineEnding = enum {
+    /// \n
+    unix,
+    /// \r\n
+    dos,
+};
+
 pub const Selection = struct {
     anchor: usize,
     cursor: usize,
