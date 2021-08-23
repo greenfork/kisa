@@ -27,7 +27,7 @@ How to do exact but case-insensitive search? Probably with regex, popular
 engines use `(?i)` prefix. This could also be same as Camel-Kebab-Pascal-Snake-case-insensitive
 in some cases.
 
-## Choice configuration
+## Keymap configuration
 
 We will probably settle at the following configuration:
 ```
@@ -43,12 +43,18 @@ keymap:
         r: search_regex
         b: search_exact_with_boundaries
         i: search_camel_kebab_pascal_snake_case_insensitive
+  search:
+    default: insert_character
+    ctrl-r: search_and_replace
 ```
  *
 
 So there's a way to choose a default search kind and use it by hitting `/` and
 if one needs another kind of search, one can access it by hitting in sequence
-Space-s and choose the preferred way.
+Space-s and choose the preferred way. And while searching, one can hit Ctrl-r
+to enter a replace mode.
+
+TODO: spec out replace mode.
 
 ## Project-wide searching
 
