@@ -17,7 +17,7 @@ It will be further moved to a more appropriate place.
 * [Highlighting design](HIGHLIGHTING_DESIGN.md)
 * [Keybindings design](KEYBINDINGS_DESIGN.md)
 * [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
-* [Windowing design](WINDOWING_ARCHITECTURE_DESIGN.md)
+* [Windowing design](WINDOWING_DESIGN.md)
 * [Search design](SEARCH_DESIGN.md)
 * [Extensions design](EXTENSIONS_DESIGN.md)
 

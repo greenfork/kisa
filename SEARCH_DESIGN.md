@@ -47,7 +47,6 @@ keymap:
     default: insert_character
     ctrl-r: search_and_replace
 ```
- *
 
 So there's a way to choose a default search kind and use it by hitting `/` and
 if one needs another kind of search, one can access it by hitting in sequence
