@@ -1,20 +1,3 @@
-* Rainbow delimiters
-  - https://github.com/luochen1990/rainbow
-  - https://www.emacswiki.org/emacs/RainbowDelimiters
-* Context coloring
-  - Nesting
-  - Arguments of a function, local variables
-  - Imported symbols
-  - Types
-  - Error handling
-  - Memory handling
-  - Public/private functions, variables
-  - https://www.crockford.com/contextcoloring.html
-  - https://buttondown.email/hillelwayne/archive/46a17205-e38c-44f9-b048-793c180c6e84
-* Tests integration
-  - Jump to failed test
-  - Color failed test line or specific arguments
-  - Contextual help for explanation of an error
 * Highlighting in general
 ** VSCode 
    - https://code.visualstudio.com/api/language-extensions/semantic-highlight-guide
@@ -24,3 +7,8 @@
 * Incremental parsing
   - https://www.cs.umd.edu/~hammer/adapton/adapton-pldi2014.pdf
   - https://tree-sitter.github.io/tree-sitter/
+* Editing
+  - https://dahu.github.io/vim_waz_ere/1_editor_fundamentals.html
+  - https://thevaluable.dev/vim-expert/
+* Editor design
+  - https://www.mattkeeter.com/projects/futureproof/

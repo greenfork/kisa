@@ -22,12 +22,9 @@ to tweak everything.
 
 ## Traditional coloring scheme
 
-As a default there will be a standard syntax highlighting mechanism which
-will use regex (possibly [TextMate grammar]) to determine syntactic
-constructs and color them appropriately. We can re-use existing editors'
-syntax parsing files.
-
-[TextMate grammar]: https://macromates.com/manual/en/language_grammars
+As a default there will be a standard syntax highlighting which is implemented
+in most editors where we use fancy colors to highlight different tokens based
+on their syntactic meaning.
 
 ## Semantic and structural highlighting
 
@@ -247,3 +244,56 @@ TODO
 
 - https://lobste.rs/s/jembrx
 - https://xi-editor.io/docs/rope_science_11.html
+
+## Overview of existing solutions
+
+### Kakoune
+
+[Kakoune] uses regex with slight modifications to allow code reuse and nested structures.
+Looks almost good enough: usually it is hard to edit and some rare constructs
+seem hard to implement (I couldn't implement highlighting for [slim], but
+maybe I'm not that smart).
+
+[slim]: https://github.com/slim-template/slim
+
+### amp
+
+[amp] reuses [TextMate grammar] syntax highlighting configurations.
+The config files look as a mix of regex and some kind of pushdown automata.
+Extremely interesting option but needs more research.
+
+### vis
+
+[vis] it has direct integration with Lua and uses Parsing Grammar Expressions (PEG)
+in combination with the Lua language features. Looks very neat and powerful.
+
+### Emacs
+
+[Emacs] it doesn't have anything in particular, just uses some regex together with
+the power of Emacs-Lisp language. The editor is the Lisp machine, it doesn't
+really need anything special.
+
+### joe
+
+[joe] uses a full-blown description of a state machine that parses the text with
+simplified grammar rules. Quite large files, for example C grammar takes
+300 loc, Ruby grammar takes 600 loc (Ruby has complicated grammar). Although
+the grammar is correct (e.g. Kakoune grammar is not 100% correct), it takes
+some dedication to create such a grammar file.
+
+[Kakoune]: https://github.com/mawww/kakoune
+[amp]: https://github.com/jmacdonald/amp
+[vis]: https://github.com/martanne/vis
+[micro]: https://github.com/zyedidia/micro
+[vy]: https://github.com/vyapp/vy
+[neovim]: https://github.com/neovim/neovim
+[helix]: https://github.com/helix-editor/helix
+[xi]: https://xi-editor.io/
+[qedit]: https://github.com/fivemoreminix/qedit
+[kilo]: https://github.com/antirez/kilo
+[moe]: https://github.com/fox0430/moe
+[paravim]: https://github.com/paranim/paravim
+[focus]: https://github.com/jamii/focus
+[Emacs]: https://www.gnu.org/software/emacs/
+[joe]: https://joe-editor.sourceforge.io/
+[TextMate grammar]: https://macromates.com/manual/en/language_grammars

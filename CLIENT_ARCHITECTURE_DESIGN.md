@@ -80,3 +80,65 @@ allow to eventually switch to this approach but right now it is definitely
 not the right time to implement it.
 
 See [xi editor revelations](https://github.com/xi-editor/xi-editor/issues/1187#issuecomment-491473599).
+
+### Terminal display and input library
+
+Editors written in other than C languages such as Go ([micro], [qedit])
+or Rust ([helix], [amp]) use their own library which implements terminal
+display routines. C/C++ based editors largely use [ncurses] library
+([vis], [neovim]), but there's a good exception to this rule
+which is [kakoune]. Since current editor's language of choice is Zig,
+there are 2 choices: port ncurses library and write our own. I tried to
+[port the ncurses library] but eventually gave up because of infinite confusion
+with it. The code is also quite and quite hard to understand, there's an
+[attempt to make it better] but it is sadly not packaged at least in Arch Linux
+distribution which could be a problem. I decided that we should implement
+the library that is going to provide just the necessary for us features.
+
+Terminal input story is similar, other than C languages implement their own
+libraries which seems necessary for them anyway. The
+C land has [libtermkey] which is contrary to ncurses has pretty good source code,
+it is used at least by [neovim] and [vis]. But the state of this library is
+a little bit questionable, end-of-life was declared for it at least since
+2016 and the original author advertises their new [libtickit] library which
+tries to be an alternative library to ncurses but it didn't get wide adoption.
+Libtermkey is alive as a [neovim fork] however so this could be a viable option
+nonetheless. But again, implementing this library seems rather straightforward
+as demonstrated by [kakoune] and there are some new ideas about the
+full and proper representation of keypresses, see [keyboard terminal extension]
+by the kitty terminal.
+
+We will do everything in Zig. Hooray.
+
+[ncurses]: https://en.wikipedia.org/wiki/Ncurses
+[libtermkey]: http://www.leonerd.org.uk/code/libtermkey/
+[port the ncurses library]: https://github.com/greenfork/zig-ncurses
+[libtickit]: http://www.leonerd.org.uk/code/libtickit/
+[neovim fork]: https://github.com/neovim/libtermkey
+[keyboard terminal extension]: https://sw.kovidgoyal.net/kitty/keyboard-protocol.html
+[attempt to make it better]: https://github.com/sabotage-linux/netbsd-curses
+
+### Where is it going to run?
+
+Since the initial implementation is going to be a terminal-based client, we
+will strive for the highest common denominator of all terminals, some popular
+choices:
+
+* [Foot]
+* [Alacritty]
+* [Kitty]
+* [Urxvt]
+* [iTerm2]
+* [tmux]
+* [xterm]... oops sorry, [this is the one]
+* [cygwin]?
+
+[Foot]: https://codeberg.org/dnkl/foot
+[Alacritty]: https://github.com/alacritty/alacritty
+[Kitty]: https://sw.kovidgoyal.net/kitty/
+[Urxvt]: https://wiki.archlinux.org/title/Rxvt-unicode
+[iTerm2]: https://iterm2.com/
+[tmux]: https://github.com/tmux/tmux
+[xterm]: https://github.com/xtermjs/xterm.js/
+[this is the one]: https://invisible-island.net/xterm/
+[cygwin]: https://www.cygwin.com/

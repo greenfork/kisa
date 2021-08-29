@@ -1,5 +1,34 @@
 # Server architecture design
 
+## Architecture
+
+This section is volatile and may change frequently.
+
+![Architecture diagram](docs/assets/architecture.png)
+
+Examples of a Generic Plugin:
+- Language Server Protocol
+- Autocompletion
+- Pair autoinsertion
+- Jumping inside a file
+
+### Why client-server architecture?
+
+Short answer: because it's fun, more opportunities, and it doesn't promise
+to be too overwhelming. Longer answer:
+
+* Frontends must only speak JSON, they can be written in any language.
+* Commandline tools can interact with a running editor session with ease.
+* Switching to client-server architecture later is almost equal to a complete
+  rewrite of the system, so why not just do it from the start.
+
+Also see:
+* [neovim-remote]
+* [foot server daemon mode]
+
+[neovim-remote]: https://github.com/mhinz/neovim-remote
+[foot server daemon mode]: https://codeberg.org/dnkl/foot#server-daemon-mode
+
 ## Request-Respond loop
 
 Server is implemented as a traditional while true loop. It listens on a Unix

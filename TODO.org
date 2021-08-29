@@ -1,5 +1,33 @@
-* TODO Wrap jsonrpc into generic rpc module
-* TODO Use Watcher on client
-* TODO Find out the test strategy for the data which client receives from the server
-* TODO Decide whether Commands should outsource sending data to client into a separate module
-* TODO Unicode in text buffers
+* Now
+
+  A set of minimal features which makes the editor usable, but not necessarily
+  pleasant to use.
+
+** TODO Modal editing, convenient key bindings
+** TODO Swappable frontends, client-server architecture
+
+* Some time later
+
+  All of it would be nice, but let's grow steadily.
+
+** TODO Integrations with external tools
+** TODO Syntax highlighting
+** TODO Multiple cursors
+** TODO Multiple panes/tabs
+** TODO Clipboard integration
+** TODO Autocompletion
+** TODO File finder
+** TODO Jump inside file to functions, variables etc.
+** TODO Mouse integration
+** TODO Language Server Protocol (LSP)
+
+* Probably never
+
+  These are the features which are almost certainly not part of a standard editing experience.
+  But nevertheless they can be considered given a solid use case. It is also advisable to
+  not make hard assumptions which would block these features from being implemented forever.
+  
+** Non-UTF8 encodings
+** Edit binaries/hexeditor
+** Edit large files like gigabytes of csv
+

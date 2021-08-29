@@ -1,5 +1,62 @@
 # Configuration design
 
+There are several possible levels of varying configurability:
+
+1. No configuration at all
+2. Configuration of builtin options with true/false, numbers and strings
+3. Provide "hooks" to execute scripts when certain events are fired
+4. Expose editor API via an embedded language like Lua
+
+Let's forget about the first option, I don't want to be the only user of
+this editor even if I write it for myself.
+
+Second option looks like a good start. It is also possible to merge it
+with other options but I have a feeling that these should be separate things
+in separate places.
+
+Third option, the concept of a "hook" as a general idea of an executable piece
+of code which will be run after a certain event was fired like inserting a
+character or
+switching panes. This is a nice approach but the problem I see here is that
+we will need a language that is going to be executed in this "hook" and we
+can't really leave it as a choice to the user. Let's read my sad story
+about [Kakoune]:
+
+Kakoune is an example with minimal own language for configuration, main idea is
+to use integrations written in any language the user wants to, and the "Kakoune
+language" just enables easier interoperation. The result is
+that most of the scripts are written in Bash (: And the more complicated ones
+use a myriad of languages such as Guile, Perl, Python, Crystal, Rust. Although
+it is feasible to use them, the most common denominator is Bash and this is sad.
+
+Fourth option, the API. The holy grail of programming. I program my editor, I am
+in the command. But am I really? I will still be able to program things which
+the editor carefully exposed to me via its API. And once I want to do something
+more significant, I will have to do it in another language, Zig, with different
+set of abstractions and everything. The main idea of embedding a scripting
+language is that it is easy to hop in but it always fails whenever the user
+desires a more sophisticated ability to extend the code. At this point the
+complexity of an extension language can be comparable to the source language.
+
+At the same time the embedded language looks as the only viable option if we
+want others to be able to provide lightweight plugins. Including everything
+in the main editor code can quickly blow up the complexity and worsen
+maintainability by a large amount. And it is likely to happen since different
+people would want different things in their editor.
+
+Another use case for an embedded language is to program a part of the editor
+in this very language. It is a popular practice in gamedev world, main benefit
+is the ease of programming and dynamic environment (usually embedded languages
+are highly dynamic). And the main downside is the slowness of execution when
+the amount of this embedded language becomes critically large. Today there
+are languages and tools which try to maximize benefits and minimize
+disadvantages.
+
+See further design of the embedded language in
+[Extensions design](EXTENSIONS_DESIGN.md).
+
+## File format
+
 Currently the format for file configuration is [zzz], it is a YAML-like
 syntax with a representation like a tree, allows duplicated keys and
 carries no distinction between the keys and values. It is flexible enough
@@ -79,7 +136,6 @@ keymap:                          # top-level key
     ctrl-n: move_down   # keybinding with a modifier key
     ctrl-p: move_up
 ```
- *
 
 TODO: describe the parsing algorithm
 
@@ -113,7 +169,6 @@ scopes:                        # top-level key
   xz:
     contents: 7zXZ             # matching on binary data (why on Earth)
 ```
- *
 
 ### Scope usage
 
@@ -133,7 +188,6 @@ ruby:
   settings:
     tab_width: 2
 ```
- *
 
 ## Settings
 
@@ -152,12 +206,3 @@ settings:
   tab_width: 8                # positive number
   expand_tab: smart           # true, false, smart
 ```
- *
-
-## Extensions
-
-TODO
-
-## Hooks
-
-TODO?

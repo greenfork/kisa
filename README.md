@@ -1,14 +1,16 @@
 # Kisa
 
-Kisa is a hackable batteries-included code editor.
+Kisa is a hackable and batteries-included text editor of the new world.
+
+Home repository is on [sourcehut] but there's also a mirror on [GitHub].
+
+[sourcehut]: https://sr.ht/~greenfork/kisa/
+[GitHub]: https://github.com/greenfork/kisa
 
 Kisa is in its early stage and it is not usable at the moment.
 
-Further are design ideas and philosophy behind this editor.
-
-In addition to ramblings below there's a growing set of design documents
-which are supposed to provide a more structured and thought through
-ideas, beware most of it is not implemented:
+There's a growing set of design documents beware most of it is not implemented.
+It will be further moved to a more appropriate place.
 * [Cursor design](CURSOR_DESIGN.md)
 * [Client architecture design](CLIENT_ARCHITECTURE_DESIGN.md)
 * [Configuration design](CONFIGURATION_DESIGN.md)
@@ -17,6 +19,77 @@ ideas, beware most of it is not implemented:
 * [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
 * [Windowing design](WINDOWING_ARCHITECTURE_DESIGN.md)
 * [Search design](SEARCH_DESIGN.md)
+* [Extensions design](EXTENSIONS_DESIGN.md)
+
+## Purpose
+
+I, greenfork, the one who started this project, would like to have a
+supreme code editor. I want to edit code with pleasure, I want to know
+that whenever I feel something is not right - I have enough power to fix it,
+but with great power comes great responsibility. I shall wield this power
+with caution and I shall encourage my peers and empower them to follow
+my steps and eventually let them lead me instead of simply being led.
+
+## Zen
+
+* Programmer must be able to perfect their tool.
+* Choice is burden.
+* Choice is freedom.
+
+## Goals
+
+* Provide a powerful and flexible code editor - obvious but worth saying,
+  we should not provide anything less than that.
+* Identify common workflows and set them in stone - text editing has become
+  quite sophisticated in this day and age, we have already discovered a lot
+  of editing capabilities. Now is the time to make them easy to use and fully
+  integrated with the rest of the features of the editor, not rely on
+  third-party plugins to emulate the necessary features.
+* Adhere to hybrid Unix/Apple philosophy - programs must be able to communicate
+  with each other, the editor must make integrations with other tools possible,
+  this is from Unix philosophy. At the same time the editor must be built from
+  ground-up and have full control of all its core features to provide a
+  single and uniform way of doing things, this is from Apple philosophy.
+* Make it infinitely extensible by design, no hard assumptions - the only types of
+  unimplementable features are those which were not accounted for from the
+  very beginning and got hardblocked by design decisions which are interleaved
+  with the rest of the editor, so changing it is not feasible. The solution
+  is simple - layers and layers of abstractions, assumptions are strictly
+  kept to minimum by careful thinking about the public API design of the layer.
+* Make it hackable - I believe there are several key points to make an editor
+  hackable: interesting design, clean code, extensive development documentation,
+  friendly attitude to anyone trying.
+
+## Communication
+
+* [~greenfork/kisa-announce@lists.sr.ht] - readonly mailing list for rare
+  announcements regarding this project
+* [~greenfork/kisa-devel@lists.sr.ht] - mailing list for discussions and
+  sending patches
+* hello@greenfork.me - my personal email address
+* [Discord] - real-time chatting experience
+* [Twitch] - occasional streams including editor development
+* [YouTube] - recordings of past streams and other related videos
+
+Please be kind and understanding to everyone.
+
+[~greenfork/kisa-announce@lists.sr.ht]: https://lists.sr.ht/~greenfork/kisa-announce
+[~greenfork/kisa-devel@lists.sr.ht]: https://lists.sr.ht/~greenfork/kisa-devel
+[Discord]: https://discord.gg/uc2AtWmP
+[Twitch]: https://www.twitch.tv/greenfork_gf
+[YouTube]: https://www.youtube.com/channel/UCinLbIxD_iIrByWR9fvO2kQ/videos
+
+## Contributing
+
+Ideas are very welcome. At this stage of the project the main task is to
+shape its design and provide proof-of-concept implementations of these ideas.
+Code contributions without previous discussions are unlikely to be accepted
+so please discuss the design first. Ideas should be in-line with current
+goals and values of this editor. Many ideas will likely be rejected since not
+all goals and values are identified, but nevertheless they will help us to
+improve this situation.
+
+For structured discussions please use [~greenfork/kisa-devel@lists.sr.ht] mailing list.
 
 ## How to build
 
@@ -37,335 +110,6 @@ $ zig build run
 You can also run individual tests for files, for example for `main.zig` I often
 only run `zig build test-main-nofork`, similar commands can be found in
 [build.zig](build.zig).
-
-## Purpose
-
-I, greenfork, the one who started this project, would like to have a
-supreme code editor. I want to edit code with pleasure, I want to know
-that whenever I feel something is not right - I have enough power to fix it,
-but with great power comes great responsibility. I shall wield this power
-with caution and I shall encourage my peers and empower them to follow
-my steps and eventually let them lead me instead of simply being led.
-
-## Zen
-
-* Programmer must be able to perfect their tool.
-* Programmer must learn to use the tool, not try to shoehorn it.
-* Choice is burden.
-* Choice is freedom.
-
-## Goals
-
-* Identify common workflows and set them in stone
-* Adhere to hybrid Unix/Apple philosophy
-* Infinitely extensible by design, no hard assumptions
-* ...
-
-TODO: elaborate on goals and add new goals
-
-## Requirements
-
-### Must-haves
-
-Following features should make the editor usable.
-
-* Modal editing, convenient key bindings
-
-### Nice-to-haves
-
-Features not used by everyone but which provide more pleasant experience.
-
-* Language Server Protocol (LSP)
-* Multiple cursors
-* Jump inside file to functions, variables etc.
-* Multiple panes/tabs
-* Swapable frontends, client-server architecture
-* Mouse integration
-* Autocompletion
-* Clipboard integration
-* Grepping
-* File finder
-* Syntax highlighting
-
-### Out of scope
-
-All of it would be nice, but let's grow steadily.
-
-* Non-UTF8 encodings
-* Edit binaries/hexeditor
-* Edit large files like gigabytes of csv
-
-## Why?
-
-My personal frustration with other editors is that I only seem to have a very
-limited ability to hack on them. With [Emacs] although I do enjoy writing Lisp
-code, the Emacs-Lisp never sat right with me, it's Lisp-2 and I'm more of a
-Schemer, so maybe this is the reason. With [Kakoune] I don't want to deal
-neither with C++ to edit the source code, nor with Bash to write scripting
-extensions.
-
-## Hackable
-
-I believe there are several key points to make an editor hackable:
-
-* Interesting design
-* Clean code
-* Eternal polishing
-
-And some points to make it hackable for everyone who is not me:
-
-* Extensive documentation
-* Preaching about it in blog posts, on streams, at conventions
-* Friendly attitude to anyone interested in hacking
-
-## Configuration
-
-There are several possible levels of varying configurability:
-
-1. No configuration at all
-2. Configuration of builtin options with true/false, numbers and strings
-3. Provide "hooks" to execute commands when certain events are fired
-4. Expose editor API via an embedded language like Lua
-
-Let's forget about the first option, I don't want to be the only user of
-this editor even if I write it for myself.
-
-Second option looks like a good start, there's [editorconfig] format which we
-can gladly use. It is also possible to merge it with other options but I
-have a feeling that these should be separate things in separate places.
-One small "hook" in custom editorconfig format and we will be against all
-the demons of the underworld trying to add just one more.
-
-[editorconfig]: https://editorconfig.org/
-
-Third option, the concept of a "hook" as a general idea of an executable piece
-of code which will be run after a certain event was fired like inserting a character or
-switching panes. This is a nice approach but the problem I see here is that
-we will need a language that is going to be executed in this "hook" and we
-can't really leave it as a choice to the user. Let's read my sad story
-about [Kakoune]:
-
-Kakoune is an example with minimal own language for configuration, main idea is
-to use integrations written in any language the user wants to, and the Kakoune
-language just enables easier interoperation. The result is
-that most of the scripts are written in Bash (: And the more complicated ones
-use a myriad of languages such as Guile, Perl, Python, Crystal, Rust. Although
-it is feasible to use them, the most common denominator is Bash and this is sad.
-
-Fourth option, the API. The holy grail of programming. I program my editor, I am
-in the command. But am I really? I will still be able to program things which
-the editor carefully exposed to me via its API. And once I want to do something
-more significant, I will have to do it in another language, Zig, with different
-set of abstractions and everything. The main idea of embedding a scripting
-language is that it is easy to hop in but it always fails whenever the user
-desires a more sophisticated ability to extend the code. At this point the
-complexity of an extension language can be comparable to the source language.
-
-As a side note there are some languages I considered as an embedded
-extension language:
-* [Lua]
-* [Squirrel]
-* [Wren]
-* [PocketLang]
-* [Chibi Scheme]
-* [Guile]
-* [mruby]
-* [bog]
-
-[Lua]: https://www.lua.org/
-[Wren]: https://wren.io/
-[PocketLang]: https://github.com/ThakeeNathees/pocketlang
-[Chibi Scheme]: https://github.com/ashinn/chibi-scheme
-[Guile]: https://www.gnu.org/software/guile/
-[Squirrel]: http://squirrel-lang.org/
-[mruby]: http://mruby.org/
-[bog]: https://github.com/Vexu/bog
-
-For now my heart is closer to plain config file and modifying the source if
-we need something extra.
-
-## Extension points and plugins
-
-Configuration with a full API exposure can be considered as a plugin/script
-extension. My idea is that we should have these things separate for a
-number of reasons:
-1. For large programs it could be very important to run asynchronously, so
-   that a slow Ruby program would not freeze your editor while it tries to
-   lint the code.
-2. Large programs are more likely to invest into more sophisticated transport
-   such as JSON-RPC via pipes or whatever we have. Thus we will not be subjected
-   to implementing an "easy to use" interface via our config files.
-
-Asynchrony traditionally adds a lot of complexity to the application. We will
-explore whether we are able to solve this problem in our specific case and
-not in general by providing a limited set of API endpoints to plugins. Otherwise
-we might find ourselves solving the problem of simultaneous edits by
-multiple users.
-
-For additional notes see [xi article on plugins].
-
-[xi article on plugins]: https://xi-editor.io/docs/plugin.html
-
-## Highlighting
-
-There are numerous ways to do highlighting. In this case I would like to
-explore the possibility of treating highlighted tokens not only as a colored
-thingy on the screen, but also as a semantic token. This is useful e.g. for
-jumping through functions in the file. Both highlighting and semantic
-information seem to be tightly coupled so we have an ability to provide a
-default semantic information with our highlighter as well as leverage
-3rd-party programs such as Language Server Protocol (LSP) to provide us this
-information with better precision.
-
-Further are some examples how editors do highlighting.
-
-### Kakoune
-
-[Kakoune] uses regex with slight modifications to allow code reuse and nested structures.
-Looks almost good enough: usually it is hard to edit and some rare constructs
-seem hard to implement (I couldn't implement highlighting for [slim], but
-maybe I'm not that smart).
-
-[slim]: https://github.com/slim-template/slim
-
-### amp
-
-[amp] reuses Textmate syntax highlighting configurations. The config files look
-as a mix of regex and some kind of pushdown automata. Extremely interesting
-option but needs more research.
-
-### vis
-
-[vis] it has direct integration with Lua and uses Parsing Grammar Expressions (PEG)
-in combination with the Lua language features. Looks very neat and powerful.
-
-### Emacs
-
-[Emacs] it doesn't have anything in particular, just uses some regex together with
-the power of Emacs-Lisp language. The editor is the Lisp machine, it doesn't
-really need anything special.
-
-### joe
-
-[joe] uses a full-blown description of a state machine that parses the text with
-simplified grammar rules. Quite large files, for example C grammar takes
-300 loc, Ruby grammar takes 600 loc (Ruby has complicated grammar). Although
-the grammar is correct (e.g. Kakoune grammar is not 100% correct), it takes
-some dedication to create such a grammar file.
-
-## Implementation details
-
-### API documentation
-
-https://greenfork.github.io/kisa/
-
-### Terminal display and input library
-
-Editors written in other than C languages such as Go ([micro], [qedit])
-or Rust ([helix], [amp]) use their own library which implements terminal
-display routines. C/C++ based editors largely use [ncurses] library
-([vis], [neovim]), but there's a good exception to this rule
-which is [kakoune]. Since this editor's language of choice is Zig,
-there are 2 choices: port ncurses library and write our own. I tried to
-[port the ncurses library] but eventually gave up because of infinite confusion
-with it. The code is also quite and quite hard to understand, there's an
-[attempt to make it better] but it is sadly not packaged at least in Arch Linux
-distribution which could be a problem. I decided that we should implement
-the library that is going to provide just the necessary for us features.
-
-Terminal input story is similar, other than C languages implement their own
-libraries which seems necessary for them anyway. The
-C land has [libtermkey] which is contrary to ncurses has pretty good source code,
-it is used at least by [neovim] and [vis]. But the state of this library is
-a little bit questionable, end-of-life was declared for it at least since
-2016 and the original author advertises their new [libtickit] library which
-tries to be an alternative library to ncurses but it didn't get wide adoption.
-Libtermkey is alive as a [neovim fork] however so this could be a viable option
-nonetheless. But again, implementing this library seems rather straightforward
-as demonstrated by [kakoune] and there are some new ideas about the
-full and proper representation of keypresses, see [keyboard terminal extension]
-by the kitty terminal.
-
-We will do everything in Zig. Hooray.
-
-[ncurses]: https://en.wikipedia.org/wiki/Ncurses
-[libtermkey]: http://www.leonerd.org.uk/code/libtermkey/
-[port the ncurses library]: https://github.com/greenfork/zig-ncurses
-[libtickit]: http://www.leonerd.org.uk/code/libtickit/
-[neovim fork]: https://github.com/neovim/libtermkey
-[keyboard terminal extension]: https://sw.kovidgoyal.net/kitty/keyboard-protocol.html
-[attempt to make it better]: https://github.com/sabotage-linux/netbsd-curses
-
-### Where is it going to run?
-
-Since the initial implementation is going to be a terminal-based client, we
-will strive for the highest common denominator of all terminals, some popular
-choices:
-
-* [Foot]
-* [Alacritty]
-* [Kitty]
-* [Urxvt]
-* [iTerm2]
-* [tmux]
-* [xterm]... oops sorry, [this is the one]
-* [cygwin]?
-
-[Foot]: https://codeberg.org/dnkl/foot
-[Alacritty]: https://github.com/alacritty/alacritty
-[Kitty]: https://sw.kovidgoyal.net/kitty/
-[Urxvt]: https://wiki.archlinux.org/title/Rxvt-unicode
-[iTerm2]: https://iterm2.com/
-[tmux]: https://github.com/tmux/tmux
-[xterm]: https://github.com/xtermjs/xterm.js/
-[this is the one]: https://invisible-island.net/xterm/
-[cygwin]: https://www.cygwin.com/
-
-### Architecture
-
-This section is volatile and may change frequently.
-
-![Architecture diagram](docs/assets/architecture.png)
-
-Examples of a Generic Plugin:
-- Language Server Protocol
-- Autocompletion
-- Pair autoinsertion
-- Jumping inside a file
-
-#### Why client-server architecture?
-
-Short answer: because it's fun, more opportunities, and it doesn't promise
-to be too overwhelming. Longer answer:
-
-* Frontends must only speak JSON, they can be written in any language.
-* Commandline tools can interact with a running editor session with ease.
-* Switching to client-server architecture later is almost equal to a complete
-  rewrite of the system, so why not just do it from the start.
-
-Also see:
-* [neovim-remote]
-* [foot server daemon mode]
-
-[neovim-remote]: https://github.com/mhinz/neovim-remote
-[foot server daemon mode]: https://codeberg.org/dnkl/foot#server-daemon-mode
-
-
-[Kakoune]: https://github.com/mawww/kakoune
-[amp]: https://github.com/jmacdonald/amp
-[vis]: https://github.com/martanne/vis
-[micro]: https://github.com/zyedidia/micro
-[vy]: https://github.com/vyapp/vy
-[neovim]: https://github.com/neovim/neovim
-[helix]: https://github.com/helix-editor/helix
-[xi]: https://xi-editor.io/
-[qedit]: https://github.com/fivemoreminix/qedit
-[kilo]: https://github.com/antirez/kilo
-[moe]: https://github.com/fox0430/moe
-[paravim]: https://github.com/paranim/paravim
-[focus]: https://github.com/jamii/focus
-[Emacs]: https://www.gnu.org/software/emacs/
-[joe]: https://joe-editor.sourceforge.io/
 
 ## Is this a task for a mere mortal?
 
