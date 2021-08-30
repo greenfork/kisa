@@ -155,7 +155,6 @@ for await (const |conn| of *listener*) {
 }
 ```
 
- *
 
 Meaning will probably vary a lot between different languages and there could
 be opinionated implementations of this feature. Hopefully there's an option
@@ -185,7 +184,6 @@ matching `errdefer`), in Zig:
         *errdefer* self.destroyWindowPane(window_pane.data.id);
 // ...
 ```
- *
 
 ### Memory handling
 
@@ -236,7 +234,6 @@ class Cookie
   end
 end
 ```
- *
 
 ## Architecture
 

@@ -115,6 +115,6 @@ workflow.
 [overly complicated]: https://github.com/andreyorst/fzf.kak/blob/master/rc/fzf.kak
 [scary bash scripts]: https://github.com/greenfork/dotfiles/blob/efeeda144639cbbd11e3fe68d3e78145080be47a/.config/kak/kakrc#L180-L188
 
-It suffices to say that [fzf] and similar programs provide quite a core
+It is worth saying that [fzf] and similar programs provide quite a core
 workflow of finding specific files in the project either by content or
 by filename.

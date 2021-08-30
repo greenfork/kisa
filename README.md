@@ -9,7 +9,7 @@ Home repository is on [sourcehut] but there's also a mirror on [GitHub].
 
 Kisa is in its early stage and it is not usable at the moment.
 
-There's a growing set of design documents beware most of it is not implemented.
+There's a growing set of design documents, beware most of it is not implemented.
 It will be further moved to a more appropriate place.
 * [Cursor design](CURSOR_DESIGN.md)
 * [Client architecture design](CLIENT_ARCHITECTURE_DESIGN.md)
@@ -55,7 +55,7 @@ my steps and eventually let them lead me instead of simply being led.
   very beginning and got hardblocked by design decisions which are interleaved
   with the rest of the editor, so changing it is not feasible. The solution
   is simple - layers and layers of abstractions, assumptions are strictly
-  kept to minimum by careful thinking about the public API design of the layer.
+  kept to minimum by careful thinking about the public API design of each layer.
 * Make it hackable - I believe there are several key points to make an editor
   hackable: interesting design, clean code, extensive development documentation,
   friendly attitude to anyone trying.
@@ -63,15 +63,17 @@ my steps and eventually let them lead me instead of simply being led.
 ## Communication
 
 * <~greenfork/kisa-announce@lists.sr.ht> - readonly mailing list for rare
-  announcements regarding this project, [web interface][announce-list]
+  announcements regarding this project, [web archive][announce-list]
 * <~greenfork/kisa-devel@lists.sr.ht> - mailing list for discussions and
-  sending patches, [web interface][devel-list]
+  sending patches, [web archive][devel-list]
 * <hello@greenfork.me> - my personal email address
 * [Discord] - real-time chatting experience
 * [Twitch] - occasional streams including editor development
 * [YouTube] - recordings of past streams and other related videos
 
 Please be kind and understanding to everyone.
+
+Are you new to mailing lists? Please check out [this tutorial](https://man.sr.ht/lists.sr.ht/).
 
 [announce-list]: https://lists.sr.ht/~greenfork/kisa-announce
 [devel-list]: https://lists.sr.ht/~greenfork/kisa-devel

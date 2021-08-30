@@ -89,29 +89,8 @@ no point in time we block on the call to `send` in user space.
 
 ## Event-based system
 
-Every action is an event (except for initialization and deinitialization),
-which gets resolved to a further action. Client specifically sends messages
-`fire_event` and sends key presses, which gets resolved to certain events
-from configuration file. In this sense a lot of actions are duplicated
-with the same-named events.
-
-The reason is to decouple the command execution and a place for different
-extensions to hook up to these commands. In other words the "event" can do
-several things: fire another event, issue several commands, execute
-extension-registered hooks to do some more events or commands. And the
-"command" usually mutates or queries the current state. This distinction
-should make it possible to easily add and remove different in-memory
-extensions. To the best of my knowledge, this is also a usual solution
-for graphical and terminal user interfaces.
-
-Example:
-1. Client sends a keypress event with left bracket `(`
-2. Server resolves it with keymap config into the `insert_character` event
-3. Event dispatcher processes this event
-4. During processing a "pair bracket" extension kicks in and sends another event
-   `insert_character` with `)`
-5. Original event is resolved, command `insertCharacter` is issued with `(`
-6. Event from "pair bracket" extension is resolved, command `insertCharacter`
-   is issued with `)`
-7. Result is that the client sees `()` being inserted when it only pressed
-   a single bracket key `(`
+Event-based system is a mechanism for integration with internal and
+external plugins, generally with everything that is not in the "core" of
+the editor. The editor core emits events at the strategic points of
+execution and the editor allows to "hook up" into these events and do
+different actions based on event types and any metadata they carry.
