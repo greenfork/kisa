@@ -62,19 +62,19 @@ my steps and eventually let them lead me instead of simply being led.
 
 ## Communication
 
-* [~greenfork/kisa-announce@lists.sr.ht] - readonly mailing list for rare
-  announcements regarding this project
-* [~greenfork/kisa-devel@lists.sr.ht] - mailing list for discussions and
-  sending patches
-* hello@greenfork.me - my personal email address
+* <~greenfork/kisa-announce@lists.sr.ht> - readonly mailing list for rare
+  announcements regarding this project, [web interface][announce-list]
+* <~greenfork/kisa-devel@lists.sr.ht> - mailing list for discussions and
+  sending patches, [web interface][devel-list]
+* <hello@greenfork.me> - my personal email address
 * [Discord] - real-time chatting experience
 * [Twitch] - occasional streams including editor development
 * [YouTube] - recordings of past streams and other related videos
 
 Please be kind and understanding to everyone.
 
-[~greenfork/kisa-announce@lists.sr.ht]: https://lists.sr.ht/~greenfork/kisa-announce
-[~greenfork/kisa-devel@lists.sr.ht]: https://lists.sr.ht/~greenfork/kisa-devel
+[announce-list]: https://lists.sr.ht/~greenfork/kisa-announce
+[devel-list]: https://lists.sr.ht/~greenfork/kisa-devel
 [Discord]: https://discord.gg/uc2AtWmP
 [Twitch]: https://www.twitch.tv/greenfork_gf
 [YouTube]: https://www.youtube.com/channel/UCinLbIxD_iIrByWR9fvO2kQ/videos
@@ -89,7 +89,7 @@ goals and values of this editor. Many ideas will likely be rejected since not
 all goals and values are identified, but nevertheless they will help us to
 improve this situation.
 
-For structured discussions please use [~greenfork/kisa-devel@lists.sr.ht] mailing list.
+For structured discussions please use <~greenfork/kisa-devel@lists.sr.ht> mailing list.
 
 ## How to build
 
