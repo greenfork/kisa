@@ -1,33 +1,158 @@
-* Now
-
-  A set of minimal features which makes the editor usable, but not necessarily
-  pleasant to use.
-
-** TODO Modal editing, convenient key bindings
-** TODO Swappable frontends, client-server architecture
-
-* Some time later
-
-  All of it would be nice, but let's grow steadily.
-
-** TODO Integrations with external tools
-** TODO Syntax highlighting
-** TODO Multiple cursors
-** TODO Multiple panes/tabs
-** TODO Clipboard integration
-** TODO Autocompletion
-** TODO File finder
-** TODO Jump inside file to functions, variables etc.
-** TODO Mouse integration
-** TODO Language Server Protocol (LSP)
-
-* Probably never
-
-  These are the features which are almost certainly not part of a standard editing experience.
-  But nevertheless they can be considered given a solid use case. It is also advisable to
-  not make hard assumptions which would block these features from being implemented forever.
+#+title: Kisa project progress
+#+author: greenfork
+#+STARTUP: logdone
+   
+* DONE Stage 1: Prototype [100%]
   
-** Non-UTF8 encodings
-** Edit binaries/hexeditor
-** Edit large files like gigabytes of csv
+** DONE Handle keyboard keys
+   
+** DONE Draw on the terminal
+   
+** DONE Read file for displaying
 
+* TODO Stage 2: Basic working program [15%]
+  :PROPERTIES:
+  :COOKIE_DATA: todo recursive
+  :END:
+  
+** TODO Client-Server communication [3/5]
+
+*** DONE Write RPC implementation [2/2]
+    CLOSED: [2021-09-02 Thu 23:39]
+    - [X] Write JSON-RPC 2.0 implementation
+    - [X] Wrap it into program-specific interface
+
+*** DONE Write polling with file descriptors
+    CLOSED: [2021-09-02 Thu 23:39]
+
+*** TODO Server-side loop [2/3]
+    - [X] Accept new clients
+    - [X] Process client requests
+    - [ ] Send notifications to clients
+
+*** TODO Client-side loop [1/3]
+    - [X] Send key presses
+    - [ ] Send commands
+    - [ ] Process notifications from the server
+
+*** DONE Error handling
+    CLOSED: [2021-09-02 Thu 23:45]
+
+** TODO Terminal user interface [0/6]
+
+*** TODO Draw on the screen
+
+*** TODO Read keys from the keyboard
+
+*** TODO Accumulate number multiplier
+    Pressing numbers should create a multiplier for the next command, normally
+    the number of times this command should be repeated.
+
+*** TODO Draw beautiful UI boxes
+    - [ ] Write design document
+    - [ ] Actually draw it
+
+*** TODO Enter command mode
+    Prompt should appear where the user can type commands
+
+*** TODO Draw cursor and selections
+
+** TODO State management [1/2]
+   - [X] Managing resources
+   - [ ] Layout of multiple splits
+
+** TODO Text buffer [0/2]
+*** TODO Prototype [0/6]
+     Implementation as a simple contiguous growing array. Mainly
+     it is needed to understand the interface and get some idea about the kind
+     of processing that is necessary for common operations on the text buffer.
+     - [ ] Move the cursor
+     - [ ] Insert characters
+     - [ ] Multiple cursors proof-of-concept
+     - [ ] Search exact/regex
+     - [ ] Open file
+     - [ ] Open scratch buffer
+*** TODO Main implementation
+     Decide on main implementation and write it. This decision is not final but
+     still seems necessary for a basic working program.
+
+** TODO Configuration processing [1/3]
+*** DONE Decide on file format - [[https://github.com/gruebite/zzz][zzz]]
+    CLOSED: [2021-09-03 Fri 00:43]
+*** TODO Read configuration [1/3]
+    - [X] Read key map
+    - [ ] Read general settings
+    - [ ] Read scopes :: A mechanism for keeping configuration belonging to
+      separate domains, for example language-specific configuration.
+       
+*** TODO Merge several configuration files
+    Usually there are several places for configuration files which are loaded
+    in the order of priority.
+
+** TODO Syntax highlighting
+   The simplest possible one, just syntax tokens. Most probably implemented
+   with an extension language.
+
+** TODO Add extension language [0/3]
+
+*** TODO Decide on extension language
+    - [ ] [[https://www.lua.org/][Lua]]
+    - [ ] [[https://fennel-lang.org/][Fennel]]
+    - [ ] [[http://synthcode.com/scheme/chibi/][Chibi Scheme]]
+    - [ ] [[https://janet-lang.org/][Janet]]
+
+*** TODO Implement event system
+    Events are signals emitted by the core to which the extension language can
+    subscribe and do desired actions. Event system is /de facto/ the way the
+    extension language can know about anything happening in the editor.
+
+*** TODO Provide proof-of-concept implementations
+    - [ ] Integration with [[https://github.com/junegunn/fzf][fzf]]
+    - [ ] Syntax highlighting
+    - [ ] Complex commands :: Most probably the "core" of the editor will only
+      provide most basic commands for manipulating the state, and the extension
+      language is then responsible for combining these simple commands into more
+      complex interactions.
+
+* TODO Stage 3 [0%]
+  :PROPERTIES:
+  :COOKIE_DATA: todo recursive
+  :END:
+
+** TODO Finalize text buffer implementation [0/2]
+   - [ ] Implement several variants
+   - [ ] Benchmark them
+
+** TODO Semantic highlighting
+   Experimentation with different modes for highlighting and implementation of
+   the "tower of highlighting".
+
+** TODO Decide on configuration handling
+   - Do we need extension language?
+   - If we keep extension language, do we need zzz file format?
+
+** TODO Search and replace
+
+*** TODO Decide which search variations to implement
+    - [ ] Exact
+    - [ ] Exact with word boundaries
+    - [ ] Regex
+    - [ ] Exact case-insensitive
+    - [ ] Camel-Kebab-Pascal-Snake-case-insensitive
+    - [ ] PEG
+
+*** TODO Implement searching
+
+*** TODO Implement replacing
+
+* Unsorted
+** Integrations with external tools
+** Syntax highlighting
+** Multiple cursors
+** Multiple panes/tabs
+** Clipboard integration
+** Autocompletion
+** File finder
+** Jump inside file to functions, variables etc.
+** Mouse integration
+** Language Server Protocol (LSP)
