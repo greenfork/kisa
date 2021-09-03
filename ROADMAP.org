@@ -1,6 +1,6 @@
-#+title: Kisa project progress
+#+title: Kisa project roadmap
 #+author: greenfork
-#+STARTUP: logdone
+#+STARTUP: logdone content
    
 * DONE Stage 1: Prototype [100%]
   
@@ -10,11 +10,27 @@
    
 ** DONE Read file for displaying
 
-* TODO Stage 2: Basic working program [15%]
+* TODO Stage 2: Basic working program [12%]
   :PROPERTIES:
   :COOKIE_DATA: todo recursive
   :END:
-  
+
+  This stage should result in a basic working editor with some experimental
+  features. It should provide answers to fundamental design decisions which
+  should be taken further.
+
+** TODO Write design documents [8/10]
+   - [X] Client architecture
+   - [X] Server architecture
+   - [X] Configuration
+   - [X] Cursor
+   - [ ] Extensions
+   - [X] Highlighting
+   - [X] Keybindings
+   - [X] Search
+   - [X] Windowing
+   - [ ] User interface
+   
 ** TODO Client-Server communication [3/5]
 
 *** DONE Write RPC implementation [2/2]
@@ -49,20 +65,24 @@
     the number of times this command should be repeated.
 
 *** TODO Draw beautiful UI boxes
-    - [ ] Write design document
-    - [ ] Actually draw it
 
 *** TODO Enter command mode
     Prompt should appear where the user can type commands
 
 *** TODO Draw cursor and selections
 
+** TODO Windowing [0/4]
+   - [ ] Evenly spaced horizontal layout
+   - [ ] Evenly spaced vertical layout
+   - [ ] Splits layout
+   - [ ] Stack layout
+
 ** TODO State management [1/2]
    - [X] Managing resources
    - [ ] Layout of multiple splits
 
 ** TODO Text buffer [0/2]
-*** TODO Prototype [0/6]
+*** TODO Prototype [0/7]
      Implementation as a simple contiguous growing array. Mainly
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
@@ -72,6 +92,7 @@
      - [ ] Search exact/regex
      - [ ] Open file
      - [ ] Open scratch buffer
+     - [ ] Search
 *** TODO Main implementation
      Decide on main implementation and write it. This decision is not final but
      still seems necessary for a basic working program.
@@ -114,25 +135,41 @@
       language is then responsible for combining these simple commands into more
       complex interactions.
 
-* TODO Stage 3 [0%]
+** TODO Integration with external tools [0/4]
+   This will probably intersect with other sections such as extension language.
+
+*** TODO fzf
+
+*** TODO ripgrep
+
+*** TODO Linting
+
+*** TODO Formatting
+
+* TODO Stage 3: Polished working program [0%]
   :PROPERTIES:
   :COOKIE_DATA: todo recursive
   :END:
 
+  This stage should result in a full working editor with basic features which
+  work well and as expected. But it does not necessarily include all the nice
+  convenience features which are generally expected in a modern text editor.
+
+** TODO Write documentation
 ** TODO Finalize text buffer implementation [0/2]
    - [ ] Implement several variants
    - [ ] Benchmark them
 
-** TODO Semantic highlighting
+** TODO Implement tower of highlighting
    Experimentation with different modes for highlighting and implementation of
-   the "tower of highlighting".
+   the "tower of highlighting". Only the basic structure should be implemented,
+   not necessarily all the different semantic modes.
 
 ** TODO Decide on configuration handling
    - Do we need extension language?
    - If we keep extension language, do we need zzz file format?
 
 ** TODO Search and replace
-
 *** TODO Decide which search variations to implement
     - [ ] Exact
     - [ ] Exact with word boundaries
@@ -142,9 +179,44 @@
     - [ ] PEG
 
 *** TODO Implement searching
-
 *** TODO Implement replacing
 
+* TODO Stage 4: Experimental convenience functionality [0%]
+  :PROPERTIES:
+  :COOKIE_DATA: todo recursive
+  :END:
+
+  This stage includes all the nice features which help the programmer program
+  quicker, faster and easier. A lot of experimental features are expected to be
+  here with the idea that they can be further refined, removed or changed.
+  
+** TODO Autocompletion
+
+** TODO Clipboard integration
+   
+** TODO Jump inside file
+
+** TODO Mouse integration
+
+** TODO Multiple cursors
+
+** TODO Language server protocol
+   
+* TODO Stage 5: Refined convenience functionality [0%]
+
+  This stage should complete and decide on all the functionality that should be
+  included in the "core" of the editor, moved to third-party library or removed
+  completely and left as the exercise for the reader.
+  
+** TODO Decide on the features
+   
+* TODO Stage 6: Final release
+
+  This stage should be a release of version 1.0. After all the stages have been
+  implemented and tested, this stage will stabilize the features, API and all
+  the other important things so that users can expect a seamless upgrade process
+  of future versions. The next breaking version will be 2.0.
+  
 * Unsorted
 ** Integrations with external tools
 ** Syntax highlighting
