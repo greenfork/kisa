@@ -66,7 +66,9 @@ my steps and eventually let them lead me instead of simply being led.
 ## Communication
 
 * <~greenfork/kisa-announce@lists.sr.ht> - readonly mailing list for rare
-  announcements regarding this project, [web archive][announce-list]
+  announcements regarding this project, [web archive][announce-list]. Subscribe
+  to this list by sending any email to
+  <~greenfork/kisa-announce+subscribe@lists.sr.ht>.
 * <~greenfork/kisa-devel@lists.sr.ht> - mailing list for discussions and
   sending patches, [web archive][devel-list]
 * <hello@greenfork.me> - my personal email address
