@@ -77,6 +77,8 @@ my steps and eventually let them lead me instead of simply being led.
 Please be kind and understanding to everyone.
 
 Are you new to mailing lists? Please check out [this tutorial](https://man.sr.ht/lists.sr.ht/).
+There's also the [in-detail comparison video](https://youtu.be/XVe9SD3kSR0) of pull requests
+versus patches.
 
 [announce-list]: https://lists.sr.ht/~greenfork/kisa-announce
 [devel-list]: https://lists.sr.ht/~greenfork/kisa-devel
