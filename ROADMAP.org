@@ -217,14 +217,3 @@
   the other important things so that users can expect a seamless upgrade process
   of future versions. The next breaking version will be 2.0.
   
-* Unsorted
-** Integrations with external tools
-** Syntax highlighting
-** Multiple cursors
-** Multiple panes/tabs
-** Clipboard integration
-** Autocompletion
-** File finder
-** Jump inside file to functions, variables etc.
-** Mouse integration
-** Language Server Protocol (LSP)
