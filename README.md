@@ -7,7 +7,10 @@ Home repository is on [sourcehut] but there's also a mirror on [GitHub].
 [sourcehut]: https://sr.ht/~greenfork/kisa/
 [GitHub]: https://github.com/greenfork/kisa
 
-Kisa is in its early stage and it is not usable at the moment.
+Kisa is in its early stage and it is not usable at the moment. See [roadmap]
+for the current progress.
+
+[roadmap]: https://greenfork.github.io/kisa/ROADMAP.html
 
 There's a growing set of design documents, beware most of it is not implemented.
 It will be further moved to a more appropriate place.
