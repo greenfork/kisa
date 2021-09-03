@@ -1,0 +1,762 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2021-09-03 Fri 18:48 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kisa project roadmap</title>
+<meta name="generator" content="Org mode" />
+<meta name="author" content="greenfork" />
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  .title  { text-align: center;
+             margin-bottom: .2em; }
+  .subtitle { text-align: center;
+              font-size: medium;
+              font-weight: bold;
+              margin-top:0; }
+  .todo   { font-family: monospace; color: red; }
+  .done   { font-family: monospace; color: green; }
+  .priority { font-family: monospace; color: orange; }
+  .tag    { background-color: #eee; font-family: monospace;
+            padding: 2px; font-size: 80%; font-weight: normal; }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .org-right  { margin-left: auto; margin-right: 0px;  text-align: right; }
+  .org-left   { margin-left: 0px;  margin-right: auto; text-align: left; }
+  .org-center { margin-left: auto; margin-right: auto; text-align: center; }
+  .underline { text-decoration: underline; }
+  #postamble p, #preamble p { font-size: 90%; margin: .2em; }
+  p.verse { margin-left: 3%; }
+  pre {
+    border: 1px solid #ccc;
+    box-shadow: 3px 3px 3px #eee;
+    padding: 8pt;
+    font-family: monospace;
+    overflow: auto;
+    margin: 1.2em;
+  }
+  pre.src {
+    position: relative;
+    overflow: auto;
+    padding-top: 1.2em;
+  }
+  pre.src:before {
+    display: none;
+    position: absolute;
+    background-color: white;
+    top: -10px;
+    right: 10px;
+    padding: 3px;
+    border: 1px solid black;
+  }
+  pre.src:hover:before { display: inline; margin-top: 14px;}
+  /* Languages per Org manual */
+  pre.src-asymptote:before { content: 'Asymptote'; }
+  pre.src-awk:before { content: 'Awk'; }
+  pre.src-C:before { content: 'C'; }
+  /* pre.src-C++ doesn't work in CSS */
+  pre.src-clojure:before { content: 'Clojure'; }
+  pre.src-css:before { content: 'CSS'; }
+  pre.src-D:before { content: 'D'; }
+  pre.src-ditaa:before { content: 'ditaa'; }
+  pre.src-dot:before { content: 'Graphviz'; }
+  pre.src-calc:before { content: 'Emacs Calc'; }
+  pre.src-emacs-lisp:before { content: 'Emacs Lisp'; }
+  pre.src-fortran:before { content: 'Fortran'; }
+  pre.src-gnuplot:before { content: 'gnuplot'; }
+  pre.src-haskell:before { content: 'Haskell'; }
+  pre.src-hledger:before { content: 'hledger'; }
+  pre.src-java:before { content: 'Java'; }
+  pre.src-js:before { content: 'Javascript'; }
+  pre.src-latex:before { content: 'LaTeX'; }
+  pre.src-ledger:before { content: 'Ledger'; }
+  pre.src-lisp:before { content: 'Lisp'; }
+  pre.src-lilypond:before { content: 'Lilypond'; }
+  pre.src-lua:before { content: 'Lua'; }
+  pre.src-matlab:before { content: 'MATLAB'; }
+  pre.src-mscgen:before { content: 'Mscgen'; }
+  pre.src-ocaml:before { content: 'Objective Caml'; }
+  pre.src-octave:before { content: 'Octave'; }
+  pre.src-org:before { content: 'Org mode'; }
+  pre.src-oz:before { content: 'OZ'; }
+  pre.src-plantuml:before { content: 'Plantuml'; }
+  pre.src-processing:before { content: 'Processing.js'; }
+  pre.src-python:before { content: 'Python'; }
+  pre.src-R:before { content: 'R'; }
+  pre.src-ruby:before { content: 'Ruby'; }
+  pre.src-sass:before { content: 'Sass'; }
+  pre.src-scheme:before { content: 'Scheme'; }
+  pre.src-screen:before { content: 'Gnu Screen'; }
+  pre.src-sed:before { content: 'Sed'; }
+  pre.src-sh:before { content: 'shell'; }
+  pre.src-sql:before { content: 'SQL'; }
+  pre.src-sqlite:before { content: 'SQLite'; }
+  /* additional languages in org.el's org-babel-load-languages alist */
+  pre.src-forth:before { content: 'Forth'; }
+  pre.src-io:before { content: 'IO'; }
+  pre.src-J:before { content: 'J'; }
+  pre.src-makefile:before { content: 'Makefile'; }
+  pre.src-maxima:before { content: 'Maxima'; }
+  pre.src-perl:before { content: 'Perl'; }
+  pre.src-picolisp:before { content: 'Pico Lisp'; }
+  pre.src-scala:before { content: 'Scala'; }
+  pre.src-shell:before { content: 'Shell Script'; }
+  pre.src-ebnf2ps:before { content: 'ebfn2ps'; }
+  /* additional language identifiers per "defun org-babel-execute"
+       in ob-*.el */
+  pre.src-cpp:before  { content: 'C++'; }
+  pre.src-abc:before  { content: 'ABC'; }
+  pre.src-coq:before  { content: 'Coq'; }
+  pre.src-groovy:before  { content: 'Groovy'; }
+  /* additional language identifiers from org-babel-shell-names in
+     ob-shell.el: ob-shell is the only babel language using a lambda to put
+     the execution function name together. */
+  pre.src-bash:before  { content: 'bash'; }
+  pre.src-csh:before  { content: 'csh'; }
+  pre.src-ash:before  { content: 'ash'; }
+  pre.src-dash:before  { content: 'dash'; }
+  pre.src-ksh:before  { content: 'ksh'; }
+  pre.src-mksh:before  { content: 'mksh'; }
+  pre.src-posh:before  { content: 'posh'; }
+  /* Additional Emacs modes also supported by the LaTeX listings package */
+  pre.src-ada:before { content: 'Ada'; }
+  pre.src-asm:before { content: 'Assembler'; }
+  pre.src-caml:before { content: 'Caml'; }
+  pre.src-delphi:before { content: 'Delphi'; }
+  pre.src-html:before { content: 'HTML'; }
+  pre.src-idl:before { content: 'IDL'; }
+  pre.src-mercury:before { content: 'Mercury'; }
+  pre.src-metapost:before { content: 'MetaPost'; }
+  pre.src-modula-2:before { content: 'Modula-2'; }
+  pre.src-pascal:before { content: 'Pascal'; }
+  pre.src-ps:before { content: 'PostScript'; }
+  pre.src-prolog:before { content: 'Prolog'; }
+  pre.src-simula:before { content: 'Simula'; }
+  pre.src-tcl:before { content: 'tcl'; }
+  pre.src-tex:before { content: 'TeX'; }
+  pre.src-plain-tex:before { content: 'Plain TeX'; }
+  pre.src-verilog:before { content: 'Verilog'; }
+  pre.src-vhdl:before { content: 'VHDL'; }
+  pre.src-xml:before { content: 'XML'; }
+  pre.src-nxml:before { content: 'XML'; }
+  /* add a generic configuration mode; LaTeX export needs an additional
+     (add-to-list 'org-latex-listings-langs '(conf " ")) in .emacs */
+  pre.src-conf:before { content: 'Configuration File'; }
+
+  table { border-collapse:collapse; }
+  caption.t-above { caption-side: top; }
+  caption.t-bottom { caption-side: bottom; }
+  td, th { vertical-align:top;  }
+  th.org-right  { text-align: center;  }
+  th.org-left   { text-align: center;   }
+  th.org-center { text-align: center; }
+  td.org-right  { text-align: right;  }
+  td.org-left   { text-align: left;   }
+  td.org-center { text-align: center; }
+  dt { font-weight: bold; }
+  .footpara { display: inline; }
+  .footdef  { margin-bottom: 1em; }
+  .figure { padding: 1em; }
+  .figure p { text-align: center; }
+  .equation-container {
+    display: table;
+    text-align: center;
+    width: 100%;
+  }
+  .equation {
+    vertical-align: middle;
+  }
+  .equation-label {
+    display: table-cell;
+    text-align: right;
+    vertical-align: middle;
+  }
+  .inlinetask {
+    padding: 10px;
+    border: 2px solid gray;
+    margin: 10px;
+    background: #ffffcc;
+  }
+  #org-div-home-and-up
+   { text-align: right; font-size: 70%; white-space: nowrap; }
+  textarea { overflow-x: auto; }
+  .linenr { font-size: smaller }
+  .code-highlighted { background-color: #ffff00; }
+  .org-info-js_info-navigation { border-style: none; }
+  #org-info-js_console-label
+    { font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .org-info-js_search-highlight
+    { background-color: #ffff00; color: #000000; font-weight: bold; }
+  .org-svg { width: 90%; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+// @license magnet:?xt=urn:btih:e95b018ef3580986a04669f1b5879592219e2a7a&dn=public-domain.txt Public Domain
+<!--/*--><![CDATA[/*><!--*/
+     function CodeHighlightOn(elem, id)
+     {
+       var target = document.getElementById(id);
+       if(null != target) {
+         elem.classList.add("code-highlighted");
+         target.classList.add("code-highlighted");
+       }
+     }
+     function CodeHighlightOff(elem, id)
+     {
+       var target = document.getElementById(id);
+       if(null != target) {
+         elem.classList.remove("code-highlighted");
+         target.classList.remove("code-highlighted");
+       }
+     }
+    /*]]>*///-->
+// @license-end
+</script>
+</head>
+<body>
+<div id="content">
+<h1 class="title">Kisa project roadmap</h1>
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#orgdcefb6b">1. <span class="done DONE">DONE</span> Stage 1: Prototype <code>[100%]</code></a>
+<ul>
+<li><a href="#org9aab04c">1.1. <span class="done DONE">DONE</span> Handle keyboard keys</a></li>
+<li><a href="#org90d3437">1.2. <span class="done DONE">DONE</span> Draw on the terminal</a></li>
+<li><a href="#orgaf60889">1.3. <span class="done DONE">DONE</span> Read file for displaying</a></li>
+</ul>
+</li>
+<li><a href="#org783e136">2. <span class="todo TODO">TODO</span> Stage 2: Basic working program <code>[12%]</code></a>
+<ul>
+<li><a href="#org66c0576">2.1. <span class="todo TODO">TODO</span> Write design documents <code>[8/10]</code></a></li>
+<li><a href="#org66dc1dc">2.2. <span class="todo TODO">TODO</span> Client-Server communication <code>[3/5]</code></a>
+<ul>
+<li><a href="#orgccda691">2.2.1. <span class="done DONE">DONE</span> Write RPC implementation <code>[2/2]</code></a></li>
+<li><a href="#org6f2274c">2.2.2. <span class="done DONE">DONE</span> Write polling with file descriptors</a></li>
+<li><a href="#org169be23">2.2.3. <span class="todo TODO">TODO</span> Server-side loop <code>[2/3]</code></a></li>
+<li><a href="#org8534472">2.2.4. <span class="todo TODO">TODO</span> Client-side loop <code>[1/3]</code></a></li>
+<li><a href="#orgce7dd76">2.2.5. <span class="done DONE">DONE</span> Error handling</a></li>
+</ul>
+</li>
+<li><a href="#orge286cca">2.3. <span class="todo TODO">TODO</span> Terminal user interface <code>[0/6]</code></a>
+<ul>
+<li><a href="#org3d7fc47">2.3.1. <span class="todo TODO">TODO</span> Draw on the screen</a></li>
+<li><a href="#org79d9b0c">2.3.2. <span class="todo TODO">TODO</span> Read keys from the keyboard</a></li>
+<li><a href="#org6b42a73">2.3.3. <span class="todo TODO">TODO</span> Accumulate number multiplier</a></li>
+<li><a href="#orgda1ab71">2.3.4. <span class="todo TODO">TODO</span> Draw beautiful UI boxes</a></li>
+<li><a href="#org6d2f226">2.3.5. <span class="todo TODO">TODO</span> Enter command mode</a></li>
+<li><a href="#org141dd13">2.3.6. <span class="todo TODO">TODO</span> Draw cursor and selections</a></li>
+</ul>
+</li>
+<li><a href="#org1ba9d86">2.4. <span class="todo TODO">TODO</span> Windowing <code>[0/4]</code></a></li>
+<li><a href="#org1ac60c1">2.5. <span class="todo TODO">TODO</span> State management <code>[1/2]</code></a></li>
+<li><a href="#orgedf3346">2.6. <span class="todo TODO">TODO</span> Text buffer <code>[0/2]</code></a>
+<ul>
+<li><a href="#org39881e1">2.6.1. <span class="todo TODO">TODO</span> Prototype <code>[0/7]</code></a></li>
+<li><a href="#orgcfcf94e">2.6.2. <span class="todo TODO">TODO</span> Main implementation</a></li>
+</ul>
+</li>
+<li><a href="#orgd5e8cad">2.7. <span class="todo TODO">TODO</span> Configuration processing <code>[1/3]</code></a>
+<ul>
+<li><a href="#org63cc690">2.7.1. <span class="done DONE">DONE</span> Decide on file format - zzz</a></li>
+<li><a href="#org8ef2d1d">2.7.2. <span class="todo TODO">TODO</span> Read configuration <code>[1/3]</code></a></li>
+<li><a href="#org3f6dc5c">2.7.3. <span class="todo TODO">TODO</span> Merge several configuration files</a></li>
+</ul>
+</li>
+<li><a href="#org866490c">2.8. <span class="todo TODO">TODO</span> Syntax highlighting</a></li>
+<li><a href="#org2275b4f">2.9. <span class="todo TODO">TODO</span> Add extension language <code>[0/3]</code></a>
+<ul>
+<li><a href="#org7493979">2.9.1. <span class="todo TODO">TODO</span> Decide on extension language</a></li>
+<li><a href="#org5bbeebe">2.9.2. <span class="todo TODO">TODO</span> Implement event system</a></li>
+<li><a href="#org4c7b4e4">2.9.3. <span class="todo TODO">TODO</span> Provide proof-of-concept implementations</a></li>
+</ul>
+</li>
+<li><a href="#orgd579525">2.10. <span class="todo TODO">TODO</span> Integration with external tools <code>[0/4]</code></a>
+<ul>
+<li><a href="#org12f3e66">2.10.1. <span class="todo TODO">TODO</span> fzf</a></li>
+<li><a href="#orgced7253">2.10.2. <span class="todo TODO">TODO</span> ripgrep</a></li>
+<li><a href="#org6474370">2.10.3. <span class="todo TODO">TODO</span> Linting</a></li>
+<li><a href="#orgee4781d">2.10.4. <span class="todo TODO">TODO</span> Formatting</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#orge63b5a6">3. <span class="todo TODO">TODO</span> Stage 3: Polished working program <code>[0%]</code></a>
+<ul>
+<li><a href="#org374498b">3.1. <span class="todo TODO">TODO</span> Write documentation</a></li>
+<li><a href="#org8721a73">3.2. <span class="todo TODO">TODO</span> Finalize text buffer implementation <code>[0/2]</code></a></li>
+<li><a href="#org4fd9948">3.3. <span class="todo TODO">TODO</span> Implement tower of highlighting</a></li>
+<li><a href="#org4d3ff57">3.4. <span class="todo TODO">TODO</span> Decide on configuration handling</a></li>
+<li><a href="#org96cb211">3.5. <span class="todo TODO">TODO</span> Search and replace</a>
+<ul>
+<li><a href="#org4559bf4">3.5.1. <span class="todo TODO">TODO</span> Decide which search variations to implement</a></li>
+<li><a href="#org9e41afe">3.5.2. <span class="todo TODO">TODO</span> Implement searching</a></li>
+<li><a href="#org34b62a8">3.5.3. <span class="todo TODO">TODO</span> Implement replacing</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#org5ecee19">4. <span class="todo TODO">TODO</span> Stage 4: Experimental convenience functionality <code>[0%]</code></a>
+<ul>
+<li><a href="#org885f241">4.1. <span class="todo TODO">TODO</span> Autocompletion</a></li>
+<li><a href="#org2d6c9fd">4.2. <span class="todo TODO">TODO</span> Clipboard integration</a></li>
+<li><a href="#org7212992">4.3. <span class="todo TODO">TODO</span> Jump inside file</a></li>
+<li><a href="#org25b7bfc">4.4. <span class="todo TODO">TODO</span> Mouse integration</a></li>
+<li><a href="#org7d4fd0d">4.5. <span class="todo TODO">TODO</span> Multiple cursors</a></li>
+<li><a href="#orgb1521ab">4.6. <span class="todo TODO">TODO</span> Language server protocol</a></li>
+</ul>
+</li>
+<li><a href="#org24e5fa1">5. <span class="todo TODO">TODO</span> Stage 5: Refined convenience functionality <code>[0%]</code></a>
+<ul>
+<li><a href="#orgddfd4f3">5.1. <span class="todo TODO">TODO</span> Decide on the features</a></li>
+</ul>
+</li>
+<li><a href="#org0de2323">6. <span class="todo TODO">TODO</span> Stage 6: Final release</a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgdcefb6b" class="outline-2">
+<h2 id="orgdcefb6b"><span class="section-number-2">1</span> <span class="done DONE">DONE</span> Stage 1: Prototype <code>[100%]</code></h2>
+<div class="outline-text-2" id="text-1">
+</div>
+<div id="outline-container-org9aab04c" class="outline-3">
+<h3 id="org9aab04c"><span class="section-number-3">1.1</span> <span class="done DONE">DONE</span> Handle keyboard keys</h3>
+</div>
+
+<div id="outline-container-org90d3437" class="outline-3">
+<h3 id="org90d3437"><span class="section-number-3">1.2</span> <span class="done DONE">DONE</span> Draw on the terminal</h3>
+</div>
+
+<div id="outline-container-orgaf60889" class="outline-3">
+<h3 id="orgaf60889"><span class="section-number-3">1.3</span> <span class="done DONE">DONE</span> Read file for displaying</h3>
+</div>
+</div>
+
+<div id="outline-container-org783e136" class="outline-2">
+<h2 id="org783e136"><span class="section-number-2">2</span> <span class="todo TODO">TODO</span> Stage 2: Basic working program <code>[12%]</code></h2>
+<div class="outline-text-2" id="text-2">
+<p>
+This stage should result in a basic working editor with some experimental
+features. It should provide answers to fundamental design decisions which
+should be taken further.
+</p>
+</div>
+
+<div id="outline-container-org66c0576" class="outline-3">
+<h3 id="org66c0576"><span class="section-number-3">2.1</span> <span class="todo TODO">TODO</span> Write design documents <code>[8/10]</code></h3>
+<div class="outline-text-3" id="text-2-1">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Client architecture</li>
+<li class="on"><code>[X]</code> Server architecture</li>
+<li class="on"><code>[X]</code> Configuration</li>
+<li class="on"><code>[X]</code> Cursor</li>
+<li class="off"><code>[&#xa0;]</code> Extensions</li>
+<li class="on"><code>[X]</code> Highlighting</li>
+<li class="on"><code>[X]</code> Keybindings</li>
+<li class="on"><code>[X]</code> Search</li>
+<li class="on"><code>[X]</code> Windowing</li>
+<li class="off"><code>[&#xa0;]</code> User interface</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org66dc1dc" class="outline-3">
+<h3 id="org66dc1dc"><span class="section-number-3">2.2</span> <span class="todo TODO">TODO</span> Client-Server communication <code>[3/5]</code></h3>
+<div class="outline-text-3" id="text-2-2">
+</div>
+<div id="outline-container-orgccda691" class="outline-4">
+<h4 id="orgccda691"><span class="section-number-4">2.2.1</span> <span class="done DONE">DONE</span> Write RPC implementation <code>[2/2]</code></h4>
+<div class="outline-text-4" id="text-2-2-1">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Write JSON-RPC 2.0 implementation</li>
+<li class="on"><code>[X]</code> Wrap it into program-specific interface</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org6f2274c" class="outline-4">
+<h4 id="org6f2274c"><span class="section-number-4">2.2.2</span> <span class="done DONE">DONE</span> Write polling with file descriptors</h4>
+<div class="outline-text-4" id="text-2-2-2">
+</div>
+</div>
+
+<div id="outline-container-org169be23" class="outline-4">
+<h4 id="org169be23"><span class="section-number-4">2.2.3</span> <span class="todo TODO">TODO</span> Server-side loop <code>[2/3]</code></h4>
+<div class="outline-text-4" id="text-2-2-3">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Accept new clients</li>
+<li class="on"><code>[X]</code> Process client requests</li>
+<li class="off"><code>[&#xa0;]</code> Send notifications to clients</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org8534472" class="outline-4">
+<h4 id="org8534472"><span class="section-number-4">2.2.4</span> <span class="todo TODO">TODO</span> Client-side loop <code>[1/3]</code></h4>
+<div class="outline-text-4" id="text-2-2-4">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Send key presses</li>
+<li class="off"><code>[&#xa0;]</code> Send commands</li>
+<li class="off"><code>[&#xa0;]</code> Process notifications from the server</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgce7dd76" class="outline-4">
+<h4 id="orgce7dd76"><span class="section-number-4">2.2.5</span> <span class="done DONE">DONE</span> Error handling</h4>
+<div class="outline-text-4" id="text-2-2-5">
+</div>
+</div>
+</div>
+
+<div id="outline-container-orge286cca" class="outline-3">
+<h3 id="orge286cca"><span class="section-number-3">2.3</span> <span class="todo TODO">TODO</span> Terminal user interface <code>[0/6]</code></h3>
+<div class="outline-text-3" id="text-2-3">
+</div>
+<div id="outline-container-org3d7fc47" class="outline-4">
+<h4 id="org3d7fc47"><span class="section-number-4">2.3.1</span> <span class="todo TODO">TODO</span> Draw on the screen</h4>
+</div>
+
+<div id="outline-container-org79d9b0c" class="outline-4">
+<h4 id="org79d9b0c"><span class="section-number-4">2.3.2</span> <span class="todo TODO">TODO</span> Read keys from the keyboard</h4>
+</div>
+
+<div id="outline-container-org6b42a73" class="outline-4">
+<h4 id="org6b42a73"><span class="section-number-4">2.3.3</span> <span class="todo TODO">TODO</span> Accumulate number multiplier</h4>
+<div class="outline-text-4" id="text-2-3-3">
+<p>
+Pressing numbers should create a multiplier for the next command, normally
+the number of times this command should be repeated.
+</p>
+</div>
+</div>
+
+<div id="outline-container-orgda1ab71" class="outline-4">
+<h4 id="orgda1ab71"><span class="section-number-4">2.3.4</span> <span class="todo TODO">TODO</span> Draw beautiful UI boxes</h4>
+</div>
+
+<div id="outline-container-org6d2f226" class="outline-4">
+<h4 id="org6d2f226"><span class="section-number-4">2.3.5</span> <span class="todo TODO">TODO</span> Enter command mode</h4>
+<div class="outline-text-4" id="text-2-3-5">
+<p>
+Prompt should appear where the user can type commands
+</p>
+</div>
+</div>
+
+<div id="outline-container-org141dd13" class="outline-4">
+<h4 id="org141dd13"><span class="section-number-4">2.3.6</span> <span class="todo TODO">TODO</span> Draw cursor and selections</h4>
+</div>
+</div>
+
+<div id="outline-container-org1ba9d86" class="outline-3">
+<h3 id="org1ba9d86"><span class="section-number-3">2.4</span> <span class="todo TODO">TODO</span> Windowing <code>[0/4]</code></h3>
+<div class="outline-text-3" id="text-2-4">
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> Evenly spaced horizontal layout</li>
+<li class="off"><code>[&#xa0;]</code> Evenly spaced vertical layout</li>
+<li class="off"><code>[&#xa0;]</code> Splits layout</li>
+<li class="off"><code>[&#xa0;]</code> Stack layout</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org1ac60c1" class="outline-3">
+<h3 id="org1ac60c1"><span class="section-number-3">2.5</span> <span class="todo TODO">TODO</span> State management <code>[1/2]</code></h3>
+<div class="outline-text-3" id="text-2-5">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Managing resources</li>
+<li class="off"><code>[&#xa0;]</code> Layout of multiple splits</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-orgedf3346" class="outline-3">
+<h3 id="orgedf3346"><span class="section-number-3">2.6</span> <span class="todo TODO">TODO</span> Text buffer <code>[0/2]</code></h3>
+<div class="outline-text-3" id="text-2-6">
+</div>
+<div id="outline-container-org39881e1" class="outline-4">
+<h4 id="org39881e1"><span class="section-number-4">2.6.1</span> <span class="todo TODO">TODO</span> Prototype <code>[0/7]</code></h4>
+<div class="outline-text-4" id="text-2-6-1">
+<p>
+Implementation as a simple contiguous growing array. Mainly
+it is needed to understand the interface and get some idea about the kind
+of processing that is necessary for common operations on the text buffer.
+</p>
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> Move the cursor</li>
+<li class="off"><code>[&#xa0;]</code> Insert characters</li>
+<li class="off"><code>[&#xa0;]</code> Multiple cursors proof-of-concept</li>
+<li class="off"><code>[&#xa0;]</code> Search exact/regex</li>
+<li class="off"><code>[&#xa0;]</code> Open file</li>
+<li class="off"><code>[&#xa0;]</code> Open scratch buffer</li>
+<li class="off"><code>[&#xa0;]</code> Search</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-orgcfcf94e" class="outline-4">
+<h4 id="orgcfcf94e"><span class="section-number-4">2.6.2</span> <span class="todo TODO">TODO</span> Main implementation</h4>
+<div class="outline-text-4" id="text-2-6-2">
+<p>
+Decide on main implementation and write it. This decision is not final but
+still seems necessary for a basic working program.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgd5e8cad" class="outline-3">
+<h3 id="orgd5e8cad"><span class="section-number-3">2.7</span> <span class="todo TODO">TODO</span> Configuration processing <code>[1/3]</code></h3>
+<div class="outline-text-3" id="text-2-7">
+</div>
+<div id="outline-container-org63cc690" class="outline-4">
+<h4 id="org63cc690"><span class="section-number-4">2.7.1</span> <span class="done DONE">DONE</span> Decide on file format - <a href="https://github.com/gruebite/zzz">zzz</a></h4>
+<div class="outline-text-4" id="text-2-7-1">
+</div>
+</div>
+<div id="outline-container-org8ef2d1d" class="outline-4">
+<h4 id="org8ef2d1d"><span class="section-number-4">2.7.2</span> <span class="todo TODO">TODO</span> Read configuration <code>[1/3]</code></h4>
+<div class="outline-text-4" id="text-2-7-2">
+<ul class="org-ul">
+<li class="on"><code>[X]</code> Read key map</li>
+<li class="off"><code>[&#xa0;]</code> Read general settings</li>
+<li class="off" id="Read scopes"><code>[&#xa0;]</code> A mechanism for keeping configuration belonging to
+separate domains, for example language-specific configuration.</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org3f6dc5c" class="outline-4">
+<h4 id="org3f6dc5c"><span class="section-number-4">2.7.3</span> <span class="todo TODO">TODO</span> Merge several configuration files</h4>
+<div class="outline-text-4" id="text-2-7-3">
+<p>
+Usually there are several places for configuration files which are loaded
+in the order of priority.
+</p>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org866490c" class="outline-3">
+<h3 id="org866490c"><span class="section-number-3">2.8</span> <span class="todo TODO">TODO</span> Syntax highlighting</h3>
+<div class="outline-text-3" id="text-2-8">
+<p>
+The simplest possible one, just syntax tokens. Most probably implemented
+with an extension language.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org2275b4f" class="outline-3">
+<h3 id="org2275b4f"><span class="section-number-3">2.9</span> <span class="todo TODO">TODO</span> Add extension language <code>[0/3]</code></h3>
+<div class="outline-text-3" id="text-2-9">
+</div>
+<div id="outline-container-org7493979" class="outline-4">
+<h4 id="org7493979"><span class="section-number-4">2.9.1</span> <span class="todo TODO">TODO</span> Decide on extension language</h4>
+<div class="outline-text-4" id="text-2-9-1">
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> <a href="https://www.lua.org/">Lua</a></li>
+<li class="off"><code>[&#xa0;]</code> <a href="https://fennel-lang.org/">Fennel</a></li>
+<li class="off"><code>[&#xa0;]</code> <a href="http://synthcode.com/scheme/chibi/">Chibi Scheme</a></li>
+<li class="off"><code>[&#xa0;]</code> <a href="https://janet-lang.org/">Janet</a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org5bbeebe" class="outline-4">
+<h4 id="org5bbeebe"><span class="section-number-4">2.9.2</span> <span class="todo TODO">TODO</span> Implement event system</h4>
+<div class="outline-text-4" id="text-2-9-2">
+<p>
+Events are signals emitted by the core to which the extension language can
+subscribe and do desired actions. Event system is <i>de facto</i> the way the
+extension language can know about anything happening in the editor.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org4c7b4e4" class="outline-4">
+<h4 id="org4c7b4e4"><span class="section-number-4">2.9.3</span> <span class="todo TODO">TODO</span> Provide proof-of-concept implementations</h4>
+<div class="outline-text-4" id="text-2-9-3">
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> Integration with <a href="https://github.com/junegunn/fzf">fzf</a></li>
+<li class="off"><code>[&#xa0;]</code> Syntax highlighting</li>
+<li class="off" id="Complex commands"><code>[&#xa0;]</code> Most probably the "core" of the editor will only
+provide most basic commands for manipulating the state, and the extension
+language is then responsible for combining these simple commands into more
+complex interactions.</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orgd579525" class="outline-3">
+<h3 id="orgd579525"><span class="section-number-3">2.10</span> <span class="todo TODO">TODO</span> Integration with external tools <code>[0/4]</code></h3>
+<div class="outline-text-3" id="text-2-10">
+<p>
+This will probably intersect with other sections such as extension language.
+</p>
+</div>
+
+<div id="outline-container-org12f3e66" class="outline-4">
+<h4 id="org12f3e66"><span class="section-number-4">2.10.1</span> <span class="todo TODO">TODO</span> fzf</h4>
+</div>
+
+<div id="outline-container-orgced7253" class="outline-4">
+<h4 id="orgced7253"><span class="section-number-4">2.10.2</span> <span class="todo TODO">TODO</span> ripgrep</h4>
+</div>
+
+<div id="outline-container-org6474370" class="outline-4">
+<h4 id="org6474370"><span class="section-number-4">2.10.3</span> <span class="todo TODO">TODO</span> Linting</h4>
+</div>
+
+<div id="outline-container-orgee4781d" class="outline-4">
+<h4 id="orgee4781d"><span class="section-number-4">2.10.4</span> <span class="todo TODO">TODO</span> Formatting</h4>
+</div>
+</div>
+</div>
+
+<div id="outline-container-orge63b5a6" class="outline-2">
+<h2 id="orge63b5a6"><span class="section-number-2">3</span> <span class="todo TODO">TODO</span> Stage 3: Polished working program <code>[0%]</code></h2>
+<div class="outline-text-2" id="text-3">
+<p>
+This stage should result in a full working editor with basic features which
+work well and as expected. But it does not necessarily include all the nice
+convenience features which are generally expected in a modern text editor.
+</p>
+</div>
+
+<div id="outline-container-org374498b" class="outline-3">
+<h3 id="org374498b"><span class="section-number-3">3.1</span> <span class="todo TODO">TODO</span> Write documentation</h3>
+</div>
+<div id="outline-container-org8721a73" class="outline-3">
+<h3 id="org8721a73"><span class="section-number-3">3.2</span> <span class="todo TODO">TODO</span> Finalize text buffer implementation <code>[0/2]</code></h3>
+<div class="outline-text-3" id="text-3-2">
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> Implement several variants</li>
+<li class="off"><code>[&#xa0;]</code> Benchmark them</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org4fd9948" class="outline-3">
+<h3 id="org4fd9948"><span class="section-number-3">3.3</span> <span class="todo TODO">TODO</span> Implement tower of highlighting</h3>
+<div class="outline-text-3" id="text-3-3">
+<p>
+Experimentation with different modes for highlighting and implementation of
+the "tower of highlighting". Only the basic structure should be implemented,
+not necessarily all the different semantic modes.
+</p>
+</div>
+</div>
+
+<div id="outline-container-org4d3ff57" class="outline-3">
+<h3 id="org4d3ff57"><span class="section-number-3">3.4</span> <span class="todo TODO">TODO</span> Decide on configuration handling</h3>
+<div class="outline-text-3" id="text-3-4">
+<ul class="org-ul">
+<li>Do we need extension language?</li>
+<li>If we keep extension language, do we need zzz file format?</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org96cb211" class="outline-3">
+<h3 id="org96cb211"><span class="section-number-3">3.5</span> <span class="todo TODO">TODO</span> Search and replace</h3>
+<div class="outline-text-3" id="text-3-5">
+</div>
+<div id="outline-container-org4559bf4" class="outline-4">
+<h4 id="org4559bf4"><span class="section-number-4">3.5.1</span> <span class="todo TODO">TODO</span> Decide which search variations to implement</h4>
+<div class="outline-text-4" id="text-3-5-1">
+<ul class="org-ul">
+<li class="off"><code>[&#xa0;]</code> Exact</li>
+<li class="off"><code>[&#xa0;]</code> Exact with word boundaries</li>
+<li class="off"><code>[&#xa0;]</code> Regex</li>
+<li class="off"><code>[&#xa0;]</code> Exact case-insensitive</li>
+<li class="off"><code>[&#xa0;]</code> Camel-Kebab-Pascal-Snake-case-insensitive</li>
+<li class="off"><code>[&#xa0;]</code> PEG</li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-org9e41afe" class="outline-4">
+<h4 id="org9e41afe"><span class="section-number-4">3.5.2</span> <span class="todo TODO">TODO</span> Implement searching</h4>
+</div>
+<div id="outline-container-org34b62a8" class="outline-4">
+<h4 id="org34b62a8"><span class="section-number-4">3.5.3</span> <span class="todo TODO">TODO</span> Implement replacing</h4>
+</div>
+</div>
+</div>
+
+<div id="outline-container-org5ecee19" class="outline-2">
+<h2 id="org5ecee19"><span class="section-number-2">4</span> <span class="todo TODO">TODO</span> Stage 4: Experimental convenience functionality <code>[0%]</code></h2>
+<div class="outline-text-2" id="text-4">
+<p>
+This stage includes all the nice features which help the programmer program
+quicker, faster and easier. A lot of experimental features are expected to be
+here with the idea that they can be further refined, removed or changed.
+</p>
+</div>
+
+<div id="outline-container-org885f241" class="outline-3">
+<h3 id="org885f241"><span class="section-number-3">4.1</span> <span class="todo TODO">TODO</span> Autocompletion</h3>
+</div>
+
+<div id="outline-container-org2d6c9fd" class="outline-3">
+<h3 id="org2d6c9fd"><span class="section-number-3">4.2</span> <span class="todo TODO">TODO</span> Clipboard integration</h3>
+</div>
+
+<div id="outline-container-org7212992" class="outline-3">
+<h3 id="org7212992"><span class="section-number-3">4.3</span> <span class="todo TODO">TODO</span> Jump inside file</h3>
+</div>
+
+<div id="outline-container-org25b7bfc" class="outline-3">
+<h3 id="org25b7bfc"><span class="section-number-3">4.4</span> <span class="todo TODO">TODO</span> Mouse integration</h3>
+</div>
+
+<div id="outline-container-org7d4fd0d" class="outline-3">
+<h3 id="org7d4fd0d"><span class="section-number-3">4.5</span> <span class="todo TODO">TODO</span> Multiple cursors</h3>
+</div>
+
+<div id="outline-container-orgb1521ab" class="outline-3">
+<h3 id="orgb1521ab"><span class="section-number-3">4.6</span> <span class="todo TODO">TODO</span> Language server protocol</h3>
+</div>
+</div>
+
+<div id="outline-container-org24e5fa1" class="outline-2">
+<h2 id="org24e5fa1"><span class="section-number-2">5</span> <span class="todo TODO">TODO</span> Stage 5: Refined convenience functionality <code>[0%]</code></h2>
+<div class="outline-text-2" id="text-5">
+<p>
+This stage should complete and decide on all the functionality that should be
+included in the "core" of the editor, moved to third-party library or removed
+completely and left as the exercise for the reader.
+</p>
+</div>
+
+<div id="outline-container-orgddfd4f3" class="outline-3">
+<h3 id="orgddfd4f3"><span class="section-number-3">5.1</span> <span class="todo TODO">TODO</span> Decide on the features</h3>
+</div>
+</div>
+
+<div id="outline-container-org0de2323" class="outline-2">
+<h2 id="org0de2323"><span class="section-number-2">6</span> <span class="todo TODO">TODO</span> Stage 6: Final release</h2>
+<div class="outline-text-2" id="text-6">
+<p>
+This stage should be a release of version 1.0. After all the stages have been
+implemented and tested, this stage will stabilize the features, API and all
+the other important things so that users can expect a seamless upgrade process
+of future versions. The next breaking version will be 2.0.
+</p>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: greenfork</p>
+<p class="date">Created: 2021-09-03 Fri 18:48</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
