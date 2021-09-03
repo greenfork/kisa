@@ -4,7 +4,7 @@ Kisa is a hackable and batteries-included text editor of the new world.
 
 Home repository is on [sourcehut] but there's also a mirror on [GitHub].
 
-[sourcehut]: https://sr.ht/~greenfork/kisa/
+[sourcehut]: https://git.sr.ht/~greenfork/kisa/
 [GitHub]: https://github.com/greenfork/kisa
 
 Kisa is in its early stage and it is not usable at the moment. See [roadmap]
