@@ -84,7 +84,7 @@ versus patches.
 
 [announce-list]: https://lists.sr.ht/~greenfork/kisa-announce
 [devel-list]: https://lists.sr.ht/~greenfork/kisa-devel
-[Discord]: https://discord.gg/uc2AtWmP
+[Discord]: https://discord.gg/p5892XNmAk
 [Twitch]: https://www.twitch.tv/greenfork_gf
 [YouTube]: https://www.youtube.com/channel/UCinLbIxD_iIrByWR9fvO2kQ/videos
 
