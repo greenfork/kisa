@@ -82,7 +82,7 @@
    - [ ] Layout of multiple splits
 
 ** TODO Text buffer [0/2]
-*** TODO Prototype [0/7]
+*** TODO Prototype [0/8]
      Implementation as a simple contiguous growing array. Mainly
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
@@ -93,6 +93,9 @@
      - [ ] Open file
      - [ ] Open scratch buffer
      - [ ] Search
+     - [ ] Not consecutive lines :: Some functionality like code folding or
+       filtering the buffer to only contain certain lines will make lines not
+       consecutive.
 *** TODO Main implementation
      Decide on main implementation and write it. This decision is not final but
      still seems necessary for a basic working program.
