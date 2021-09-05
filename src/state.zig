@@ -638,7 +638,7 @@ test "state: close window pane when there are several window panes on window tab
 /// Manages the contents of an opened file on a filesystem or of a virtual file
 /// and provides an interface for querying and modifying it.
 pub const TextBuffer = TextBufferWithImplementation(TextBufferImplementation);
-pub fn TextBufferWithImplementation(comptime impl: anytype) type {
+fn TextBufferWithImplementation(comptime impl: anytype) type {
     assert(std.meta.trait.hasFunctions(impl, .{"Behavior"}));
     assert(std.meta.trait.hasDecls(impl, .{"Contents"}));
     const dummy_impl = impl.Behavior(struct {
