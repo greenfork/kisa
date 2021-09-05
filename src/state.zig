@@ -103,6 +103,7 @@ pub const EditorMode = enum {
 
 /// Workspace is a collection of all elements in code editor that can be considered a state,
 /// as well as a set of actions to operate on them from a high-level perspective.
+/// Workspace is responsible for managing the resources of all the parts of the state.
 pub const Workspace = struct {
     ally: *mem.Allocator,
     text_buffers: std.TailQueue(TextBuffer) = std.TailQueue(TextBuffer){},
@@ -768,22 +769,15 @@ fn TextBufferWithImplementation(comptime impl: anytype) type {
         // TODO: what do we do with the `Commands` in the main.zig?
         pub fn command(
             self: *Self,
-            display_window_id: Workspace.id,
+            // display_window_id: Workspace.id,
+            display_window_node: *Workspace.DisplayWindowNode,
             command_kind: kisa.CommandKind,
         ) void {
-            if (self.workspace.findDisplayWindow(display_window_id)) |display_window_node| {
-                switch (command_kind) {
-                    .cursor_move_left => {
-                        modified_selections = self.cursorMoveLeft(
-                            display_window_node.data.selections,
-                        );
-                        display_window_node.data.selections = modified_selections;
-                    },
-                    else => @panic("not implemented"),
-                }
-            } else {
-                // TODO: is it really unreachable?
-                unreachable;
+            switch (command_kind) {
+                .cursor_move_left => {
+                    self.cursorMoveLeft(&display_window_node.data.selections);
+                },
+                else => @panic("not implemented"),
             }
         }
     };
@@ -805,6 +799,47 @@ test "state: init text buffer with text" {
         "Hello",
     );
     defer text_buffer.deinit();
+}
+
+test "state: text buffer cursor commands" {
+    var workspace = Workspace.init(testing.allocator);
+    defer workspace.deinit();
+    var text_buffer = try TextBuffer.init(
+        &workspace,
+        TextBuffer.InitParams{
+            .path = null,
+            .name = "text buffer name",
+            .contents = "Hello",
+        },
+    );
+    defer text_buffer.deinit();
+    var display_window_node = try testing.allocator.create(Workspace.DisplayWindowNode);
+    defer testing.allocator.destroy(display_window_node);
+    display_window_node.data = try DisplayWindow.init(&workspace);
+    defer display_window_node.data.deinit();
+    display_window_node.data.id = 1;
+    {
+        const selection = display_window_node.data.selections.items[0];
+        try testing.expectEqual(@as(usize, 0), selection.cursor);
+        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(true, selection.primary);
+    }
+    text_buffer.command(display_window_node, .cursor_move_left);
+    {
+        const selection = display_window_node.data.selections.items[0];
+        try testing.expectEqual(@as(usize, 0), selection.cursor);
+        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(true, selection.primary);
+    }
+
+    display_window_node.data.selections.items[0] = kisa.Selection{ .cursor = 1, .anchor = 1 };
+    text_buffer.command(display_window_node, .cursor_move_left);
+    {
+        const selection = display_window_node.data.selections.items[0];
+        try testing.expectEqual(@as(usize, 0), selection.cursor);
+        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(true, selection.primary);
+    }
 }
 
 /// Manages the data of what the user sees on the screen. Sends all the necessary data

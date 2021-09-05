@@ -46,11 +46,16 @@ pub fn Behavior(comptime Self: type) type {
             self.metrics.max_line_number += 1;
         }
 
-        pub fn cursorMoveLeft(self: *Self, selections: Selections) Selections {
+        pub fn cursorMoveLeft(self: *Self, selections: *kisa.Selections) void {
             _ = self;
-            _ = selections;
-            modified_selections = selections;
-            return modified_selections;
+            for (selections.items) |*selection| {
+                if (selection.cursor != 0) {
+                    selection.cursor -= 1;
+                    if (!selection.anchored and selection.anchor != 0) {
+                        selection.anchor -= 1;
+                    }
+                }
+            }
         }
     };
 }
