@@ -45,5 +45,12 @@ pub fn Behavior(comptime Self: type) type {
         pub fn detectFeaturesAndMetrics(self: *Self) void {
             self.metrics.max_line_number += 1;
         }
+
+        pub fn cursorMoveLeft(self: *Self, selections: Selections) Selections {
+            _ = self;
+            _ = selections;
+            modified_selections = selections;
+            return modified_selections;
+        }
     };
 }

@@ -87,6 +87,10 @@
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
      - [ ] Move the cursor
+       + [ ] Left, right
+       + [ ] Up, down
+       + [ ] Start of the line, end of the line
+       + [ ] To the first non-empty character of the line
      - [ ] Insert characters
      - [ ] Multiple cursors proof-of-concept
      - [ ] Search exact/regex

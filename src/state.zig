@@ -366,6 +366,7 @@ pub const Workspace = struct {
 
     fn createTextBuffer(self: *Self, init_params: TextBuffer.InitParams) !*TextBufferNode {
         var text_buffer = try self.ally.create(TextBufferNode);
+        errdefer self.ally.destroy(text_buffer);
         text_buffer.data = try TextBuffer.init(self, init_params);
         self.text_buffer_id_counter += 1;
         text_buffer.data.id = self.text_buffer_id_counter;
@@ -375,7 +376,8 @@ pub const Workspace = struct {
 
     fn createDisplayWindow(self: *Self) !*DisplayWindowNode {
         var display_window = try self.ally.create(DisplayWindowNode);
-        display_window.data = DisplayWindow.init(self);
+        errdefer self.ally.destroy(display_window);
+        display_window.data = try DisplayWindow.init(self);
         self.display_window_id_counter += 1;
         display_window.data.id = self.display_window_id_counter;
         self.display_windows.append(display_window);
@@ -564,7 +566,7 @@ test "state: open existing text buffer" {
 }
 
 test "state: handle failing conditions" {
-    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 14).allocator;
+    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 15).allocator;
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
@@ -762,6 +764,28 @@ fn TextBufferWithImplementation(comptime impl: anytype) type {
                 }
             }
         }
+
+        // TODO: what do we do with the `Commands` in the main.zig?
+        pub fn command(
+            self: *Self,
+            display_window_id: Workspace.id,
+            command_kind: kisa.CommandKind,
+        ) void {
+            if (self.workspace.findDisplayWindow(display_window_id)) |display_window_node| {
+                switch (command_kind) {
+                    .cursor_move_left => {
+                        modified_selections = self.cursorMoveLeft(
+                            display_window_node.data.selections,
+                        );
+                        display_window_node.data.selections = modified_selections;
+                    },
+                    else => @panic("not implemented"),
+                }
+            } else {
+                // TODO: is it really unreachable?
+                unreachable;
+            }
+        }
     };
 }
 
@@ -793,19 +817,24 @@ pub const DisplayWindow = struct {
     text_buffer_id: Workspace.Id = 0,
     first_line_number: u32,
     mode: EditorMode,
+    selections: std.ArrayList(kisa.Selection),
 
     const Self = @This();
 
-    pub fn init(workspace: *Workspace) Self {
+    // TODO: add variables customizing the position in the text.
+    pub fn init(workspace: *Workspace) !Self {
+        var selections = std.ArrayList(kisa.Selection).init(workspace.ally);
+        try selections.append(kisa.Selection{ .cursor = 0, .anchor = 0 });
         return Self{
             .workspace = workspace,
             .first_line_number = 1,
             .mode = .normal,
+            .selections = selections,
         };
     }
 
     pub fn deinit(self: Self) void {
-        _ = self;
+        self.selections.deinit();
     }
 
     /// Text buffer could have been removed from server, it is not fully controlled by

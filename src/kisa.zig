@@ -113,6 +113,14 @@ pub const TextBufferLineEnding = enum {
 };
 
 pub const Selection = struct {
-    anchor: usize,
+    /// Value is offset.
     cursor: usize,
+    /// Value is offset.
+    anchor: usize,
+    anchored: bool = false,
+    primary: bool = true,
+    // TODO: think about design.
+    // last_character_is_newline: bool,
 };
+
+pub const Selections = std.ArrayList(Selection);
