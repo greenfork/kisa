@@ -19,8 +19,12 @@ of user input which we use to compactly and intuitively assign keys to actions:
   which has its own keybindings and the next key press (or all next keys pressed
   until exited if we "enable" it, not just "activate") is interpreted
   according to the mini-mode keymap.
-* Number modifier - pressing numbers creates a numeric argument which will be
-  passed to the next command if that command accepts such an argument.
+* Argument:
+  * Pressing numbers creates a numeric argument which will be
+    passed to the next command if that command accepts such an argument.
+  * Several other options are for considerations: letter argument for
+    manipulation with registers, boolean "universal" argument for slight
+    modifications of the original command.
 * Prompt - pressing the key expects further input, longer than 1 character.
   Example can be searching or entering a command.
 

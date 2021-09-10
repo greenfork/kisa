@@ -23,6 +23,8 @@ It will be further moved to a more appropriate place.
 * [Windowing design](WINDOWING_DESIGN.md)
 * [Search design](SEARCH_DESIGN.md)
 * [Extensions design](EXTENSIONS_DESIGN.md)
+* [Lines design](LINES_DESIGN.md)
+* [Text manipulation design](TEXT_MANIPULATION_DESIGN.md)
 
 ## Purpose
 

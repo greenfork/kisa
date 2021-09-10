@@ -32,7 +32,9 @@ command that changes its position.
 
 Following considerations apply when the cursor is at the end of a line:
 - At the position of a newline "\n" character - cursor should move to the
-  newline character above or below if the current line is longer.
+  newline character above or below if the current line is longer. Option
+  `track-eol` makes the cursor always follow the end of line, no matter
+  the line length.
 - At the position of the last character in a line, right before the newline
   "\n" character - cursor should move to the last character of the line if
   the current line is longer.

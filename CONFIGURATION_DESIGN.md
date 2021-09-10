@@ -109,7 +109,9 @@ We need to consider these points:
 6. Some commands may take an argument
 7. Some keys might be in a foreign language
 8. Keys can execute multiple commands at a time
-9. Keys can have documentation for interactive help
+9. Multiple commands executed with a single key might need to have special
+   handling in cases when we want to repeat or undo the command
+10. Keys can have documentation for interactive help
 
 Point (3) will be addressed in Scopes section. All other points are
 demonstrated below using zzz file format:
