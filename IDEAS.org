@@ -7,11 +7,18 @@
 * Incremental parsing
   - https://www.cs.umd.edu/~hammer/adapton/adapton-pldi2014.pdf
   - https://tree-sitter.github.io/tree-sitter/
-* Editing
-  - https://dahu.github.io/vim_waz_ere/1_editor_fundamentals.html
-  - https://thevaluable.dev/vim-expert/
 * Editor design
   - https://www.mattkeeter.com/projects/futureproof/
+  - https://github.com/jamii/focus
 * Terminal key parsing
   - https://github.com/janet-lang/janet/blob/master/src/mainclient/shell.c
   - https://github.com/mawww/kakoune/blob/master/src/terminal_ui.cc
+* Diffing
+  - https://github.com/Wilfred/difftastic
+* Editing, modes
+  - https://dahu.github.io/vim_waz_ere/1_editor_fundamentals.html
+  - https://thevaluable.dev/vim-expert/
+  - https://github.com/countvajhula/rigpa
+  - https://countvajhula.com/2021/09/25/symex-el-edit-lisp-code-in-a-vim-like-way/
+  - https://countvajhula.com/2021/09/25/the-animated-guide-to-symex/
+  - https://github.com/ashok-khanna/parevil
