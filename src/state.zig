@@ -643,7 +643,7 @@ pub const TextBuffer = struct {
     workspace: *Workspace,
     id: Workspace.Id = 0,
     display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
-    contents: tbi.Contents,
+    contents: tbi.Buffer,
     /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
     path: ?[]u8,
     /// A textual representation of the buffer name, either path or name for virtual buffer.
@@ -665,7 +665,7 @@ pub const TextBuffer = struct {
     pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
         const contents = blk: {
             if (init_params.contents) |cont| {
-                break :blk try tbi.initContentsWithText(workspace.ally, cont);
+                break :blk try tbi.Buffer.initWithText(workspace.ally, cont);
             } else if (init_params.path) |p| {
                 var file = std.fs.openFileAbsolute(
                     p,
@@ -696,7 +696,7 @@ pub const TextBuffer = struct {
                 };
 
                 defer file.close();
-                break :blk try tbi.initContentsWithFile(workspace.ally, file);
+                break :blk try tbi.Buffer.initWithFile(workspace.ally, file);
             } else {
                 return error.InitParamsMustHaveEitherPathOrContent;
             }
@@ -727,7 +727,7 @@ pub const TextBuffer = struct {
             display_window_id = dw_id.next;
             self.workspace.ally.destroy(dw_id);
         }
-        tbi.deinitContents(&self.contents);
+        self.contents.deinit();
         if (self.path) |p| self.workspace.ally.free(p);
         self.workspace.ally.free(self.name);
     }

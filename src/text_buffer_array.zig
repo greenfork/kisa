@@ -10,36 +10,42 @@ const Zigstr = @import("zigstr");
 
 pub const Contents = Zigstr;
 
-pub fn initContentsWithFile(ally: *mem.Allocator, file: std.fs.File) !Contents {
-    const contents = file.readToEndAlloc(
-        ally,
-        std.math.maxInt(usize),
-    ) catch |err| switch (err) {
-        error.WouldBlock => unreachable,
-        error.BrokenPipe => unreachable,
-        error.ConnectionResetByPeer => unreachable,
-        error.ConnectionTimedOut => unreachable,
-        error.FileTooBig,
-        error.SystemResources,
-        error.IsDir,
-        error.OutOfMemory,
-        error.OperationAborted,
-        error.NotOpenForReading,
-        error.AccessDenied,
-        error.InputOutput,
-        error.Unexpected,
-        => |e| return e,
-    };
-    return try Contents.fromOwnedBytes(ally, contents);
-}
+pub const Buffer = struct {
+    contents: Contents,
 
-pub fn initContentsWithText(ally: *mem.Allocator, text: []const u8) !Contents {
-    return try Contents.fromBytes(ally, text);
-}
+    const Self = @This();
 
-pub fn deinitContents(contents: *Contents) void {
-    contents.deinit();
-}
+    pub fn initWithFile(ally: *mem.Allocator, file: std.fs.File) !Self {
+        const contents = file.readToEndAlloc(
+            ally,
+            std.math.maxInt(usize),
+        ) catch |err| switch (err) {
+            error.WouldBlock => unreachable,
+            error.BrokenPipe => unreachable,
+            error.ConnectionResetByPeer => unreachable,
+            error.ConnectionTimedOut => unreachable,
+            error.FileTooBig,
+            error.SystemResources,
+            error.IsDir,
+            error.OutOfMemory,
+            error.OperationAborted,
+            error.NotOpenForReading,
+            error.AccessDenied,
+            error.InputOutput,
+            error.Unexpected,
+            => |e| return e,
+        };
+        return Self{ .contents = try Contents.fromOwnedBytes(ally, contents) };
+    }
+
+    pub fn initWithText(ally: *mem.Allocator, text: []const u8) !Self {
+        return Self{ .contents = try Contents.fromBytes(ally, text) };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.contents.deinit();
+    }
+};
 
 test "state2: init text buffer with file descriptor" {
     var file = try std.fs.cwd().openFile("kisarc.zzz", .{});
