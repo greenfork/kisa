@@ -727,7 +727,7 @@ pub const TextBuffer = struct {
             display_window_id = dw_id.next;
             self.workspace.ally.destroy(dw_id);
         }
-        tbi.deinitContents(self.workspace.ally, &self.contents);
+        tbi.deinitContents(&self.contents);
         if (self.path) |p| self.workspace.ally.free(p);
         self.workspace.ally.free(self.name);
     }

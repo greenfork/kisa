@@ -6,8 +6,9 @@ const mem = std.mem;
 const kisa = @import("kisa");
 const assert = std.debug.assert;
 const testing = std.testing;
+const Zigstr = @import("zigstr");
 
-pub const Contents = std.ArrayListUnmanaged(u8);
+pub const Contents = Zigstr;
 
 pub fn initContentsWithFile(ally: *mem.Allocator, file: std.fs.File) !Contents {
     const contents = file.readToEndAlloc(
@@ -29,20 +30,15 @@ pub fn initContentsWithFile(ally: *mem.Allocator, file: std.fs.File) !Contents {
         error.Unexpected,
         => |e| return e,
     };
-    return Contents{
-        .items = contents,
-        .capacity = contents.len,
-    };
+    return try Contents.fromOwnedBytes(ally, contents);
 }
 
 pub fn initContentsWithText(ally: *mem.Allocator, text: []const u8) !Contents {
-    var contents = try Contents.initCapacity(ally, text.len);
-    try contents.insertSlice(ally, 0, text);
-    return contents;
+    return try Contents.fromBytes(ally, text);
 }
 
-pub fn deinitContents(ally: *mem.Allocator, contents: *Contents) void {
-    contents.deinit(ally);
+pub fn deinitContents(contents: *Contents) void {
+    contents.deinit();
 }
 
 test "state2: init text buffer with file descriptor" {

@@ -4,3 +4,9 @@
 [submodule "known-folders"]
 	path = libs/known-folders
 	url = https://github.com/ziglibs/known-folders.git
+[submodule "libs/ziglyph"]
+	path = libs/ziglyph
+	url = https://github.com/jecolon/ziglyph.git
+[submodule "libs/zigstr"]
+	path = libs/zigstr
+	url = https://github.com/jecolon/zigstr.git

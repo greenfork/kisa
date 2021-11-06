@@ -7,6 +7,8 @@ pub fn build(b: *std.build.Builder) void {
     const exe = b.addExecutable("kisa", "src/main.zig");
     exe.addPackagePath("zzz", "libs/zzz/src/main.zig");
     exe.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
+    exe.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
+    exe.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
     exe.addPackagePath("kisa", "src/kisa.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
@@ -36,6 +38,8 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setFilter("main:");
         test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
         test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
+        test_cases.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
+        test_cases.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
@@ -50,6 +54,8 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setFilter("fork/socket:");
         test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
         test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
+        test_cases.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
+        test_cases.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
@@ -62,6 +68,8 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setFilter("state:");
         test_cases.addPackagePath("zzz", "libs/zzz/src/main.zig");
         test_cases.addPackagePath("known-folders", "libs/known-folders/known-folders.zig");
+        test_cases.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
+        test_cases.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
