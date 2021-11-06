@@ -9,7 +9,8 @@ const testing = std.testing;
 const mem = std.mem;
 const assert = std.debug.assert;
 const kisa = @import("kisa");
-const TextBufferImplementation = @import("text_buffer_array.zig");
+/// Text buffer implementation.
+const tbi = @import("text_buffer_array.zig");
 
 /// How Server sees a Client.
 pub const Client = struct {
@@ -638,168 +639,143 @@ test "state: close window pane when there are several window panes on window tab
     try checkLastStateItemsCongruence(workspace, active_display_state);
 }
 
-/// Manages the contents of an opened file on a filesystem or of a virtual file
-/// and provides an interface for querying and modifying it.
-pub const TextBuffer = TextBufferWithImplementation(TextBufferImplementation);
-fn TextBufferWithImplementation(comptime impl: anytype) type {
-    assert(std.meta.trait.hasFunctions(impl, .{"Behavior"}));
-    assert(std.meta.trait.hasDecls(impl, .{"Contents"}));
-    const dummy_impl = impl.Behavior(struct {
-        contents: impl.Contents,
-        metrics: kisa.TextBufferMetrics,
-    });
-    assert(std.meta.trait.hasFunctions(dummy_impl, .{
-        "initContentsWithFile",
-        "initContentsWithText",
-        "deinitContents",
-    }));
+pub const TextBuffer = struct {
+    workspace: *Workspace,
+    id: Workspace.Id = 0,
+    display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
+    contents: tbi.Contents,
+    /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
+    path: ?[]u8,
+    /// A textual representation of the buffer name, either path or name for virtual buffer.
+    name: []u8,
+    readonly: bool,
+    metrics: kisa.TextBufferMetrics,
+    line_ending: kisa.TextBufferLineEnding,
 
-    return struct {
-        workspace: *Workspace,
-        id: Workspace.Id = 0,
-        display_window_ids: std.TailQueue(Workspace.Id) = std.TailQueue(Workspace.Id){},
-        contents: impl.Contents,
-        /// When path is null, it is a virtual buffer, meaning that it is not connected to a file.
-        path: ?[]u8,
-        /// A textual representation of the buffer name, either path or name for virtual buffer.
-        name: []u8,
-        readonly: bool,
-        metrics: kisa.TextBufferMetrics,
-        line_ending: kisa.TextBufferLineEnding,
+    const Self = @This();
 
-        pub usingnamespace impl.Behavior(Self);
-
-        const Self = @This();
-
-        pub const InitParams = struct {
-            path: ?[]const u8,
-            name: []const u8,
-            contents: ?[]const u8,
-            readonly: bool = false,
-        };
-
-        /// Takes ownership of `path` and `contents`, they must be allocated with `workspaces` allocator.
-        pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
-            const contents = blk: {
-                if (init_params.contents) |cont| {
-                    break :blk try initContentsWithText(workspace.ally, cont);
-                } else if (init_params.path) |p| {
-                    var file = std.fs.openFileAbsolute(
-                        p,
-                        .{},
-                    ) catch |err| switch (err) {
-                        error.PipeBusy => unreachable,
-                        error.NotDir => unreachable,
-                        error.PathAlreadyExists => unreachable,
-                        error.WouldBlock => unreachable,
-                        error.FileLocksNotSupported => unreachable,
-                        error.SharingViolation,
-                        error.AccessDenied,
-                        error.SymLinkLoop,
-                        error.ProcessFdQuotaExceeded,
-                        error.SystemFdQuotaExceeded,
-                        error.FileNotFound,
-                        error.SystemResources,
-                        error.NameTooLong,
-                        error.NoDevice,
-                        error.DeviceBusy,
-                        error.FileTooBig,
-                        error.NoSpaceLeft,
-                        error.IsDir,
-                        error.BadPathName,
-                        error.InvalidUtf8,
-                        error.Unexpected,
-                        => |e| return e,
-                    };
-
-                    defer file.close();
-                    break :blk try initContentsWithFile(workspace.ally, file);
-                } else {
-                    return error.InitParamsMustHaveEitherPathOrContent;
-                }
-            };
-            const path = blk: {
-                if (init_params.path) |p| {
-                    break :blk try workspace.ally.dupe(u8, p);
-                } else {
-                    break :blk null;
-                }
-            };
-            const name = try workspace.ally.dupe(u8, init_params.name);
-            var result = Self{
-                .workspace = workspace,
-                .contents = contents,
-                .path = path,
-                .name = name,
-                .readonly = init_params.readonly,
-                .metrics = kisa.TextBufferMetrics{},
-                .line_ending = .unix,
-            };
-            return result;
-        }
-
-        pub fn deinit(self: Self) void {
-            var display_window_id = self.display_window_ids.first;
-            while (display_window_id) |dw_id| {
-                display_window_id = dw_id.next;
-                self.workspace.ally.destroy(dw_id);
-            }
-            self.deinitContents();
-            if (self.path) |p| self.workspace.ally.free(p);
-            self.workspace.ally.free(self.name);
-        }
-
-        pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
-            var display_window_id = try self.workspace.ally.create(Workspace.IdNode);
-            display_window_id.data = id;
-            self.display_window_ids.append(display_window_id);
-        }
-
-        pub fn removeDisplayWindowId(self: *Self, id: Workspace.Id) void {
-            var display_window_id = self.display_window_ids.first;
-            while (display_window_id) |dw_id| : (display_window_id = dw_id.next) {
-                if (dw_id.data == id) {
-                    self.display_window_ids.remove(dw_id);
-                    self.workspace.ally.destroy(dw_id);
-                    return;
-                }
-            }
-        }
-
-        // TODO: what do we do with the `Commands` in the main.zig?
-        pub fn command(
-            self: *Self,
-            // display_window_id: Workspace.id,
-            display_window_node: *Workspace.DisplayWindowNode,
-            command_kind: kisa.CommandKind,
-        ) void {
-            switch (command_kind) {
-                .cursor_move_left => {
-                    self.cursorMoveLeft(&display_window_node.data.selections);
-                },
-                else => @panic("not implemented"),
-            }
-        }
+    pub const InitParams = struct {
+        path: ?[]const u8,
+        name: []const u8,
+        contents: ?[]const u8,
+        readonly: bool = false,
     };
-}
 
-test "state: init text buffer with file descriptor" {
-    var file = try std.fs.cwd().openFile("kisarc.zzz", .{});
-    defer file.close();
-    const text_buffer = try TextBuffer.initContentsWithFile(
-        testing.allocator,
-        file,
-    );
-    defer text_buffer.deinit();
-}
+    /// Takes ownership of `path` and `contents`, they must be allocated with `workspaces` allocator.
+    pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
+        const contents = blk: {
+            if (init_params.contents) |cont| {
+                break :blk try tbi.initContentsWithText(workspace.ally, cont);
+            } else if (init_params.path) |p| {
+                var file = std.fs.openFileAbsolute(
+                    p,
+                    .{},
+                ) catch |err| switch (err) {
+                    error.PipeBusy => unreachable,
+                    error.NotDir => unreachable,
+                    error.PathAlreadyExists => unreachable,
+                    error.WouldBlock => unreachable,
+                    error.FileLocksNotSupported => unreachable,
+                    error.SharingViolation,
+                    error.AccessDenied,
+                    error.SymLinkLoop,
+                    error.ProcessFdQuotaExceeded,
+                    error.SystemFdQuotaExceeded,
+                    error.FileNotFound,
+                    error.SystemResources,
+                    error.NameTooLong,
+                    error.NoDevice,
+                    error.DeviceBusy,
+                    error.FileTooBig,
+                    error.NoSpaceLeft,
+                    error.IsDir,
+                    error.BadPathName,
+                    error.InvalidUtf8,
+                    error.Unexpected,
+                    => |e| return e,
+                };
 
-test "state: init text buffer with text" {
-    const text_buffer = try TextBuffer.initContentsWithText(
-        testing.allocator,
-        "Hello",
-    );
-    defer text_buffer.deinit();
-}
+                defer file.close();
+                break :blk try tbi.initContentsWithFile(workspace.ally, file);
+            } else {
+                return error.InitParamsMustHaveEitherPathOrContent;
+            }
+        };
+        const path = blk: {
+            if (init_params.path) |p| {
+                break :blk try workspace.ally.dupe(u8, p);
+            } else {
+                break :blk null;
+            }
+        };
+        const name = try workspace.ally.dupe(u8, init_params.name);
+        var result = Self{
+            .workspace = workspace,
+            .contents = contents,
+            .path = path,
+            .name = name,
+            .readonly = init_params.readonly,
+            .metrics = kisa.TextBufferMetrics{},
+            .line_ending = .unix,
+        };
+        return result;
+    }
+
+    pub fn deinit(self: *Self) void {
+        var display_window_id = self.display_window_ids.first;
+        while (display_window_id) |dw_id| {
+            display_window_id = dw_id.next;
+            self.workspace.ally.destroy(dw_id);
+        }
+        tbi.deinitContents(self.workspace.ally, &self.contents);
+        if (self.path) |p| self.workspace.ally.free(p);
+        self.workspace.ally.free(self.name);
+    }
+
+    pub fn addDisplayWindowId(self: *Self, id: Workspace.Id) !void {
+        var display_window_id = try self.workspace.ally.create(Workspace.IdNode);
+        display_window_id.data = id;
+        self.display_window_ids.append(display_window_id);
+    }
+
+    pub fn removeDisplayWindowId(self: *Self, id: Workspace.Id) void {
+        var display_window_id = self.display_window_ids.first;
+        while (display_window_id) |dw_id| : (display_window_id = dw_id.next) {
+            if (dw_id.data == id) {
+                self.display_window_ids.remove(dw_id);
+                self.workspace.ally.destroy(dw_id);
+                return;
+            }
+        }
+    }
+
+    // TODO: what do we do with the `Commands` in the main.zig?
+    pub fn command(
+        self: *Self,
+        // display_window_id: Workspace.id,
+        display_window_node: *Workspace.DisplayWindowNode,
+        command_kind: kisa.CommandKind,
+    ) void {
+        switch (command_kind) {
+            .cursor_move_left => {
+                self.cursorMoveLeft(&display_window_node.data.selections);
+            },
+            else => @panic("not implemented"),
+        }
+    }
+
+    pub fn cursorMoveLeft(self: *Self, selections: *kisa.Selections) void {
+        _ = self;
+        for (selections.items) |*selection| {
+            if (selection.cursor != 0) {
+                selection.cursor -= 1;
+                if (!selection.anchored and selection.anchor != 0) {
+                    selection.anchor -= 1;
+                }
+            }
+        }
+    }
+};
 
 test "state: text buffer cursor commands" {
     var workspace = Workspace.init(testing.allocator);

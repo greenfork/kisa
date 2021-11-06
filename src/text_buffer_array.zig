@@ -5,57 +5,60 @@ const os = std.os;
 const mem = std.mem;
 const kisa = @import("kisa");
 const assert = std.debug.assert;
+const testing = std.testing;
 
-pub const Contents = std.ArrayList(u8);
+pub const Contents = std.ArrayListUnmanaged(u8);
 
-pub fn Behavior(comptime Self: type) type {
-    return struct {
-        pub fn initContentsWithFile(ally: *mem.Allocator, file: std.fs.File) !Contents {
-            const contents = file.readToEndAlloc(
-                ally,
-                std.math.maxInt(usize),
-            ) catch |err| switch (err) {
-                error.WouldBlock => unreachable,
-                error.BrokenPipe => unreachable,
-                error.ConnectionResetByPeer => unreachable,
-                error.ConnectionTimedOut => unreachable,
-                error.FileTooBig,
-                error.SystemResources,
-                error.IsDir,
-                error.OutOfMemory,
-                error.OperationAborted,
-                error.NotOpenForReading,
-                error.AccessDenied,
-                error.InputOutput,
-                error.Unexpected,
-                => |e| return e,
-            };
-            return Contents.fromOwnedSlice(ally, contents);
-        }
-
-        pub fn initContentsWithText(ally: *mem.Allocator, text: []const u8) !Contents {
-            const contents = try ally.dupe(u8, text);
-            return Contents.fromOwnedSlice(ally, contents);
-        }
-
-        pub fn deinitContents(self: Self) void {
-            self.contents.deinit();
-        }
-
-        pub fn detectFeaturesAndMetrics(self: *Self) void {
-            self.metrics.max_line_number += 1;
-        }
-
-        pub fn cursorMoveLeft(self: *Self, selections: *kisa.Selections) void {
-            _ = self;
-            for (selections.items) |*selection| {
-                if (selection.cursor != 0) {
-                    selection.cursor -= 1;
-                    if (!selection.anchored and selection.anchor != 0) {
-                        selection.anchor -= 1;
-                    }
-                }
-            }
-        }
+pub fn initContentsWithFile(ally: *mem.Allocator, file: std.fs.File) !Contents {
+    const contents = file.readToEndAlloc(
+        ally,
+        std.math.maxInt(usize),
+    ) catch |err| switch (err) {
+        error.WouldBlock => unreachable,
+        error.BrokenPipe => unreachable,
+        error.ConnectionResetByPeer => unreachable,
+        error.ConnectionTimedOut => unreachable,
+        error.FileTooBig,
+        error.SystemResources,
+        error.IsDir,
+        error.OutOfMemory,
+        error.OperationAborted,
+        error.NotOpenForReading,
+        error.AccessDenied,
+        error.InputOutput,
+        error.Unexpected,
+        => |e| return e,
     };
+    return Contents{
+        .items = contents,
+        .capacity = contents.len,
+    };
+}
+
+pub fn initContentsWithText(ally: *mem.Allocator, text: []const u8) !Contents {
+    var contents = try Contents.initCapacity(ally, text.len);
+    try contents.insertSlice(ally, 0, text);
+    return contents;
+}
+
+pub fn deinitContents(ally: *mem.Allocator, contents: *Contents) void {
+    contents.deinit(ally);
+}
+
+test "state2: init text buffer with file descriptor" {
+    var file = try std.fs.cwd().openFile("kisarc.zzz", .{});
+    defer file.close();
+    var text_buffer = try initContentsWithFile(
+        testing.allocator,
+        file,
+    );
+    defer text_buffer.deinit(testing.allocator);
+}
+
+test "state2: init text buffer with text" {
+    var text_buffer = try initContentsWithText(
+        testing.allocator,
+        "Hello",
+    );
+    defer text_buffer.deinit(testing.allocator);
 }
