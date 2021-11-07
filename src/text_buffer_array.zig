@@ -54,7 +54,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the next code point.
-    pub fn nextCharPos(self: Self, offset: usize) usize {
+    pub fn nextCharOffset(self: Self, offset: usize) usize {
         // -1 for maximum offset, another -1 so we can add +1 to it.
         if (offset >= self.contents.bytes.items.len - 2) return offset;
         var result = offset + 1;
@@ -67,7 +67,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the previous code point.
-    pub fn prevCharPos(self: Self, offset: usize) usize {
+    pub fn prevCharOffset(self: Self, offset: usize) usize {
         if (offset == 0) return 0;
         var result = offset - 1;
         while (utf8IsTrailing(self.contents.bytes.items[result]) and result > 0) result -= 1;
@@ -75,7 +75,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the first character of the current line.
-    pub fn beginningOfLinePos(self: Self, offset: usize) usize {
+    pub fn beginningOfLineOffset(self: Self, offset: usize) usize {
         if (offset == 0) return 0;
         var result = offset - 1;
         while (self.contents.bytes.items[result] != '\n' and result > 0)
@@ -89,7 +89,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the ending newline character of the current line.
-    pub fn endOfLinePos(self: Self, offset: usize) usize {
+    pub fn endOfLineOffset(self: Self, offset: usize) usize {
         var result = offset;
         while (self.contents.bytes.items[result] != '\n' and
             result < self.contents.bytes.items.len - 1)
@@ -100,7 +100,7 @@ pub const Buffer = struct {
     }
 
     /// Return line and column given offset.
-    pub fn getPos(self: Self, offset: usize) Position {
+    pub fn getPosFromOffset(self: Self, offset: usize) Position {
         var line: u32 = 1;
         var column: u32 = 1;
         var off: usize = 0;
@@ -116,7 +116,7 @@ pub const Buffer = struct {
     }
 
     /// Return offset given line and column.
-    pub fn getOffset(self: Self, line: u32, column: u32) usize {
+    pub fn getOffsetFromPos(self: Self, line: u32, column: u32) usize {
         if (line <= 0 or column <= 0) return 0;
         var lin: u32 = 1;
         var col: u32 = 1;
@@ -146,39 +146,39 @@ test "state: init text buffer with text" {
     defer buffer.deinit();
 }
 
-test "state: nextCharPos" {
+test "state: nextCharOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, "Dobrý deň");
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 11), buffer.contents.bytes.items.len);
-    try testing.expectEqual(@as(usize, 1), buffer.nextCharPos(0));
-    try testing.expectEqual(@as(usize, 2), buffer.nextCharPos(1));
-    try testing.expectEqual(@as(usize, 3), buffer.nextCharPos(2));
-    try testing.expectEqual(@as(usize, 4), buffer.nextCharPos(3));
-    try testing.expectEqual(@as(usize, 6), buffer.nextCharPos(4)); // ý, 2 bytes
-    try testing.expectEqual(@as(usize, 6), buffer.nextCharPos(5)); // error condition
-    try testing.expectEqual(@as(usize, 7), buffer.nextCharPos(6));
-    try testing.expectEqual(@as(usize, 8), buffer.nextCharPos(7));
-    try testing.expectEqual(@as(usize, 9), buffer.nextCharPos(8));
-    try testing.expectEqual(@as(usize, 9), buffer.nextCharPos(9));
+    try testing.expectEqual(@as(usize, 1), buffer.nextCharOffset(0));
+    try testing.expectEqual(@as(usize, 2), buffer.nextCharOffset(1));
+    try testing.expectEqual(@as(usize, 3), buffer.nextCharOffset(2));
+    try testing.expectEqual(@as(usize, 4), buffer.nextCharOffset(3));
+    try testing.expectEqual(@as(usize, 6), buffer.nextCharOffset(4)); // ý, 2 bytes
+    try testing.expectEqual(@as(usize, 6), buffer.nextCharOffset(5)); // error condition
+    try testing.expectEqual(@as(usize, 7), buffer.nextCharOffset(6));
+    try testing.expectEqual(@as(usize, 8), buffer.nextCharOffset(7));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCharOffset(8));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCharOffset(9));
 }
 
-test "state: prevCharPos" {
+test "state: prevCharOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, "Dobrý deň");
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 11), buffer.contents.bytes.items.len);
-    try testing.expectEqual(@as(usize, 8), buffer.prevCharPos(9));
-    try testing.expectEqual(@as(usize, 7), buffer.prevCharPos(8));
-    try testing.expectEqual(@as(usize, 6), buffer.prevCharPos(7));
-    try testing.expectEqual(@as(usize, 4), buffer.prevCharPos(6)); // ý, 2 bytes
-    try testing.expectEqual(@as(usize, 4), buffer.prevCharPos(5)); // error condition
-    try testing.expectEqual(@as(usize, 3), buffer.prevCharPos(4));
-    try testing.expectEqual(@as(usize, 2), buffer.prevCharPos(3));
-    try testing.expectEqual(@as(usize, 1), buffer.prevCharPos(2));
-    try testing.expectEqual(@as(usize, 0), buffer.prevCharPos(1));
-    try testing.expectEqual(@as(usize, 0), buffer.prevCharPos(0));
+    try testing.expectEqual(@as(usize, 8), buffer.prevCharOffset(9));
+    try testing.expectEqual(@as(usize, 7), buffer.prevCharOffset(8));
+    try testing.expectEqual(@as(usize, 6), buffer.prevCharOffset(7));
+    try testing.expectEqual(@as(usize, 4), buffer.prevCharOffset(6)); // ý, 2 bytes
+    try testing.expectEqual(@as(usize, 4), buffer.prevCharOffset(5)); // error condition
+    try testing.expectEqual(@as(usize, 3), buffer.prevCharOffset(4));
+    try testing.expectEqual(@as(usize, 2), buffer.prevCharOffset(3));
+    try testing.expectEqual(@as(usize, 1), buffer.prevCharOffset(2));
+    try testing.expectEqual(@as(usize, 0), buffer.prevCharOffset(1));
+    try testing.expectEqual(@as(usize, 0), buffer.prevCharOffset(0));
 }
 
-test "state: beginningOfLinePos" {
+test "state: beginningOfLineOffset" {
     {
         const text =
             \\Hi
@@ -187,11 +187,11 @@ test "state: beginningOfLinePos" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 5), buffer.contents.bytes.items.len);
-        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLinePos(0));
-        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLinePos(1));
-        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLinePos(2));
-        try testing.expectEqual(@as(usize, 3), buffer.beginningOfLinePos(3));
-        try testing.expectEqual(@as(usize, 3), buffer.beginningOfLinePos(4));
+        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLineOffset(0));
+        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLineOffset(1));
+        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLineOffset(2));
+        try testing.expectEqual(@as(usize, 3), buffer.beginningOfLineOffset(3));
+        try testing.expectEqual(@as(usize, 3), buffer.beginningOfLineOffset(4));
     }
     {
         const text =
@@ -204,16 +204,16 @@ test "state: beginningOfLinePos" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
-        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLinePos(0));
-        try testing.expectEqual(@as(usize, 1), buffer.beginningOfLinePos(1));
-        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLinePos(2));
-        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLinePos(3));
-        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLinePos(4));
-        try testing.expectEqual(@as(usize, 5), buffer.beginningOfLinePos(5));
+        try testing.expectEqual(@as(usize, 0), buffer.beginningOfLineOffset(0));
+        try testing.expectEqual(@as(usize, 1), buffer.beginningOfLineOffset(1));
+        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLineOffset(2));
+        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLineOffset(3));
+        try testing.expectEqual(@as(usize, 2), buffer.beginningOfLineOffset(4));
+        try testing.expectEqual(@as(usize, 5), buffer.beginningOfLineOffset(5));
     }
 }
 
-test "state: endOfLinePos" {
+test "state: endOfLineOffset" {
     {
         const text =
             \\Hi
@@ -222,11 +222,11 @@ test "state: endOfLinePos" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 5), buffer.contents.bytes.items.len);
-        try testing.expectEqual(@as(usize, 2), buffer.endOfLinePos(0));
-        try testing.expectEqual(@as(usize, 2), buffer.endOfLinePos(1));
-        try testing.expectEqual(@as(usize, 2), buffer.endOfLinePos(2));
-        try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(3));
-        try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(4));
+        try testing.expectEqual(@as(usize, 2), buffer.endOfLineOffset(0));
+        try testing.expectEqual(@as(usize, 2), buffer.endOfLineOffset(1));
+        try testing.expectEqual(@as(usize, 2), buffer.endOfLineOffset(2));
+        try testing.expectEqual(@as(usize, 4), buffer.endOfLineOffset(3));
+        try testing.expectEqual(@as(usize, 4), buffer.endOfLineOffset(4));
     }
     {
         const text =
@@ -239,16 +239,16 @@ test "state: endOfLinePos" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
-        try testing.expectEqual(@as(usize, 0), buffer.endOfLinePos(0));
-        try testing.expectEqual(@as(usize, 1), buffer.endOfLinePos(1));
-        try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(2));
-        try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(3));
-        try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(4));
-        try testing.expectEqual(@as(usize, 5), buffer.endOfLinePos(5));
+        try testing.expectEqual(@as(usize, 0), buffer.endOfLineOffset(0));
+        try testing.expectEqual(@as(usize, 1), buffer.endOfLineOffset(1));
+        try testing.expectEqual(@as(usize, 4), buffer.endOfLineOffset(2));
+        try testing.expectEqual(@as(usize, 4), buffer.endOfLineOffset(3));
+        try testing.expectEqual(@as(usize, 4), buffer.endOfLineOffset(4));
+        try testing.expectEqual(@as(usize, 5), buffer.endOfLineOffset(5));
     }
 }
 
-test "state: getPos" {
+test "state: getPosFromOffset" {
     const text =
         \\
         \\
@@ -259,16 +259,16 @@ test "state: getPos" {
     var buffer = try Buffer.initWithText(testing.allocator, text);
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
-    try testing.expectEqual(Buffer.Position{ .line = 1, .column = 1 }, buffer.getPos(0));
-    try testing.expectEqual(Buffer.Position{ .line = 2, .column = 1 }, buffer.getPos(1));
-    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 1 }, buffer.getPos(2));
-    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 2 }, buffer.getPos(3));
-    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 3 }, buffer.getPos(4));
-    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPos(5));
-    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPos(999));
+    try testing.expectEqual(Buffer.Position{ .line = 1, .column = 1 }, buffer.getPosFromOffset(0));
+    try testing.expectEqual(Buffer.Position{ .line = 2, .column = 1 }, buffer.getPosFromOffset(1));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 1 }, buffer.getPosFromOffset(2));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 2 }, buffer.getPosFromOffset(3));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 3 }, buffer.getPosFromOffset(4));
+    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPosFromOffset(5));
+    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPosFromOffset(999));
 }
 
-test "state: getOffset" {
+test "state: getOffsetFromPos" {
     const text =
         \\
         \\
@@ -279,12 +279,12 @@ test "state: getOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, text);
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
-    try testing.expectEqual(@as(usize, 0), buffer.getOffset(1, 1));
-    try testing.expectEqual(@as(usize, 1), buffer.getOffset(2, 1));
-    try testing.expectEqual(@as(usize, 2), buffer.getOffset(3, 1));
-    try testing.expectEqual(@as(usize, 3), buffer.getOffset(3, 2));
-    try testing.expectEqual(@as(usize, 4), buffer.getOffset(3, 3));
-    try testing.expectEqual(@as(usize, 5), buffer.getOffset(4, 1));
-    try testing.expectEqual(@as(usize, 5), buffer.getOffset(999, 999));
-    try testing.expectEqual(@as(usize, 0), buffer.getOffset(0, 0));
+    try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(1, 1));
+    try testing.expectEqual(@as(usize, 1), buffer.getOffsetFromPos(2, 1));
+    try testing.expectEqual(@as(usize, 2), buffer.getOffsetFromPos(3, 1));
+    try testing.expectEqual(@as(usize, 3), buffer.getOffsetFromPos(3, 2));
+    try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(3, 3));
+    try testing.expectEqual(@as(usize, 5), buffer.getOffsetFromPos(4, 1));
+    try testing.expectEqual(@as(usize, 5), buffer.getOffsetFromPos(999, 999));
+    try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(0, 0));
 }
