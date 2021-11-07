@@ -122,8 +122,10 @@ pub const Buffer = struct {
         var col: u32 = 1;
         var offset: usize = 0;
         while (offset < self.contents.bytes.items.len - 1) : (offset += 1) {
-            if (lin == line and col == column) break;
             const ch = self.contents.bytes.items[offset];
+            // If ch == '\n', this means that the column is bigger than the maximum column in the
+            // line.
+            if (lin == line and (col == column or ch == '\n')) break;
             col += 1;
             if (ch == '\n') {
                 lin += 1;
@@ -285,6 +287,12 @@ test "state: getOffsetFromPos" {
     try testing.expectEqual(@as(usize, 3), buffer.getOffsetFromPos(3, 2));
     try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(3, 3));
     try testing.expectEqual(@as(usize, 5), buffer.getOffsetFromPos(4, 1));
+    // Get the very last offset.
     try testing.expectEqual(@as(usize, 5), buffer.getOffsetFromPos(999, 999));
+    // Incorrect data lower than minimum, get the very first offset.
     try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(0, 0));
+    // Line contains only a single newline, column is bigger than the line has.
+    try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(1, 999));
+    // Line has several characters, column is bigger than the line has.
+    try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(3, 999));
 }
