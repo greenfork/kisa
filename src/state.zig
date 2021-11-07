@@ -663,7 +663,7 @@ pub const TextBuffer = struct {
 
     /// Takes ownership of `path` and `contents`, they must be allocated with `workspaces` allocator.
     pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
-        const contents = blk: {
+        var contents = blk: {
             if (init_params.contents) |cont| {
                 break :blk try tbi.Buffer.initWithText(workspace.ally, cont);
             } else if (init_params.path) |p| {
@@ -701,6 +701,7 @@ pub const TextBuffer = struct {
                 return error.InitParamsMustHaveEitherPathOrContent;
             }
         };
+        errdefer contents.deinit();
         const path = blk: {
             if (init_params.path) |p| {
                 break :blk try workspace.ally.dupe(u8, p);
@@ -708,7 +709,9 @@ pub const TextBuffer = struct {
                 break :blk null;
             }
         };
+        errdefer if (path) |p| workspace.ally.free(p);
         const name = try workspace.ally.dupe(u8, init_params.name);
+        errdefer workspace.ally.free(name);
         var result = Self{
             .workspace = workspace,
             .contents = contents,
