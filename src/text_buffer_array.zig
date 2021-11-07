@@ -133,6 +133,25 @@ pub const Buffer = struct {
         }
         return offset;
     }
+
+    /// Insert bytes at offset. If the offset is the length of the buffer, append to the end.
+    pub fn insert(self: *Self, offset: usize, bytes: []const u8) !void {
+        if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8Sequence;
+        if (offset > self.contents.bytes.items.len) {
+            return error.OffsetTooBig;
+        } else if (offset == self.contents.bytes.items.len) {
+            try self.contents.bytes.appendSlice(bytes);
+        } else if (offset < self.contents.bytes.items.len) {
+            if (utf8IsTrailing(self.contents.bytes.items[offset])) {
+                return error.InsertAtInvalidPlace;
+            }
+            try self.contents.bytes.insertSlice(offset, bytes);
+        }
+    }
+
+    pub fn slice(self: Self) []const u8 {
+        return self.contents.bytes.items;
+    }
 };
 
 const BP = Buffer.Position;
@@ -296,4 +315,30 @@ test "state: getOffsetFromPos" {
     try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(BP{ .line = 1, .column = 999 }));
     // Line has several characters, column is bigger than the line has.
     try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(BP{ .line = 3, .column = 999 }));
+}
+
+test "state: insert" {
+    {
+        const text = "ý";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectError(error.OffsetTooBig, buffer.insert(3, "u"));
+        try testing.expectError(error.InsertAtInvalidPlace, buffer.insert(1, "u"));
+        try testing.expectError(error.InvalidUtf8Sequence, buffer.insert(0, &[_]u8{0b1011_1111}));
+    }
+    {
+        const text = "";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try buffer.insert(0, "a");
+        try testing.expectEqualStrings("a", buffer.slice());
+        try buffer.insert(0, "b");
+        try testing.expectEqualStrings("ba", buffer.slice());
+        try buffer.insert(1, "ee");
+        try testing.expectEqualStrings("beea", buffer.slice());
+        try buffer.insert(1, "ý");
+        try testing.expectEqualStrings("býeea", buffer.slice());
+        try buffer.insert(1, "c");
+        try testing.expectEqualStrings("bcýeea", buffer.slice());
+    }
 }
