@@ -20,6 +20,7 @@ pub const Buffer = struct {
     contents: Contents,
 
     const Self = @This();
+    const Position = struct { line: u32, column: u32 };
 
     pub fn initWithFile(ally: *mem.Allocator, file: std.fs.File) !Self {
         const contents = file.readToEndAlloc(
@@ -52,7 +53,7 @@ pub const Buffer = struct {
         self.contents.deinit();
     }
 
-    /// Return the position of the next code point.
+    /// Return the offset of the next code point.
     pub fn nextCharPos(self: Self, offset: usize) usize {
         // -1 for maximum offset, another -1 so we can add +1 to it.
         if (offset >= self.contents.bytes.items.len - 2) return offset;
@@ -65,7 +66,7 @@ pub const Buffer = struct {
         return result;
     }
 
-    /// Return the position of the previous code point.
+    /// Return the offset of the previous code point.
     pub fn prevCharPos(self: Self, offset: usize) usize {
         if (offset == 0) return 0;
         var result = offset - 1;
@@ -73,7 +74,7 @@ pub const Buffer = struct {
         return result;
     }
 
-    /// Return the position of the first character of the current line.
+    /// Return the offset of the first character of the current line.
     pub fn beginningOfLinePos(self: Self, offset: usize) usize {
         if (offset == 0) return 0;
         var result = offset - 1;
@@ -87,7 +88,7 @@ pub const Buffer = struct {
         }
     }
 
-    /// Return the position of the ending newline character of the current line.
+    /// Return the offset of the ending newline character of the current line.
     pub fn endOfLinePos(self: Self, offset: usize) usize {
         var result = offset;
         while (self.contents.bytes.items[result] != '\n' and
@@ -96,6 +97,40 @@ pub const Buffer = struct {
             result += 1;
         }
         return result;
+    }
+
+    /// Return line and column given offset.
+    pub fn getPos(self: Self, offset: usize) Position {
+        var line: u32 = 1;
+        var column: u32 = 1;
+        var off: usize = 0;
+        while (off < offset and off < self.contents.bytes.items.len - 1) : (off += 1) {
+            const ch = self.contents.bytes.items[off];
+            column += 1;
+            if (ch == '\n') {
+                line += 1;
+                column = 1;
+            }
+        }
+        return Position{ .line = line, .column = column };
+    }
+
+    /// Return offset given line and column.
+    pub fn getOffset(self: Self, line: u32, column: u32) usize {
+        if (line <= 0 or column <= 0) return 0;
+        var lin: u32 = 1;
+        var col: u32 = 1;
+        var offset: usize = 0;
+        while (offset < self.contents.bytes.items.len - 1) : (offset += 1) {
+            if (lin == line and col == column) break;
+            const ch = self.contents.bytes.items[offset];
+            col += 1;
+            if (ch == '\n') {
+                lin += 1;
+                col = 1;
+            }
+        }
+        return offset;
     }
 };
 
@@ -211,4 +246,45 @@ test "state: endOfLinePos" {
         try testing.expectEqual(@as(usize, 4), buffer.endOfLinePos(4));
         try testing.expectEqual(@as(usize, 5), buffer.endOfLinePos(5));
     }
+}
+
+test "state: getPos" {
+    const text =
+        \\
+        \\
+        \\Hi
+        \\
+        \\
+    ;
+    var buffer = try Buffer.initWithText(testing.allocator, text);
+    defer buffer.deinit();
+    try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
+    try testing.expectEqual(Buffer.Position{ .line = 1, .column = 1 }, buffer.getPos(0));
+    try testing.expectEqual(Buffer.Position{ .line = 2, .column = 1 }, buffer.getPos(1));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 1 }, buffer.getPos(2));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 2 }, buffer.getPos(3));
+    try testing.expectEqual(Buffer.Position{ .line = 3, .column = 3 }, buffer.getPos(4));
+    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPos(5));
+    try testing.expectEqual(Buffer.Position{ .line = 4, .column = 1 }, buffer.getPos(999));
+}
+
+test "state: getOffset" {
+    const text =
+        \\
+        \\
+        \\Hi
+        \\
+        \\
+    ;
+    var buffer = try Buffer.initWithText(testing.allocator, text);
+    defer buffer.deinit();
+    try testing.expectEqual(@as(usize, 6), buffer.contents.bytes.items.len);
+    try testing.expectEqual(@as(usize, 0), buffer.getOffset(1, 1));
+    try testing.expectEqual(@as(usize, 1), buffer.getOffset(2, 1));
+    try testing.expectEqual(@as(usize, 2), buffer.getOffset(3, 1));
+    try testing.expectEqual(@as(usize, 3), buffer.getOffset(3, 2));
+    try testing.expectEqual(@as(usize, 4), buffer.getOffset(3, 3));
+    try testing.expectEqual(@as(usize, 5), buffer.getOffset(4, 1));
+    try testing.expectEqual(@as(usize, 5), buffer.getOffset(999, 999));
+    try testing.expectEqual(@as(usize, 0), buffer.getOffset(0, 0));
 }
