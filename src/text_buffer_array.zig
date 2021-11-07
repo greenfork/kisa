@@ -137,15 +137,41 @@ pub const Buffer = struct {
     /// Insert bytes at offset. If the offset is the length of the buffer, append to the end.
     pub fn insert(self: *Self, offset: usize, bytes: []const u8) !void {
         if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8Sequence;
-        if (offset > self.contents.bytes.items.len) {
-            return error.OffsetTooBig;
-        } else if (offset == self.contents.bytes.items.len) {
+        if (offset > self.contents.bytes.items.len) return error.OffsetTooBig;
+        if (offset == self.contents.bytes.items.len) {
             try self.contents.bytes.appendSlice(bytes);
-        } else if (offset < self.contents.bytes.items.len) {
-            if (utf8IsTrailing(self.contents.bytes.items[offset])) {
+        } else {
+            if (utf8IsTrailing(self.contents.bytes.items[offset]))
                 return error.InsertAtInvalidPlace;
-            }
             try self.contents.bytes.insertSlice(offset, bytes);
+        }
+    }
+
+    // TODO: use grapheme instead of code point?
+    /// Remove bytes from start to end which are offsets in bytes pointing to the start of
+    /// the code point.
+    pub fn remove(self: *Self, start: usize, end: usize) !void {
+        if (start > end) return error.StartIsBiggerThanEnd;
+        if (start >= self.contents.bytes.items.len or end >= self.contents.bytes.items.len)
+            return error.StartOrEndBiggerThanBufferLength;
+        if (utf8IsTrailing(self.contents.bytes.items[start]) or
+            utf8IsTrailing(self.contents.bytes.items[end]))
+            return error.RemoveAtInvalidPlace;
+        const endlen = std.unicode.utf8ByteSequenceLength(self.contents.bytes.items[end]) catch {
+            return error.RemoveAtInvalidPlace;
+        };
+
+        if (start == end and endlen == 1) {
+            _ = self.contents.bytes.orderedRemove(start);
+        } else {
+            const newlen = self.contents.bytes.items.len + start - (end + endlen - 1) - 1;
+            std.mem.copy(
+                u8,
+                self.contents.bytes.items[start..newlen],
+                self.contents.bytes.items[end + endlen ..],
+            );
+            std.mem.set(u8, self.contents.bytes.items[newlen..], undefined);
+            self.contents.bytes.items.len = newlen;
         }
     }
 
@@ -340,5 +366,122 @@ test "state: insert" {
         try testing.expectEqualStrings("býeea", buffer.slice());
         try buffer.insert(1, "c");
         try testing.expectEqualStrings("bcýeea", buffer.slice());
+    }
+}
+
+test "state: remove" {
+    {
+        const text = "ý01234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try testing.expectError(error.StartIsBiggerThanEnd, buffer.remove(2, 0));
+        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.remove(0, 10));
+        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.remove(10, 10));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(1, 1));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(0, 1));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(1, 2));
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try buffer.remove(0, 0);
+        try testing.expectEqualStrings("123456789", buffer.slice());
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try buffer.remove(1, 1);
+        try testing.expectEqualStrings("023456789", buffer.slice());
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(0, 9);
+        try testing.expectEqualStrings("", buffer.slice());
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(0, 5);
+        try testing.expectEqualStrings("6789", buffer.slice());
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(5, 9);
+        try testing.expectEqualStrings("01234", buffer.slice());
+    }
+    {
+        const text = "0123456789";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(2, 7);
+        try testing.expectEqualStrings("0189", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(0, 3);
+        try testing.expectEqualStrings("234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(0, 1);
+        try testing.expectEqualStrings("1234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(0, 0);
+        try testing.expectEqualStrings("ý1234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(1, 1);
+        try testing.expectEqualStrings("01234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(1, 3);
+        try testing.expectEqualStrings("0234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(3, 3);
+        try testing.expectEqualStrings("0ý234567", buffer.slice());
+    }
+    {
+        const text = "0ý1234567";
+        var buffer = try Buffer.initWithText(testing.allocator, text);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
+        try buffer.remove(3, 4);
+        try testing.expectEqualStrings("0ý34567", buffer.slice());
     }
 }
