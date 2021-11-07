@@ -7,7 +7,6 @@ const kisa = @import("kisa");
 const assert = std.debug.assert;
 const testing = std.testing;
 const Zigstr = @import("zigstr");
-const unicode = std.unicode;
 
 pub const Contents = Zigstr;
 
