@@ -1,4 +1,4 @@
-* Highlighting in general
+* Highlighting
 ** VSCode 
    - https://code.visualstudio.com/api/language-extensions/semantic-highlight-guide
 ** TextMate
@@ -25,3 +25,7 @@
 * Indentation
   - https://github.com/sogaiu/jsf-indent
   - https://github.com/clojure-emacs/clojure-mode/blob/e1dc7caee76d117a366f8b8b1c2da7e6400636a8/clojure-mode.el#L777-L953
+* Filter search act
+  - https://karthinks.com/software/avy-can-do-anything/
+  - https://github.com/minad/vertico
+  - https://github.com/oantolin/orderless
