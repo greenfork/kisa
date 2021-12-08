@@ -22,6 +22,7 @@
   - https://countvajhula.com/2021/09/25/symex-el-edit-lisp-code-in-a-vim-like-way/
   - https://countvajhula.com/2021/09/25/the-animated-guide-to-symex/
   - https://github.com/ashok-khanna/parevil
+  - https://github.com/meow-edit/meow
 * Indentation
   - https://github.com/sogaiu/jsf-indent
   - https://github.com/clojure-emacs/clojure-mode/blob/e1dc7caee76d117a366f8b8b1c2da7e6400636a8/clojure-mode.el#L777-L953
