@@ -30,3 +30,5 @@
   - https://karthinks.com/software/avy-can-do-anything/
   - https://github.com/minad/vertico
   - https://github.com/oantolin/orderless
+* State
+  - https://lists.gnu.org/archive/html/emacs-devel/2021-12/msg00463.html
