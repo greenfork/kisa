@@ -32,3 +32,5 @@
   - https://github.com/oantolin/orderless
 * State
   - https://lists.gnu.org/archive/html/emacs-devel/2021-12/msg00463.html
+* Projects
+  - https://gitlab.com/ideasman42/emacs-bookmark-in-project - we need project namespace for all the little things
