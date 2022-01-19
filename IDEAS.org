@@ -34,3 +34,6 @@
   - https://lists.gnu.org/archive/html/emacs-devel/2021-12/msg00463.html
 * Projects
   - https://gitlab.com/ideasman42/emacs-bookmark-in-project - we need project namespace for all the little things
+* GUI TUI interface
+  - https://github.com/zenith391/zgt - GUI, early stage
+  - https://github.com/xyaman/mibu - terminal manipulation, we don't need to implement it from scratch
