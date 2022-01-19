@@ -95,6 +95,7 @@ pub const Commands = struct {
             error.SymLinkLoop,
             error.ProcessFdQuotaExceeded,
             error.SystemFdQuotaExceeded,
+            error.FileBusy,
             error.FileNotFound,
             error.SystemResources,
             error.NameTooLong,
@@ -127,7 +128,7 @@ pub const Commands = struct {
 };
 
 pub const Server = struct {
-    ally: *mem.Allocator,
+    ally: mem.Allocator,
     config: Config,
     watcher: transport.Watcher,
     workspace: state.Workspace,
@@ -146,7 +147,7 @@ pub const Server = struct {
     };
 
     /// `initDynamic` must be called right after `init`.
-    pub fn init(ally: *mem.Allocator, address: *net.Address) !Self {
+    pub fn init(ally: mem.Allocator, address: *net.Address) !Self {
         defer ally.destroy(address);
         const listen_socket = try transport.bindUnixSocket(address);
         var watcher = transport.Watcher.init(ally);
@@ -263,6 +264,7 @@ pub const Server = struct {
                                 error.DeviceBusy,
                                 error.NoDevice,
                                 error.NameTooLong,
+                                error.FileBusy,
                                 error.FileNotFound,
                                 error.SystemFdQuotaExceeded,
                                 error.ProcessFdQuotaExceeded,
@@ -416,7 +418,7 @@ pub const Server = struct {
         }
     }
 
-    fn readConfig(ally: *mem.Allocator) !Config {
+    fn readConfig(ally: mem.Allocator) !Config {
         // var path_buf: [256]u8 = undefined;
         // const path = try std.fs.cwd().realpath("kisarc.zzz", &path_buf);
         var config = Config.init(ally);
@@ -436,7 +438,7 @@ pub const Server = struct {
 pub const Application = struct {
     client: Client,
     /// In threaded mode we call `join` on `deinit`. In not threaded mode this field is `null`.
-    server_thread: ?*std.Thread = null,
+    server_thread: ?std.Thread = null,
     // This is post 0.8 version.
     // server_thread: ?std.Thread = null,
 
@@ -452,7 +454,7 @@ pub const Application = struct {
     /// currently it is only relevant for `forked` concurrency model. When this function returns
     /// `Application` instance, this is client code.
     pub fn start(
-        ally: *mem.Allocator,
+        ally: mem.Allocator,
         concurrency_model: ConcurrencyModel,
     ) !?Self {
         const unix_socket_path = try transport.pathForUnixSocket(ally);
@@ -471,7 +473,7 @@ pub const Application = struct {
 
                     // This is post 0.8 version.
                     // try startServer(ally, address);
-                    try startServer(.{ .ally = ally, .address = address });
+                    try startServer(ally, address);
                     return null;
                 } else {
                     // Client
@@ -483,9 +485,7 @@ pub const Application = struct {
                 }
             },
             .threaded => {
-                // This is post 0.8 version.
-                // const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
-                const server_thread = try std.Thread.spawn(startServer, .{ .ally = ally, .address = address });
+                const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
                 var uivt100 = try UIVT100.init();
                 var ui = UI.init(uivt100);
                 var client = Client.init(ally, ui);
@@ -498,8 +498,8 @@ pub const Application = struct {
         unreachable;
     }
 
-    fn startServer(arg: struct { ally: *mem.Allocator, address: *net.Address }) !void {
-        var server = try Server.init(arg.ally, arg.address);
+    fn startServer(ally: mem.Allocator, address: *net.Address) !void {
+        var server = try Server.init(ally, address);
         server.initDynamic();
         errdefer server.deinit();
         try server.loop();
@@ -508,16 +508,14 @@ pub const Application = struct {
     pub fn deinit(self: *Self) void {
         self.client.deinit();
         if (self.server_thread) |server_thread| {
-            // This is post 0.8 version.
-            // server_thread.join();
-            server_thread.wait();
+            server_thread.join();
             self.server_thread = null;
         }
     }
 };
 
 pub const Client = struct {
-    ally: *mem.Allocator,
+    ally: mem.Allocator,
     ui: UI,
     server: ServerForClient,
     watcher: transport.Watcher,
@@ -532,7 +530,7 @@ pub const Client = struct {
         pub usingnamespace transport.CommunicationMixin(@This());
     };
 
-    pub fn init(ally: *mem.Allocator, ui: UI) Self {
+    pub fn init(ally: mem.Allocator, ui: UI) Self {
         return Self{
             .ally = ally,
             .ui = ui,
@@ -577,9 +575,9 @@ pub const Client = struct {
 
     /// Main loop of the client, listens for keypresses and sends requests.
     pub fn loop(self: *Self) !void {
-        var packet_buf: [transport.max_packet_size]u8 = undefined;
-        var method_buf: [transport.max_method_size]u8 = undefined;
-        var message_buf: [transport.max_message_size]u8 = undefined;
+        // var packet_buf: [transport.max_packet_size]u8 = undefined;
+        // var method_buf: [transport.max_method_size]u8 = undefined;
+        // var message_buf: [transport.max_message_size]u8 = undefined;
         while (true) {
             if (try self.watcher.pollReadable(5)) |poll_result| {
                 switch (poll_result) {
@@ -603,7 +601,7 @@ pub const Client = struct {
                             break;
                         }
                         // TODO: work with multiplier.
-                        _ = try client.keypress(key, 1);
+                        _ = try self.keypress(key, 1);
                     },
                     else => {
                         std.debug.print("Unrecognized key: {}\r\n", .{key});
@@ -732,7 +730,7 @@ test "fork/socket: start application forked via socket" {
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var ally = &gpa.allocator;
+    const ally = gpa.allocator();
 
     var arg_it = std.process.args();
     _ = try arg_it.next(ally) orelse unreachable;
@@ -908,13 +906,13 @@ pub const UIVT100 = struct {
         while (true) {
             var window_size: os.linux.winsize = undefined;
             const fd = @bitCast(usize, @as(isize, self.in_stream.handle));
-            switch (os.linux.syscall3(.ioctl, fd, os.linux.TIOCGWINSZ, @ptrToInt(&window_size))) {
+            switch (os.linux.syscall3(.ioctl, fd, os.linux.T.IOCGWINSZ, @ptrToInt(&window_size))) {
                 0 => {
                     rows.* = window_size.ws_row;
                     cols.* = window_size.ws_col;
                     return;
                 },
-                os.EINTR => continue,
+                @enumToInt(os.E.INTR) => continue,
                 else => return Error.NoWindowSize,
             }
         }

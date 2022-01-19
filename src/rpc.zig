@@ -29,6 +29,7 @@ pub const ResponseError = error{
     BadPathName,
     DeviceBusy,
     EmptyPacket,
+    FileBusy,
     FileNotFound,
     FileTooBig,
     InputOutput,
@@ -75,6 +76,7 @@ pub fn errorResponse(id: ?u32, err: ResponseError) EmptyResponse {
         error.DeviceBusy => return EmptyResponse.initError(id, 16, "Device or resource busy"),
         error.FileTooBig => return EmptyResponse.initError(id, 27, "File too large"),
         error.NoSpaceLeft => return EmptyResponse.initError(id, 28, "No space left on device"),
+        error.FileBusy => return EmptyResponse.initError(id, 21, "Is a directory"),
         error.IsDir => return EmptyResponse.initError(id, 21, "Is a directory"),
         error.NotOpenForReading => return EmptyResponse.initError(id, 77, "File descriptor in bad state, not open for reading"),
         error.InputOutput => return EmptyResponse.initError(id, 5, "Input/output error"),
@@ -156,14 +158,14 @@ pub fn parseCommandFromRequest(
     switch (@typeInfo(Payload)) {
         .Void => {
             _ = EmptyRequest.parse(buf, string) catch return error.InvalidRequest;
-            return @unionInit(kisa.Command, comptime meta.tagName(command_kind), {});
+            return @unionInit(kisa.Command, meta.tagName(command_kind), {});
         },
         else => {
             const req = Request(Payload).parse(buf, string) catch |err| switch (err) {
                 error.MissingField => return error.InvalidParams,
                 else => return error.InvalidRequest,
             };
-            return @unionInit(kisa.Command, comptime meta.tagName(command_kind), req.params.?);
+            return @unionInit(kisa.Command, @tagName(command_kind), req.params.?);
         },
     }
 }

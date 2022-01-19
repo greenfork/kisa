@@ -39,7 +39,7 @@ pub const IdValue = union(enum) {
 
 /// Parses a `method` of a Request object from `string`. Caller owns the memory.
 /// Only works for `Request`, throws error otherwise.
-pub fn parseMethodAlloc(ally: *mem.Allocator, string: []const u8) ![]u8 {
+pub fn parseMethodAlloc(ally: mem.Allocator, string: []const u8) ![]u8 {
     const RequestMethod = struct { method: []u8 };
     const parse_options = json.ParseOptions{
         .allocator = ally,
@@ -56,13 +56,13 @@ pub fn parseMethodAlloc(ally: *mem.Allocator, string: []const u8) ![]u8 {
 /// Only works for `Request`, throws error otherwise.
 pub fn parseMethod(buf: []u8, string: []const u8) ![]u8 {
     var fba = std.heap.FixedBufferAllocator.init(buf);
-    var ally = &fba.allocator;
+    var ally = fba.allocator();
     return try parseMethodAlloc(ally, string);
 }
 
 /// Parses an `id` of a Request object from `string`. Caller owns the memory.
 /// Does not work for `Notification`, throws error.
-pub fn parseIdAlloc(ally: ?*mem.Allocator, string: []const u8) !?IdValue {
+pub fn parseIdAlloc(ally: ?mem.Allocator, string: []const u8) !?IdValue {
     const RequestId = struct { id: ?IdValue };
     const parse_options = json.ParseOptions{
         .allocator = ally,
@@ -80,7 +80,7 @@ pub fn parseIdAlloc(ally: ?*mem.Allocator, string: []const u8) !?IdValue {
 pub fn parseId(buf: ?[]u8, string: []const u8) !?IdValue {
     if (buf) |b| {
         var fba = std.heap.FixedBufferAllocator.init(b);
-        var ally = &fba.allocator;
+        var ally = fba.allocator();
         return try parseIdAlloc(ally, string);
     } else {
         return try parseIdAlloc(null, string);
@@ -204,7 +204,7 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Parses a string into a Request object. Requires `allocator` if
         /// any of the `Request` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
-        pub fn parseAlloc(allocator: *mem.Allocator, string: []const u8) !Self {
+        pub fn parseAlloc(allocator: mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
@@ -214,7 +214,7 @@ pub fn Request(comptime ParamsShape: type) type {
         }
 
         /// Frees memory from call to `parseAlloc`.
-        pub fn parseFree(self: Self, allocator: *mem.Allocator) void {
+        pub fn parseFree(self: Self, allocator: mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
@@ -223,11 +223,11 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Parses a string into a Request object.
         pub fn parse(buf: []u8, string: []const u8) !Self {
             var fba = std.heap.FixedBufferAllocator.init(buf);
-            return try parseAlloc(&fba.allocator, string);
+            return try parseAlloc(fba.allocator(), string);
         }
 
         /// Generates a string representation of a Request object. Caller owns the memory.
-        pub fn generateAlloc(self: Self, allocator: *mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: mem.Allocator) ![]u8 {
             var result = std.ArrayList(u8).init(allocator);
             try self.writeTo(result.writer());
             return result.toOwnedSlice();
@@ -236,7 +236,7 @@ pub fn Request(comptime ParamsShape: type) type {
         /// Generates a string representation of a Request object.
         pub fn generate(self: Self, buf: []u8) ![]u8 {
             var fba = std.heap.FixedBufferAllocator.init(buf);
-            return try self.generateAlloc(&fba.allocator);
+            return try self.generateAlloc(fba.allocator());
         }
 
         /// Writes a string representation of a Request object to a specified `stream`.
@@ -367,7 +367,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         /// Parses a string into a `Response` object. Requires `allocator` if
         /// any of the `Response` values are pointers/slices; pass `null` otherwise.
         /// Caller owns the memory, free it with `parseFree`.
-        pub fn parseAlloc(allocator: ?*mem.Allocator, string: []const u8) !Self {
+        pub fn parseAlloc(allocator: ?mem.Allocator, string: []const u8) !Self {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             var token_stream = json.TokenStream.init(string);
@@ -377,7 +377,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         }
 
         /// Frees memory from `parseAlloc` call.
-        pub fn parseFree(self: Self, allocator: *mem.Allocator) void {
+        pub fn parseFree(self: Self, allocator: mem.Allocator) void {
             var parse_options = default_parse_options;
             parse_options.allocator = allocator;
             json.parseFree(Self, self, parse_options);
@@ -386,11 +386,11 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         /// Parses a string into a `Response` object.
         pub fn parse(buf: []u8, string: []const u8) !Self {
             var fba = std.heap.FixedBufferAllocator.init(buf);
-            return try parseAlloc(&fba.allocator, string);
+            return try parseAlloc(fba.allocator(), string);
         }
 
         /// Generates a string representation of a Response object. Caller owns the memory.
-        pub fn generateAlloc(self: Self, allocator: *mem.Allocator) ![]u8 {
+        pub fn generateAlloc(self: Self, allocator: mem.Allocator) ![]u8 {
             var rs = std.ArrayList(u8).init(allocator);
             try self.writeTo(rs.writer());
             return rs.toOwnedSlice();
@@ -399,7 +399,7 @@ pub fn Response(comptime ResultShape: type, comptime ErrorDataShape: type) type 
         /// Generates a string representation of a Response object.
         pub fn generate(self: Self, buf: []u8) ![]u8 {
             var fba = std.heap.FixedBufferAllocator.init(buf);
-            return try self.generateAlloc(&fba.allocator);
+            return try self.generateAlloc(fba.allocator());
         }
 
         /// Writes a string representation of a Response object to a specified `stream`.
@@ -475,7 +475,7 @@ fn expectEqualSpans(expected: Span, actual: Span) !void {
     try testing.expectEqualStrings(expected.contents, actual.contents);
 }
 
-fn removeSpaces(allocator: *mem.Allocator, str: []const u8) ![]u8 {
+fn removeSpaces(allocator: mem.Allocator, str: []const u8) ![]u8 {
     var result = std.ArrayList(u8).init(allocator);
     var inside_string = false;
     for (str) |ch| {

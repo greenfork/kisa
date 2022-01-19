@@ -23,9 +23,13 @@ const listen_socket_backlog = 10;
 
 pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
     const socket = try os.socket(
-        os.AF_UNIX,
-        os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-        os.PF_UNIX,
+        os.AF.UNIX,
+        os.SOCK.SEQPACKET | os.SOCK.CLOEXEC,
+        // Should be PF.UNIX but it is only available as os.linux.PF.UNIX which is not
+        // cross-compatible across OS. But the implementation says that PF and AF values
+        // are same in this case since PF is redundant now and was a design precaution/mistake
+        // made in the past.
+        os.AF.UNIX,
     );
     errdefer os.closeSocket(socket);
     try os.bind(socket, &address.any, address.getOsSockLen());
@@ -35,9 +39,9 @@ pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
 
 pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
     const socket = try os.socket(
-        os.AF_UNIX,
-        os.SOCK_SEQPACKET | os.SOCK_CLOEXEC,
-        os.PF_UNIX,
+        os.AF.UNIX,
+        os.SOCK.SEQPACKET | os.SOCK.CLOEXEC,
+        os.AF.UNIX,
     );
     errdefer os.closeSocket(socket);
     var connect_retries: u8 = max_connect_retries;
@@ -58,7 +62,7 @@ pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
 }
 
 /// Caller owns the memory.
-pub fn pathForUnixSocket(ally: *std.mem.Allocator) ![]u8 {
+pub fn pathForUnixSocket(ally: std.mem.Allocator) ![]u8 {
     const runtime_dir = (try known_folders.getPath(
         ally,
         .runtime,
@@ -89,7 +93,7 @@ pub fn pathForUnixSocket(ally: *std.mem.Allocator) ![]u8 {
 }
 
 /// Caller owns the memory.
-pub fn addressForUnixSocket(ally: *std.mem.Allocator, path: []const u8) !*net.Address {
+pub fn addressForUnixSocket(ally: std.mem.Allocator, path: []const u8) !*net.Address {
     const address = try ally.create(net.Address);
     errdefer ally.destroy(address);
     address.* = try net.Address.initUnix(path);
@@ -182,7 +186,7 @@ pub const WatcherFd = struct {
 };
 
 pub const Watcher = struct {
-    ally: *std.mem.Allocator,
+    ally: std.mem.Allocator,
     /// Array of file descriptor data. Must not be modified directly, only with provided API.
     fds: std.MultiArrayList(WatcherFd) = std.MultiArrayList(WatcherFd){},
     /// `poll` call can return several events at a time, this is their total count per call.
@@ -198,7 +202,7 @@ pub const Watcher = struct {
         err: struct { id: u32 },
     };
 
-    pub fn init(ally: *std.mem.Allocator) Self {
+    pub fn init(ally: std.mem.Allocator) Self {
         return Self{ .ally = ally };
     }
 
@@ -209,12 +213,12 @@ pub const Watcher = struct {
 
     /// Adds listen socket which is used for listening for other sockets' connections.
     pub fn addListenSocket(self: *Self, fd: os.fd_t, id: u32) !void {
-        try self.addFd(fd, os.POLLIN, .listen_socket, id);
+        try self.addFd(fd, os.POLL.IN, .listen_socket, id);
     }
 
     /// Adds connection socket which is used for communication between server and client.
     pub fn addConnectionSocket(self: *Self, fd: os.fd_t, id: u32) !void {
-        try self.addFd(fd, os.POLLIN, .connection_socket, id);
+        try self.addFd(fd, os.POLL.IN, .connection_socket, id);
     }
 
     pub fn findFileDescriptor(self: Self, id: u32) ?Result {
@@ -246,7 +250,7 @@ pub const Watcher = struct {
 
     fn addFd(self: *Self, fd: os.fd_t, events: i16, ty: FdType, id: u32) !void {
         // Only add ready-for-reading notifications with current assumptions of `pollReadable`.
-        assert(events == os.POLLIN);
+        assert(events == os.POLL.IN);
         // Ensure the `id` is unique across all elements.
         for (self.fds.items(.id)) |existing_id| assert(id != existing_id);
 
@@ -280,7 +284,7 @@ pub const Watcher = struct {
             const revents = pollfds[self.pending_events_cursor].revents;
             if (revents != 0) {
                 self.pending_events_count -= 1;
-                if (revents & (os.POLLERR | os.POLLHUP | os.POLLNVAL) != 0) {
+                if (revents & (os.POLL.ERR | os.POLL.HUP | os.POLL.NVAL) != 0) {
                     // `pollfd` is removed by swapping current one with the last one, so the cursor
                     // stays the same.
                     const result = PollResult{ .err = .{
@@ -288,7 +292,7 @@ pub const Watcher = struct {
                     } };
                     self.removeFd(self.pending_events_cursor);
                     return result;
-                } else if (revents & os.POLLIN != 0) {
+                } else if (revents & os.POLL.IN != 0) {
                     const result = PollResult{ .success = .{
                         .fd = pollfds[self.pending_events_cursor].fd,
                         .id = ids[self.pending_events_cursor],

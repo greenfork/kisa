@@ -21,7 +21,7 @@ pub const Buffer = struct {
     const Self = @This();
     const Position = struct { line: u32, column: u32 };
 
-    pub fn initWithFile(ally: *mem.Allocator, file: std.fs.File) !Self {
+    pub fn initWithFile(ally: mem.Allocator, file: std.fs.File) !Self {
         const contents = file.readToEndAlloc(
             ally,
             std.math.maxInt(usize),
@@ -44,7 +44,7 @@ pub const Buffer = struct {
         return Self{ .contents = try Contents.fromOwnedBytes(ally, contents) };
     }
 
-    pub fn initWithText(ally: *mem.Allocator, text: []const u8) !Self {
+    pub fn initWithText(ally: mem.Allocator, text: []const u8) !Self {
         return Self{ .contents = try Contents.fromBytes(ally, text) };
     }
 

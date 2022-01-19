@@ -28,14 +28,13 @@ pub const allowed_keypress_commands = [_]kisa.CommandKind{
 /// will be populated.
 pub const Config = struct {
     arena: std.heap.ArenaAllocator,
-    ally: *mem.Allocator,
+    ally: mem.Allocator,
     sources: std.ArrayList([]const u8),
     tree: Tree,
     keymap: Keymap,
 
-    const max_files = 32;
     const max_nodes = 2048;
-    pub const Tree = zzz.ZTree(max_files, max_nodes);
+    pub const Tree = zzz.ZStaticTree(max_nodes);
 
     pub const Keymap = std.AutoHashMap(EditorMode, Bindings);
     pub const KeysToActions = std.HashMap(
@@ -54,7 +53,7 @@ pub const Config = struct {
 
     const Self = @This();
 
-    pub fn init(ally: *mem.Allocator) Self {
+    pub fn init(ally: mem.Allocator) Self {
         return Self{
             .arena = std.heap.ArenaAllocator.init(ally),
             .ally = undefined,
@@ -65,7 +64,7 @@ pub const Config = struct {
     }
 
     pub fn setup(self: *Self) !void {
-        self.ally = &self.arena.allocator;
+        self.ally = self.arena.allocator();
         self.sources = std.ArrayList([]const u8).init(self.ally);
         self.tree = Tree{};
         self.keymap = Keymap.init(self.ally);
@@ -95,23 +94,20 @@ pub const Config = struct {
     /// is `true`, it means that this is the very first initialization of a config and all the
     /// values must be present, it is an error if any value is missing.
     pub fn addConfig(self: *Self, content: []const u8, default: bool) !void {
-        const root = try self.tree.appendText(content);
-        if (root.findNth(0, .{ .String = "keymap" })) |keymap| {
+        try zzz.appendText(&self.tree, null, content);
+        const root = self.tree.root;
+        if (root.findNthChild(0, "keymap")) |keymap| {
             var mode_it = keymap.nextChild(null);
             while (mode_it) |mode| : (mode_it = keymap.nextChild(mode_it)) {
-                const mode_name = switch (mode.value) {
-                    .String => |val| val,
-                    else => return error.IncorrectModeName,
-                };
-                if (std.meta.stringToEnum(EditorMode, mode_name)) |editor_mode| {
+                if (std.meta.stringToEnum(EditorMode, mode.value)) |editor_mode| {
                     var bindings = self.keymap.getPtr(editor_mode).?;
                     var bindings_it = mode.nextChild(null);
                     while (bindings_it) |binding| : (bindings_it = mode.nextChild(bindings_it)) {
                         var key_binding = blk: {
-                            if (mem.eql(u8, "default", binding.value.String)) {
+                            if (mem.eql(u8, "default", binding.value)) {
                                 break :blk &bindings.default;
                             } else {
-                                const key = try parseKeyDefinition(binding.value.String);
+                                const key = try parseKeyDefinition(binding.value);
                                 try bindings.keys.put(key, Actions.init(self.ally));
                                 break :blk bindings.keys.getPtr(key).?;
                             }
@@ -119,26 +115,21 @@ pub const Config = struct {
                         var actions_it = binding.nextChild(null);
                         while (actions_it) |action| : (actions_it = binding.nextChild(actions_it)) {
                             action_loop: {
-                                switch (action.value) {
-                                    .String => |val| {
-                                        const command_kind = std.meta.stringToEnum(
-                                            kisa.CommandKind,
-                                            val,
-                                        ) orelse {
-                                            std.debug.print("Unknown key action: {s}\n", .{val});
-                                            return error.UnknownKeyAction;
-                                        };
-                                        for (allowed_keypress_commands) |allowed_command_kind| {
-                                            if (command_kind == allowed_command_kind) {
-                                                try key_binding.append(command_kind);
-                                                break :action_loop;
-                                            }
-                                        }
-                                        std.debug.print("{s}\n", .{command_kind});
-                                        return error.UnallowedKeyAction;
-                                    },
-                                    else => unreachable,
+                                const command_kind = std.meta.stringToEnum(
+                                    kisa.CommandKind,
+                                    action.value,
+                                ) orelse {
+                                    std.debug.print("Unknown key action: {s}\n", .{action.value});
+                                    return error.UnknownKeyAction;
+                                };
+                                for (allowed_keypress_commands) |allowed_command_kind| {
+                                    if (command_kind == allowed_command_kind) {
+                                        try key_binding.append(command_kind);
+                                        break :action_loop;
+                                    }
                                 }
+                                std.debug.print("{s}\n", .{command_kind});
+                                return error.UnallowedKeyAction;
                             }
                         }
                     }
@@ -168,7 +159,7 @@ pub const Config = struct {
             return kisa.Key{ .code = keycode };
         } else {
             var key = kisa.Key{ .code = undefined };
-            var it = mem.split(string, "-");
+            var it = mem.split(u8, string, "-");
             while (it.next()) |part| {
                 if (part.len == 1) {
                     key.code = kisa.Key.ascii(part[0]).code;

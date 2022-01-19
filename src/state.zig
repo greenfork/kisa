@@ -106,7 +106,7 @@ pub const EditorMode = enum {
 /// as well as a set of actions to operate on them from a high-level perspective.
 /// Workspace is responsible for managing the resources of all the parts of the state.
 pub const Workspace = struct {
-    ally: *mem.Allocator,
+    ally: mem.Allocator,
     text_buffers: std.TailQueue(TextBuffer) = std.TailQueue(TextBuffer){},
     display_windows: std.TailQueue(DisplayWindow) = std.TailQueue(DisplayWindow){},
     window_tabs: std.TailQueue(WindowTab) = std.TailQueue(WindowTab){},
@@ -126,7 +126,7 @@ pub const Workspace = struct {
     const debug_buffer_id = 1;
     const scratch_buffer_id = 2;
 
-    pub fn init(ally: *mem.Allocator) Self {
+    pub fn init(ally: mem.Allocator) Self {
         return Self{ .ally = ally };
     }
 
@@ -568,7 +568,7 @@ test "state: open existing text buffer" {
 }
 
 test "state: handle failing conditions" {
-    const failing_allocator = &testing.FailingAllocator.init(testing.allocator, 15).allocator;
+    const failing_allocator = testing.FailingAllocator.init(testing.allocator, 15).allocator();
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
@@ -681,6 +681,7 @@ pub const TextBuffer = struct {
                     error.SymLinkLoop,
                     error.ProcessFdQuotaExceeded,
                     error.SystemFdQuotaExceeded,
+                    error.FileBusy,
                     error.FileNotFound,
                     error.SystemResources,
                     error.NameTooLong,
