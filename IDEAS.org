@@ -14,15 +14,18 @@
   - https://github.com/janet-lang/janet/blob/master/src/mainclient/shell.c
   - https://github.com/mawww/kakoune/blob/master/src/terminal_ui.cc
 * Diffing
-  - https://github.com/Wilfred/difftastic
+  - https://github.com/Wilfred/difftastic - structural syntax-aware diffs
+  - https://gitlab.com/ideasman42/emacs-diff-ansi - uses external tools and
+    converts ANSI escape codes to text colors inside editor
 * Editing, modes
   - https://dahu.github.io/vim_waz_ere/1_editor_fundamentals.html
-  - https://thevaluable.dev/vim-expert/
-  - https://github.com/countvajhula/rigpa
-  - https://countvajhula.com/2021/09/25/symex-el-edit-lisp-code-in-a-vim-like-way/
-  - https://countvajhula.com/2021/09/25/the-animated-guide-to-symex/
-  - https://github.com/ashok-khanna/parevil
-  - https://github.com/meow-edit/meow
+  - https://thevaluable.dev/vim-expert/ - modal editing
+  - https://github.com/countvajhula/rigpa - tower of modes
+  - https://countvajhula.com/2021/09/25/symex-el-edit-lisp-code-in-a-vim-like-way/ - parenthesis
+  - https://countvajhula.com/2021/09/25/the-animated-guide-to-symex/ - parenthesis
+  - https://github.com/ashok-khanna/parevil - parenthesis
+  - https://github.com/meow-edit/meow - modal editing
+  - https://github.com/AmaiKinono/puni - soft deletion
 * Indentation
   - https://github.com/sogaiu/jsf-indent
   - https://github.com/clojure-emacs/clojure-mode/blob/e1dc7caee76d117a366f8b8b1c2da7e6400636a8/clojure-mode.el#L777-L953
@@ -34,6 +37,9 @@
   - https://lists.gnu.org/archive/html/emacs-devel/2021-12/msg00463.html
 * Projects
   - https://gitlab.com/ideasman42/emacs-bookmark-in-project - we need project namespace for all the little things
+  - https://github.com/otavioschwanck/harpoon.el - same, bookmarks which are project-scoped
 * GUI TUI interface
   - https://github.com/zenith391/zgt - GUI, early stage
   - https://github.com/xyaman/mibu - terminal manipulation, we don't need to implement it from scratch
+* I18n
+  - https://github.com/elias94/accent - accented characters
