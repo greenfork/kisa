@@ -53,7 +53,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the next code point.
-    pub fn nextCharOffset(self: Self, offset: usize) usize {
+    pub fn nextCodepointOffset(self: Self, offset: usize) usize {
         // -1 for maximum offset, another -1 so we can add +1 to it.
         if (offset >= self.contents.bytes.items.len - 2) return offset;
         var result = offset + 1;
@@ -66,7 +66,7 @@ pub const Buffer = struct {
     }
 
     /// Return the offset of the previous code point.
-    pub fn prevCharOffset(self: Self, offset: usize) usize {
+    pub fn prevCodepointOffset(self: Self, offset: usize) usize {
         if (offset == 0) return 0;
         var result = offset - 1;
         while (utf8IsTrailing(self.contents.bytes.items[result]) and result > 0) result -= 1;
@@ -135,7 +135,7 @@ pub const Buffer = struct {
     }
 
     /// Insert bytes at offset. If the offset is the length of the buffer, append to the end.
-    pub fn insert(self: *Self, offset: usize, bytes: []const u8) !void {
+    pub fn insertBytes(self: *Self, offset: usize, bytes: []const u8) !void {
         if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8Sequence;
         if (offset > self.contents.bytes.items.len) return error.OffsetTooBig;
         if (offset == self.contents.bytes.items.len) {
@@ -147,10 +147,9 @@ pub const Buffer = struct {
         }
     }
 
-    // TODO: use grapheme instead of code point?
     /// Remove bytes from start to end which are offsets in bytes pointing to the start of
     /// the code point.
-    pub fn remove(self: *Self, start: usize, end: usize) !void {
+    pub fn removeBytes(self: *Self, start: usize, end: usize) !void {
         if (start > end) return error.StartIsBiggerThanEnd;
         if (start >= self.contents.bytes.items.len or end >= self.contents.bytes.items.len)
             return error.StartOrEndBiggerThanBufferLength;
@@ -198,32 +197,32 @@ test "state: nextCharOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, "Dobrý deň");
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 11), buffer.contents.bytes.items.len);
-    try testing.expectEqual(@as(usize, 1), buffer.nextCharOffset(0));
-    try testing.expectEqual(@as(usize, 2), buffer.nextCharOffset(1));
-    try testing.expectEqual(@as(usize, 3), buffer.nextCharOffset(2));
-    try testing.expectEqual(@as(usize, 4), buffer.nextCharOffset(3));
-    try testing.expectEqual(@as(usize, 6), buffer.nextCharOffset(4)); // ý, 2 bytes
-    try testing.expectEqual(@as(usize, 6), buffer.nextCharOffset(5)); // error condition
-    try testing.expectEqual(@as(usize, 7), buffer.nextCharOffset(6));
-    try testing.expectEqual(@as(usize, 8), buffer.nextCharOffset(7));
-    try testing.expectEqual(@as(usize, 9), buffer.nextCharOffset(8));
-    try testing.expectEqual(@as(usize, 9), buffer.nextCharOffset(9));
+    try testing.expectEqual(@as(usize, 1), buffer.nextCodepointOffset(0));
+    try testing.expectEqual(@as(usize, 2), buffer.nextCodepointOffset(1));
+    try testing.expectEqual(@as(usize, 3), buffer.nextCodepointOffset(2));
+    try testing.expectEqual(@as(usize, 4), buffer.nextCodepointOffset(3));
+    try testing.expectEqual(@as(usize, 6), buffer.nextCodepointOffset(4)); // ý, 2 bytes
+    try testing.expectEqual(@as(usize, 6), buffer.nextCodepointOffset(5)); // error condition
+    try testing.expectEqual(@as(usize, 7), buffer.nextCodepointOffset(6));
+    try testing.expectEqual(@as(usize, 8), buffer.nextCodepointOffset(7));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(8));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(9));
 }
 
 test "state: prevCharOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, "Dobrý deň");
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 11), buffer.contents.bytes.items.len);
-    try testing.expectEqual(@as(usize, 8), buffer.prevCharOffset(9));
-    try testing.expectEqual(@as(usize, 7), buffer.prevCharOffset(8));
-    try testing.expectEqual(@as(usize, 6), buffer.prevCharOffset(7));
-    try testing.expectEqual(@as(usize, 4), buffer.prevCharOffset(6)); // ý, 2 bytes
-    try testing.expectEqual(@as(usize, 4), buffer.prevCharOffset(5)); // error condition
-    try testing.expectEqual(@as(usize, 3), buffer.prevCharOffset(4));
-    try testing.expectEqual(@as(usize, 2), buffer.prevCharOffset(3));
-    try testing.expectEqual(@as(usize, 1), buffer.prevCharOffset(2));
-    try testing.expectEqual(@as(usize, 0), buffer.prevCharOffset(1));
-    try testing.expectEqual(@as(usize, 0), buffer.prevCharOffset(0));
+    try testing.expectEqual(@as(usize, 8), buffer.prevCodepointOffset(9));
+    try testing.expectEqual(@as(usize, 7), buffer.prevCodepointOffset(8));
+    try testing.expectEqual(@as(usize, 6), buffer.prevCodepointOffset(7));
+    try testing.expectEqual(@as(usize, 4), buffer.prevCodepointOffset(6)); // ý, 2 bytes
+    try testing.expectEqual(@as(usize, 4), buffer.prevCodepointOffset(5)); // error condition
+    try testing.expectEqual(@as(usize, 3), buffer.prevCodepointOffset(4));
+    try testing.expectEqual(@as(usize, 2), buffer.prevCodepointOffset(3));
+    try testing.expectEqual(@as(usize, 1), buffer.prevCodepointOffset(2));
+    try testing.expectEqual(@as(usize, 0), buffer.prevCodepointOffset(1));
+    try testing.expectEqual(@as(usize, 0), buffer.prevCodepointOffset(0));
 }
 
 test "state: beginningOfLineOffset" {
@@ -348,23 +347,23 @@ test "state: insert" {
         const text = "ý";
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
-        try testing.expectError(error.OffsetTooBig, buffer.insert(3, "u"));
-        try testing.expectError(error.InsertAtInvalidPlace, buffer.insert(1, "u"));
-        try testing.expectError(error.InvalidUtf8Sequence, buffer.insert(0, &[_]u8{0b1011_1111}));
+        try testing.expectError(error.OffsetTooBig, buffer.insertBytes(3, "u"));
+        try testing.expectError(error.InsertAtInvalidPlace, buffer.insertBytes(1, "u"));
+        try testing.expectError(error.InvalidUtf8Sequence, buffer.insertBytes(0, &[_]u8{0b1011_1111}));
     }
     {
         const text = "";
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
-        try buffer.insert(0, "a");
+        try buffer.insertBytes(0, "a");
         try testing.expectEqualStrings("a", buffer.slice());
-        try buffer.insert(0, "b");
+        try buffer.insertBytes(0, "b");
         try testing.expectEqualStrings("ba", buffer.slice());
-        try buffer.insert(1, "ee");
+        try buffer.insertBytes(1, "ee");
         try testing.expectEqualStrings("beea", buffer.slice());
-        try buffer.insert(1, "ý");
+        try buffer.insertBytes(1, "ý");
         try testing.expectEqualStrings("býeea", buffer.slice());
-        try buffer.insert(1, "c");
+        try buffer.insertBytes(1, "c");
         try testing.expectEqualStrings("bcýeea", buffer.slice());
     }
 }
@@ -375,25 +374,25 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try testing.expectError(error.StartIsBiggerThanEnd, buffer.remove(2, 0));
-        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.remove(0, 10));
-        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.remove(10, 10));
-        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(1, 1));
-        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(0, 1));
-        try testing.expectError(error.RemoveAtInvalidPlace, buffer.remove(1, 2));
+        try testing.expectError(error.StartIsBiggerThanEnd, buffer.removeBytes(2, 0));
+        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.removeBytes(0, 10));
+        try testing.expectError(error.StartOrEndBiggerThanBufferLength, buffer.removeBytes(10, 10));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.removeBytes(1, 1));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.removeBytes(0, 1));
+        try testing.expectError(error.RemoveAtInvalidPlace, buffer.removeBytes(1, 2));
     }
     {
         const text = "0123456789";
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
-        try buffer.remove(0, 0);
+        try buffer.removeBytes(0, 0);
         try testing.expectEqualStrings("123456789", buffer.slice());
     }
     {
         const text = "0123456789";
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
-        try buffer.remove(1, 1);
+        try buffer.removeBytes(1, 1);
         try testing.expectEqualStrings("023456789", buffer.slice());
     }
     {
@@ -401,7 +400,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(0, 9);
+        try buffer.removeBytes(0, 9);
         try testing.expectEqualStrings("", buffer.slice());
     }
     {
@@ -409,7 +408,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(0, 5);
+        try buffer.removeBytes(0, 5);
         try testing.expectEqualStrings("6789", buffer.slice());
     }
     {
@@ -417,7 +416,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(5, 9);
+        try buffer.removeBytes(5, 9);
         try testing.expectEqualStrings("01234", buffer.slice());
     }
     {
@@ -425,7 +424,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(2, 7);
+        try buffer.removeBytes(2, 7);
         try testing.expectEqualStrings("0189", buffer.slice());
     }
     {
@@ -433,7 +432,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(0, 3);
+        try buffer.removeBytes(0, 3);
         try testing.expectEqualStrings("234567", buffer.slice());
     }
     {
@@ -441,7 +440,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(0, 1);
+        try buffer.removeBytes(0, 1);
         try testing.expectEqualStrings("1234567", buffer.slice());
     }
     {
@@ -449,7 +448,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(0, 0);
+        try buffer.removeBytes(0, 0);
         try testing.expectEqualStrings("ý1234567", buffer.slice());
     }
     {
@@ -457,7 +456,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(1, 1);
+        try buffer.removeBytes(1, 1);
         try testing.expectEqualStrings("01234567", buffer.slice());
     }
     {
@@ -465,7 +464,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(1, 3);
+        try buffer.removeBytes(1, 3);
         try testing.expectEqualStrings("0234567", buffer.slice());
     }
     {
@@ -473,7 +472,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(3, 3);
+        try buffer.removeBytes(3, 3);
         try testing.expectEqualStrings("0ý234567", buffer.slice());
     }
     {
@@ -481,7 +480,7 @@ test "state: remove" {
         var buffer = try Buffer.initWithText(testing.allocator, text);
         defer buffer.deinit();
         try testing.expectEqual(@as(usize, 10), buffer.contents.bytes.items.len);
-        try buffer.remove(3, 4);
+        try buffer.removeBytes(3, 4);
         try testing.expectEqualStrings("0ý34567", buffer.slice());
     }
 }
