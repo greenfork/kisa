@@ -171,6 +171,24 @@ We will do everything in Zig (eventually). Hooray.
 [attempt to make it better]: https://github.com/sabotage-linux/netbsd-curses
 [mibu]: https://github.com/xyaman/mibu
 
+[Kakoune]: https://github.com/mawww/kakoune
+[amp]: https://github.com/jmacdonald/amp
+[vis]: https://github.com/martanne/vis
+[micro]: https://github.com/zyedidia/micro
+[vy]: https://github.com/vyapp/vy
+[neovim]: https://github.com/neovim/neovim
+[helix]: https://github.com/helix-editor/helix
+[xi]: https://xi-editor.io/
+[qedit]: https://github.com/fivemoreminix/qedit
+[kilo]: https://github.com/antirez/kilo
+[moe]: https://github.com/fox0430/moe
+[paravim]: https://github.com/paranim/paravim
+[focus]: https://github.com/jamii/focus
+[Emacs]: https://www.gnu.org/software/emacs/
+[joe]: https://joe-editor.sourceforge.io/
+[TextMate grammar]: https://macromates.com/manual/en/language_grammars
+
+
 ### Where is it going to run?
 
 Since the initial implementation is going to be a terminal-based client, we
