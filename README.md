@@ -12,19 +12,8 @@ for the current progress.
 
 [roadmap]: https://greenfork.github.io/kisa/ROADMAP.html
 
-There's a growing set of design documents, beware most of it is not implemented.
-It will be further moved to a more appropriate place.
-* [Cursor design](CURSOR_DESIGN.md)
-* [Client architecture design](CLIENT_ARCHITECTURE_DESIGN.md)
-* [Configuration design](CONFIGURATION_DESIGN.md)
-* [Highlighting design](HIGHLIGHTING_DESIGN.md)
-* [Keybindings design](KEYBINDINGS_DESIGN.md)
-* [Server architecture design](SERVER_ARCHITECTURE_DESIGN.md)
-* [Windowing design](WINDOWING_DESIGN.md)
-* [Search design](SEARCH_DESIGN.md)
-* [Extensions design](EXTENSIONS_DESIGN.md)
-* [Lines design](LINES_DESIGN.md)
-* [Text manipulation design](TEXT_MANIPULATION_DESIGN.md)
+There's a growing set of [design documents](design_docs/), beware most
+of it is not implemented.
 
 ## Purpose
 
