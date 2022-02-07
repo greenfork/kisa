@@ -97,7 +97,7 @@ Currently it is only relevant for the development, there's no usable
 text editor (just yet).
 
 Requirements:
-- Zig version 0.8.0, download [here](https://ziglang.org/download/) as a single binary
+- Zig version 0.9.0, download [here](https://ziglang.org/download/) as a single binary
 - git
 
 ```
