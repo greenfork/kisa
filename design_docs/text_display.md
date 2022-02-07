@@ -1,4 +1,4 @@
-# Lines design
+# Text display
 
 ## Numbering
 
@@ -22,7 +22,7 @@ Some considerations:
 Some considerations:
 * There could be a setting which inserts newlines when the line becomes too long.
 
-## Questions
+### Questions
 * Which commands operate on logical lines and which commands operate on visual
   lines? In Vim there's a special sequence for up/down keys to operate on visual
   lines. In Emacs up/down by default operates on visual lines but all other
