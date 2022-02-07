@@ -10,7 +10,7 @@
    
 ** DONE Read file for displaying
 
-* TODO Stage 2: Basic working program [12%]
+* TODO Stage 2: Basic working program [14%]
   :PROPERTIES:
   :COOKIE_DATA: todo recursive
   :END:
@@ -44,12 +44,12 @@
 *** TODO Server-side loop [2/3]
     - [X] Accept new clients
     - [X] Process client requests
-    - [ ] Send notifications to clients
+    - [ ] Send push notifications to clients
 
 *** TODO Client-side loop [1/3]
     - [X] Send key presses
     - [ ] Send commands
-    - [ ] Process notifications from the server
+    - [ ] Process push notifications from the server
 
 *** DONE Error handling
     CLOSED: [2021-09-02 Thu 23:45]
@@ -82,31 +82,33 @@
    - [ ] Layout of multiple splits
 
 ** TODO Text buffer [0/2]
-*** TODO Prototype [0/8]
+*** TODO Prototype [2/8]
      Implementation as a simple contiguous growing array. Mainly
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
-     - [ ] Move the cursor
-       + [ ] Left, right
+     - [-] Move the cursor
+       + [X] Left, right
        + [ ] Up, down
-       + [ ] Start of the line, end of the line
+       + [X] Start of the line, end of the line
        + [ ] To the first non-empty character of the line
-     - [ ] Insert characters
+     - [X] Insert/remove characters
      - [ ] Multiple cursors proof-of-concept
-     - [ ] Search exact/regex
-     - [ ] Open file
+     - [ ] Search exact
+     - [ ] Search regex
+     - [X] Open file
      - [ ] Open scratch buffer
-     - [ ] Search
      - [ ] Not consecutive lines :: Some functionality like code folding or
        filtering the buffer to only contain certain lines will make lines not
        consecutive.
 *** TODO Main implementation
      Decide on main implementation and write it. This decision is not final but
      still seems necessary for a basic working program.
+     - [ ] Array text buffer
 
 ** TODO Configuration processing [1/3]
-*** DONE Decide on file format - [[https://github.com/gruebite/zzz][zzz]]
+*** DONE Decide on file format - [[https://github.com/gruebite/zzz][zzz]] - still not the final decision
     CLOSED: [2021-09-03 Fri 00:43]
+*** TODO Correction on file format
 *** TODO Read configuration [1/3]
     - [X] Read key map
     - [ ] Read general settings
@@ -121,13 +123,14 @@
    The simplest possible one, just syntax tokens. Most probably implemented
    with an extension language.
 
-** TODO Add extension language [0/3]
+** TODO Add extension language [1/3]
 
-*** TODO Decide on extension language
+*** DONE Decide on extension language
+    CLOSED: [2022-02-07 Mon 21:49]
     - [ ] [[https://www.lua.org/][Lua]]
     - [ ] [[https://fennel-lang.org/][Fennel]]
     - [ ] [[http://synthcode.com/scheme/chibi/][Chibi Scheme]]
-    - [ ] [[https://janet-lang.org/][Janet]]
+    - [X] [[https://janet-lang.org/][Janet]]
 
 *** TODO Implement event system
     Events are signals emitted by the core to which the extension language can
