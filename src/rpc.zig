@@ -52,6 +52,7 @@ pub const ResponseError = error{
     SystemResources,
     Unexpected,
     UninitializedClient,
+    StreamTooLong,
 };
 pub fn errorResponse(id: ?u32, err: ResponseError) EmptyResponse {
     switch (err) {
@@ -89,6 +90,7 @@ pub fn errorResponse(id: ?u32, err: ResponseError) EmptyResponse {
 
         // Application errors
         error.UninitializedClient => return EmptyResponse.initError(id, 2001, "Client is not initialized"),
+        error.StreamTooLong => return EmptyResponse.initError(id, 2002, "Too long message which is more than `max_packet_size`"),
     }
     unreachable;
 }

@@ -249,6 +249,8 @@ pub const Server = struct {
                                 // XXX: This error is caught inside Commands, probably a bug that
                                 // compiler complains about it not being caught here.
                                 error.InitParamsMustHaveEitherPathOrContent,
+                                // XXX: This error is caught inside Transport.
+                                error.EndOfStream,
                                 => unreachable,
                                 // For these errors the client is probably wrong and we can send
                                 // an error message explaining why.
@@ -276,6 +278,7 @@ pub const Server = struct {
                                 error.IsDir,
                                 error.FileTooBig,
                                 error.UninitializedClient,
+                                error.StreamTooLong,
                                 => |e| {
                                     client.send(rpc.errorResponse(client.state.id, e)) catch {
                                         std.debug.print(
