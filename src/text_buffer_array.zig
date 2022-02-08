@@ -105,6 +105,8 @@ pub const Buffer = struct {
         var off: usize = 0;
         while (off < offset and off < self.contents.bytes.items.len - 1) : (off += 1) {
             const ch = self.contents.bytes.items[off];
+            if (utf8IsTrailing(self.contents.bytes.items[off + 1])) continue;
+
             column += 1;
             if (ch == '\n') {
                 line += 1;
@@ -116,12 +118,14 @@ pub const Buffer = struct {
 
     /// Return offset given line and column.
     pub fn getOffsetFromPos(self: Self, pos: Position) usize {
-        if (pos.line <= 0 or pos.column <= 0) return 0;
+        if (pos.line == 0 or pos.column == 0) return 0;
         var lin: u32 = 1;
         var col: u32 = 1;
         var offset: usize = 0;
         while (offset < self.contents.bytes.items.len - 1) : (offset += 1) {
             const ch = self.contents.bytes.items[offset];
+            if (utf8IsTrailing(ch)) continue;
+
             // If ch == '\n', this means that the column is bigger than the maximum column in the
             // line.
             if (lin == pos.line and (col == pos.column or ch == '\n')) break;
@@ -340,6 +344,37 @@ test "state: getOffsetFromPos" {
     try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(BP{ .line = 1, .column = 999 }));
     // Line has several characters, column is bigger than the line has.
     try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(BP{ .line = 3, .column = 999 }));
+}
+
+test "state: ofsset and pos with code points" {
+    const text =
+        \\
+        \\hi ý
+        \\h
+        \\
+    ;
+    var buffer = try Buffer.initWithText(testing.allocator, text);
+    defer buffer.deinit();
+    try testing.expectEqual(@as(usize, 9), buffer.contents.bytes.items.len);
+
+    try testing.expectEqual(BP{ .line = 1, .column = 1 }, buffer.getPosFromOffset(0));
+    try testing.expectEqual(BP{ .line = 2, .column = 1 }, buffer.getPosFromOffset(1));
+    try testing.expectEqual(BP{ .line = 2, .column = 2 }, buffer.getPosFromOffset(2));
+    try testing.expectEqual(BP{ .line = 2, .column = 3 }, buffer.getPosFromOffset(3));
+    try testing.expectEqual(BP{ .line = 2, .column = 4 }, buffer.getPosFromOffset(4));
+    try testing.expectEqual(BP{ .line = 2, .column = 4 }, buffer.getPosFromOffset(5));
+    try testing.expectEqual(BP{ .line = 2, .column = 5 }, buffer.getPosFromOffset(6));
+    try testing.expectEqual(BP{ .line = 3, .column = 1 }, buffer.getPosFromOffset(7));
+    try testing.expectEqual(BP{ .line = 3, .column = 2 }, buffer.getPosFromOffset(8));
+
+    try testing.expectEqual(@as(usize, 0), buffer.getOffsetFromPos(BP{ .line = 1, .column = 1 }));
+    try testing.expectEqual(@as(usize, 1), buffer.getOffsetFromPos(BP{ .line = 2, .column = 1 }));
+    try testing.expectEqual(@as(usize, 2), buffer.getOffsetFromPos(BP{ .line = 2, .column = 2 }));
+    try testing.expectEqual(@as(usize, 3), buffer.getOffsetFromPos(BP{ .line = 2, .column = 3 }));
+    try testing.expectEqual(@as(usize, 4), buffer.getOffsetFromPos(BP{ .line = 2, .column = 4 }));
+    try testing.expectEqual(@as(usize, 6), buffer.getOffsetFromPos(BP{ .line = 2, .column = 5 }));
+    try testing.expectEqual(@as(usize, 7), buffer.getOffsetFromPos(BP{ .line = 3, .column = 1 }));
+    try testing.expectEqual(@as(usize, 8), buffer.getOffsetFromPos(BP{ .line = 3, .column = 2 }));
 }
 
 test "state: insert" {
