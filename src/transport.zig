@@ -14,7 +14,7 @@ pub const TransportKind = enum {
     un_socket,
 };
 
-pub const max_packet_size: usize = 1024 * 16;
+pub const max_packet_size: usize = 1024 * 8;
 pub const max_method_size: usize = 1024;
 pub const max_message_size: usize = max_packet_size;
 const max_connect_retries = 50;
@@ -24,7 +24,7 @@ const listen_socket_backlog = 10;
 pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
     const socket = try os.socket(
         os.AF.UNIX,
-        os.SOCK.SEQPACKET | os.SOCK.CLOEXEC,
+        os.SOCK.STREAM | os.SOCK.CLOEXEC,
         // Should be PF.UNIX but it is only available as os.linux.PF.UNIX which is not
         // cross-compatible across OS. But the implementation says that PF and AF values
         // are same in this case since PF is redundant now and was a design precaution/mistake
@@ -40,7 +40,7 @@ pub fn bindUnixSocket(address: *net.Address) !os.socket_t {
 pub fn connectToUnixSocket(address: *net.Address) !os.socket_t {
     const socket = try os.socket(
         os.AF.UNIX,
-        os.SOCK.SEQPACKET | os.SOCK.CLOEXEC,
+        os.SOCK.STREAM | os.SOCK.CLOEXEC,
         os.AF.UNIX,
     );
     errdefer os.closeSocket(socket);
@@ -103,12 +103,23 @@ pub fn addressForUnixSocket(ally: std.mem.Allocator, path: []const u8) !*net.Add
 pub const CommunicationResources = union(TransportKind) {
     un_socket: struct {
         socket: os.socket_t,
+        buffered_reader: SocketBufferedReader,
     },
 
     const Self = @This();
+    const SocketReader = std.io.Reader(os.socket_t, os.RecvFromError, socketRead);
+    fn socketRead(socket: os.socket_t, buffer: []u8) os.RecvFromError!usize {
+        return try os.recv(socket, buffer, 0);
+    }
+    const SocketBufferedReader = std.io.BufferedReader(max_packet_size, SocketReader);
 
     pub fn initWithUnixSocket(socket: os.socket_t) Self {
-        return Self{ .un_socket = .{ .socket = socket } };
+        var socket_stream = SocketReader{ .context = socket };
+        var buffered_reader = SocketBufferedReader{ .unbuffered_reader = socket_stream };
+        return Self{ .un_socket = .{
+            .socket = socket,
+            .buffered_reader = buffered_reader,
+        } };
     }
 };
 
@@ -117,6 +128,8 @@ pub const CommunicationResources = union(TransportKind) {
 pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
     return struct {
         const Self = CommunicationContainer;
+        /// ASCII: end of transmission block. (isn't this the perfect character to send?)
+        const packet_delimiter = 0x17;
 
         pub fn initWithUnixSocket(socket: os.socket_t) Self {
             return Self{ .comms = CommunicationResources.initWithUnixSocket(socket) };
@@ -132,12 +145,17 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
 
         // TODO: allow the caller to pass `packet_buf`.
         /// Sends a message, `message` must implement `generate` receiving a buffer and putting
-        /// []u8 content into it.
+        /// []u8 contents into it.
         pub fn send(self: Self, message: anytype) !void {
+            var packet_buf: [max_packet_size]u8 = undefined;
+            const packet = try message.generate(&packet_buf);
+            packet_buf[packet.len] = packet_delimiter;
+            try self.sendPacket(packet_buf[0 .. packet.len + 1]);
+        }
+
+        pub fn sendPacket(self: Self, packet: []const u8) !void {
             switch (self.comms) {
                 .un_socket => |s| {
-                    var packet_buf: [max_packet_size]u8 = undefined;
-                    const packet = try message.generate(&packet_buf);
                     const bytes_sent = try os.send(s.socket, packet, 0);
                     assert(packet.len == bytes_sent);
                 },
@@ -146,7 +164,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
 
         /// Reads a message of type `Message` with memory stored inside `out_buf`, `Message` must
         /// implement `parse` taking a buffer and a string, returning `Message` object.
-        pub fn recv(self: Self, comptime Message: type, out_buf: []u8) !?Message {
+        pub fn recv(self: *Self, comptime Message: type, out_buf: []u8) !?Message {
             var packet_buf: [max_packet_size]u8 = undefined;
             if (try self.readPacket(&packet_buf)) |packet| {
                 return try Message.parse(out_buf, packet);
@@ -156,13 +174,17 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
         }
 
         /// Returns the slice with the length of a received packet.
-        pub fn readPacket(self: Self, buf: []u8) !?[]u8 {
+        pub fn readPacket(self: *Self, buf: []u8) !?[]u8 {
             switch (self.comms) {
-                .un_socket => |s| {
-                    const bytes_read = try os.recv(s.socket, buf, 0);
-                    if (bytes_read == 0) return null;
-                    if (buf.len == bytes_read) return error.MessageTooBig;
-                    return buf[0..bytes_read];
+                .un_socket => |*s| {
+                    var stream = s.buffered_reader.reader();
+                    var read_buf = stream.readUntilDelimiter(buf, packet_delimiter) catch |e| switch (e) {
+                        error.EndOfStream => return null,
+                        else => return e,
+                    };
+                    if (read_buf.len == 0) return null;
+                    if (buf.len == read_buf.len) return error.MessageTooBig;
+                    return read_buf;
                 },
             }
         }
@@ -322,21 +344,19 @@ const MyContainer = struct {
     usingnamespace CommunicationMixin(@This());
 };
 const MyMessage = struct {
-    content: []u8,
+    contents: []u8,
 
     const Self = @This();
 
-    fn generate(message: anytype, out_buf: []u8) ![]u8 {
-        _ = message;
-        const str = "generated message";
+    fn generate(message: Self, out_buf: []u8) ![]u8 {
+        const str = message.contents;
         std.mem.copy(u8, out_buf, str);
         return out_buf[0..str.len];
     }
     fn parse(out_buf: []u8, string: []const u8) !Self {
-        _ = string;
-        const str = "parsed message";
+        const str = string;
         std.mem.copy(u8, out_buf, str);
-        return Self{ .content = out_buf[0..str.len] };
+        return Self{ .contents = out_buf[0..str.len] };
     }
 };
 
@@ -345,18 +365,32 @@ test "transport/fork1: communication via un_socket" {
     defer testing.allocator.free(path);
     const address = try addressForUnixSocket(testing.allocator, path);
     defer testing.allocator.destroy(address);
+    const str1 = "generated string1";
+    const str2 = "gerted stng2";
 
     const pid = try os.fork();
     if (pid == 0) {
         const listen_socket = try bindUnixSocket(address);
         const accepted_socket = try os.accept(listen_socket, null, null, 0);
-        const server = MyContainer.initWithUnixSocket(accepted_socket);
+        var server = MyContainer.initWithUnixSocket(accepted_socket);
         var buf: [256]u8 = undefined;
-        const message = try server.recv(MyMessage, &buf);
-        std.debug.assert(message != null);
+        {
+            const message = try server.recv(MyMessage, &buf);
+            std.debug.assert(message != null);
+            try testing.expectEqualStrings(str1, message.?.contents);
+        }
+        {
+            const message = try server.recv(MyMessage, &buf);
+            std.debug.assert(message != null);
+            try testing.expectEqualStrings(str2, message.?.contents);
+        }
     } else {
         const client = MyContainer.initWithUnixSocket(try connectToUnixSocket(address));
-        const message = MyMessage{ .content = undefined };
+        var buf: [200]u8 = undefined;
+        // Attempt to send 2 packets simultaneously.
+        const str = str1 ++ "\x17" ++ str2;
+        std.mem.copy(u8, &buf, str);
+        const message = MyMessage{ .contents = buf[0..str.len] };
         try client.send(message);
     }
 }
