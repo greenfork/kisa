@@ -49,6 +49,7 @@ pub const Buffer = struct {
         self.contents.deinit();
     }
 
+    // Does it have to be so complex?
     /// Return the offset of the next code point.
     pub fn nextCodepointOffset(self: Self, offset: usize) usize {
         var result = offset;
@@ -63,11 +64,14 @@ pub const Buffer = struct {
             // In case we are not in the middle of a codepoint, we can advance one byte forward.
             result += 1;
         }
+
+        // If we are in the middle of a codepoint, then advance to the next valid codepoint.
         while (utf8IsTrailing(self.contents.bytes.items[result])) {
             if (result < self.contents.bytes.items.len - 1) {
                 result += 1;
             } else {
-                // The very last byte of the buffer is an ending of a multi-byte codepoint.
+                // The very last byte of the buffer is an ending of a multi-byte codepoint,
+                // let's return to the previous valid codepoint.
                 while (utf8IsTrailing(self.contents.bytes.items[result]) and result > 0) {
                     result -= 1;
                 }
