@@ -116,13 +116,31 @@ pub const TextBufferPosition = struct { line: u32, column: u32 };
 
 pub const Selection = struct {
     /// Value is offset.
-    cursor: usize,
+    cursor: Offset,
     /// Value is offset.
-    anchor: usize,
+    anchor: Offset,
     anchored: bool = false,
     primary: bool = true,
-    // TODO: think about design.
-    // last_character_is_newline: bool,
+
+    pub const Offset = u32;
+
+    pub fn move(self: Selection, offset: Offset) Selection {
+        if (self.anchored) {
+            return .{
+                .cursor = offset,
+                .anchor = self.anchor,
+                .anchored = self.anchored,
+                .primary = self.primary,
+            };
+        } else {
+            return .{
+                .cursor = offset,
+                .anchor = offset,
+                .anchored = self.anchored,
+                .primary = self.primary,
+            };
+        }
+    }
 };
 
 pub const Selections = std.ArrayList(Selection);
