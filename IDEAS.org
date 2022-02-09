@@ -17,6 +17,7 @@
   - https://github.com/Wilfred/difftastic - structural syntax-aware diffs
   - https://gitlab.com/ideasman42/emacs-diff-ansi - uses external tools and
     converts ANSI escape codes to text colors inside editor
+  - https://github.com/tomhoule/zig-diff - library just for that
 * Editing, modes
   - https://dahu.github.io/vim_waz_ere/1_editor_fundamentals.html
   - https://thevaluable.dev/vim-expert/ - modal editing
