@@ -1,11 +1,9 @@
 //! Contiguous array implementation of a text buffer. The most naive and ineffective implementation,
 //! it is supposed to be an experiement to identify the correct API and common patterns.
 const std = @import("std");
-const os = std.os;
 const mem = std.mem;
-const kisa = @import("kisa");
-const assert = std.debug.assert;
 const testing = std.testing;
+const kisa = @import("kisa");
 const Zigstr = @import("zigstr");
 
 pub const Contents = Zigstr;
@@ -19,7 +17,6 @@ pub const Buffer = struct {
     contents: Contents,
 
     const Self = @This();
-    const Position = struct { line: u32, column: u32 };
 
     pub fn initWithFile(ally: mem.Allocator, file: std.fs.File) !Self {
         const contents = file.readToEndAlloc(
@@ -54,13 +51,28 @@ pub const Buffer = struct {
 
     /// Return the offset of the next code point.
     pub fn nextCodepointOffset(self: Self, offset: usize) usize {
-        // -1 for maximum offset, another -1 so we can add +1 to it.
-        if (offset >= self.contents.bytes.items.len - 2) return offset;
-        var result = offset + 1;
-        while (utf8IsTrailing(self.contents.bytes.items[result]) and
+        var result = offset;
+
+        // Can't return `self.contents.bytes.items.len - 1` right here, the very last byte
+        // could be in the middle of a codepoint.
+        if (offset > self.contents.bytes.items.len - 1) result = self.contents.bytes.items.len - 1;
+
+        if (!utf8IsTrailing(self.contents.bytes.items[result]) and
             result < self.contents.bytes.items.len - 1)
         {
+            // In case we are not in the middle of a codepoint, we can advance one byte forward.
             result += 1;
+        }
+        while (utf8IsTrailing(self.contents.bytes.items[result])) {
+            if (result < self.contents.bytes.items.len - 1) {
+                result += 1;
+            } else {
+                // The very last byte of the buffer is an ending of a multi-byte codepoint.
+                while (utf8IsTrailing(self.contents.bytes.items[result]) and result > 0) {
+                    result -= 1;
+                }
+                return result;
+            }
         }
         return result;
     }
@@ -99,7 +111,7 @@ pub const Buffer = struct {
     }
 
     /// Return line and column given offset.
-    pub fn getPosFromOffset(self: Self, offset: usize) Position {
+    pub fn getPosFromOffset(self: Self, offset: usize) kisa.TextBufferPosition {
         var line: u32 = 1;
         var column: u32 = 1;
         var off: usize = 0;
@@ -113,11 +125,11 @@ pub const Buffer = struct {
                 column = 1;
             }
         }
-        return Position{ .line = line, .column = column };
+        return .{ .line = line, .column = column };
     }
 
     /// Return offset given line and column.
-    pub fn getOffsetFromPos(self: Self, pos: Position) usize {
+    pub fn getOffsetFromPos(self: Self, pos: kisa.TextBufferPosition) usize {
         if (pos.line == 0 or pos.column == 0) return 0;
         var lin: u32 = 1;
         var col: u32 = 1;
@@ -183,7 +195,7 @@ pub const Buffer = struct {
     }
 };
 
-const BP = Buffer.Position;
+const BP = kisa.TextBufferPosition;
 
 test "state: init text buffer with file descriptor" {
     var file = try std.fs.cwd().openFile("kisarc.zzz", .{});
@@ -211,6 +223,8 @@ test "state: nextCharOffset" {
     try testing.expectEqual(@as(usize, 8), buffer.nextCodepointOffset(7));
     try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(8));
     try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(9));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(10));
+    try testing.expectEqual(@as(usize, 9), buffer.nextCodepointOffset(999));
 }
 
 test "state: prevCharOffset" {

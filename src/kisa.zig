@@ -112,6 +112,8 @@ pub const TextBufferLineEnding = enum {
     dos,
 };
 
+pub const TextBufferPosition = struct { line: u32, column: u32 };
+
 pub const Selection = struct {
     /// Value is offset.
     cursor: usize,
