@@ -82,7 +82,7 @@
    - [ ] Layout of multiple splits
 
 ** TODO Text buffer [0/2]
-*** TODO Prototype [2/8]
+*** TODO Prototype [3/8]
      Implementation as a simple contiguous growing array. Mainly
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
@@ -96,14 +96,18 @@
      - [ ] Search exact
      - [ ] Search regex
      - [X] Open file
-     - [ ] Open scratch buffer
+     - [X] Open scratch buffer
      - [ ] Not consecutive lines :: Some functionality like code folding or
        filtering the buffer to only contain certain lines will make lines not
        consecutive.
 *** TODO Main implementation
      Decide on main implementation and write it. This decision is not final but
      still seems necessary for a basic working program.
-     - [ ] Array text buffer
+     - [ ] Array of bytes
+     - [ ] Piece table
+     - [ ] Array of lines
+     - [ ] Gap buffer
+     - [ ] Rope
 
 ** TODO Configuration processing [1/3]
 *** DONE Decide on file format - [[https://github.com/gruebite/zzz][zzz]] - still not the final decision
