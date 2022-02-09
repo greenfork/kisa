@@ -231,6 +231,8 @@ test "state: prevCharOffset" {
     var buffer = try Buffer.initWithText(testing.allocator, "Dobrý deň");
     defer buffer.deinit();
     try testing.expectEqual(@as(usize, 11), buffer.contents.bytes.items.len);
+    try testing.expectEqual(@as(usize, 9), buffer.prevCodepointOffset(11));
+    try testing.expectEqual(@as(usize, 9), buffer.prevCodepointOffset(10));
     try testing.expectEqual(@as(usize, 8), buffer.prevCodepointOffset(9));
     try testing.expectEqual(@as(usize, 7), buffer.prevCodepointOffset(8));
     try testing.expectEqual(@as(usize, 6), buffer.prevCodepointOffset(7));
