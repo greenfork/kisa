@@ -27,7 +27,7 @@ pub fn build(b: *std.build.Builder) void {
     const test_main = b.step("test-main", "Run tests in main");
     const test_main_nofork = b.step("test-main-nofork", "Run tests in main without forking");
     const test_state = b.step("test-state", "Run tests in state");
-    const test_buffer_api = b.step("test-buffer-api", "Run tests in buffer API");
+    const test_buffer = b.step("test-buffer", "Run tests in buffer API");
     const test_config = b.step("test-config", "Run tests in config");
     const test_jsonrpc = b.step("test-jsonrpc", "Run tests in jsonrpc");
     const test_transport = b.step("test-transport", "Run tests in transport");
@@ -80,14 +80,26 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         const test_cases = b.addTest("src/buffer_api.zig");
-        test_cases.setFilter("api:");
+        test_cases.setFilter("buffer:");
         test_cases.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
         test_cases.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
         test_cases.addPackagePath("kisa", "src/kisa.zig");
         test_cases.setTarget(target);
         test_cases.setBuildMode(mode);
         test_all.dependOn(&test_cases.step);
-        test_buffer_api.dependOn(&test_cases.step);
+        test_buffer.dependOn(&test_cases.step);
+    }
+
+    {
+        const test_cases = b.addTest("src/text_buffer_array.zig");
+        test_cases.setFilter("buffer:");
+        test_cases.addPackagePath("ziglyph", "libs/ziglyph/src/ziglyph.zig");
+        test_cases.addPackagePath("zigstr", "libs/zigstr/src/Zigstr.zig");
+        test_cases.addPackagePath("kisa", "src/kisa.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_all.dependOn(&test_cases.step);
+        test_buffer.dependOn(&test_cases.step);
     }
 
     {

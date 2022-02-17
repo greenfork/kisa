@@ -105,41 +105,56 @@ pub const TextBufferMetrics = struct {
     max_line_number: u32 = 0,
 };
 
-pub const TextBufferLineEnding = enum {
-    /// \n
+pub const LineEnding = enum {
     unix,
-    /// \r\n
     dos,
+    old_mac,
+
+    pub fn str(self: @This()) []const u8 {
+        return switch (self) {
+            .unix => "\n",
+            .dos => "\r\n",
+            .old_mac => "\r",
+        };
+    }
 };
 
-pub const TextBufferPosition = struct { line: u32, column: u32 };
-
+/// Pair of two positions in the buffer `cursor` and `anchor` that creates a selection of
+/// characters. In the simple case when `cursor` and `anchor` positions are same, the selection
+/// is of width 1.
 pub const Selection = struct {
-    /// Value is offset.
-    cursor: Offset,
-    /// Value is offset.
-    anchor: Offset,
+    /// Main caret position.
+    cursor: Position,
+    /// Caret position which creates selection if it is not same as `cursor`.
+    anchor: Position,
+    /// Whether to move `anchor` together with `cursor`.
     anchored: bool = false,
+    /// For multiple cursors, primary cursor never leaves the display window.
     primary: bool = true,
+    /// Used for next/previous line movements. Saves the column value and always tries to reach
+    /// it even when the line does not have enough columns.
+    transient_column: Dimension = 0,
+    /// Used for next/previous line movements. Saves whether the cursor was at newline and always
+    /// tries to reach a newline on consecutive lines. Takes precedence over `transient_column`.
+    transient_newline: bool = false,
 
+    const Self = @This();
     pub const Offset = u32;
+    pub const Dimension = u32;
+    pub const Position = struct { offset: Offset, line: Dimension, column: Dimension };
 
-    pub fn move(self: Selection, offset: Offset) Selection {
-        if (self.anchored) {
-            return .{
-                .cursor = offset,
-                .anchor = self.anchor,
-                .anchored = self.anchored,
-                .primary = self.primary,
-            };
-        } else {
-            return .{
-                .cursor = offset,
-                .anchor = offset,
-                .anchored = self.anchored,
-                .primary = self.primary,
-            };
-        }
+    pub fn moveTo(self: Self, position: Position) Self {
+        var result = self;
+        result.cursor = position;
+        if (!self.anchored) result.anchor = position;
+        return result;
+    }
+
+    pub fn resetTransients(self: Self) Self {
+        var result = self;
+        result.transient_column = 0;
+        result.transient_newline = false;
+        return result;
     }
 };
 

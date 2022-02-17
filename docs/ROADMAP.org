@@ -82,15 +82,21 @@
    - [ ] Layout of multiple splits
 
 ** TODO Text buffer [0/2]
-*** TODO Prototype [3/8]
+*** TODO Prototype [3/9]
      Implementation as a simple contiguous growing array. Mainly
      it is needed to understand the interface and get some idea about the kind
      of processing that is necessary for common operations on the text buffer.
      - [-] Move the cursor
        + [X] Left, right
-       + [ ] Up, down
+       + [X] Up, down
        + [X] Start of the line, end of the line
-       + [ ] To the first non-empty character of the line
+       + [X] To the first non-empty character of the line
+       + [X] Start, end of buffer
+       + [X] Next, previous word
+     - [ ] Select
+       + [ ] Surrounding inner object
+       + [ ] Surrounding object with borders
+       + [ ] Line, word, letters
      - [X] Insert/remove characters
      - [ ] Multiple cursors proof-of-concept
      - [ ] Search exact
