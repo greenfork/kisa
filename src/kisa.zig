@@ -92,6 +92,7 @@ pub const Command = union(CommandKind) {
         readonly: bool,
         text_area_rows: u32,
         text_area_cols: u32,
+        line_ending: LineEnding,
     };
 
     // pub const Multiplier = struct { multiplier: u32 = 1 };
@@ -116,6 +117,19 @@ pub const LineEnding = enum {
             .dos => "\r\n",
             .old_mac => "\r",
         };
+    }
+
+    pub fn jsonStringify(
+        value: @This(),
+        options: std.json.StringifyOptions,
+        out_stream: anytype,
+    ) @TypeOf(out_stream).Error!void {
+        _ = options;
+        switch (value) {
+            .unix => try std.json.stringify("unix", options, out_stream),
+            .dos => try std.json.stringify("dox", options, out_stream),
+            .old_mac => try std.json.stringify("old_mac", options, out_stream),
+        }
     }
 };
 

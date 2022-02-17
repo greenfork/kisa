@@ -83,6 +83,7 @@ pub const Commands = struct {
                 .path = path,
                 .name = path,
                 .contents = null,
+                .line_ending = .unix,
             },
         ) catch |err| switch (err) {
             error.InitParamsMustHaveEitherPathOrContent => return error.InvalidParams,
@@ -399,6 +400,7 @@ pub const Server = struct {
                                 .path = client_init_params.path,
                                 .name = client_init_params.path,
                                 .readonly = client_init_params.readonly,
+                                .line_ending = client_init_params.line_ending,
                             },
                             state.WindowPane.InitParams{
                                 .text_area_rows = client_init_params.text_area_rows,
@@ -569,6 +571,7 @@ pub const Client = struct {
                 .readonly = false,
                 .text_area_rows = 80,
                 .text_area_cols = 24,
+                .line_ending = .unix,
             },
         );
         try self.server.send(message);

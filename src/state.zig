@@ -11,6 +11,7 @@ const assert = std.debug.assert;
 const kisa = @import("kisa");
 /// Text buffer implementation.
 const tbi = @import("text_buffer_array.zig");
+const bapi = @import("buffer_api.zig");
 
 /// How Server sees a Client.
 pub const Client = struct {
@@ -136,12 +137,14 @@ pub const Workspace = struct {
             .name = "*debug*",
             .contents = "Debug buffer for error messages and debug information",
             .readonly = true,
+            .line_ending = .unix,
         });
         errdefer self.destroyTextBuffer(debug_buffer.data.id);
         const scratch_buffer = try self.createTextBuffer(TextBuffer.InitParams{
             .path = null,
             .name = "*scratch*",
             .contents = "Scratch buffer for notes and drafts",
+            .line_ending = .unix,
         });
         errdefer self.destroyTextBuffer(scratch_buffer.data.id);
         assert(debug_buffer.data.id == debug_buffer_id);
@@ -496,6 +499,7 @@ test "state: new workspace" {
         .contents = "hello",
         .path = null,
         .name = "name",
+        .line_ending = .unix,
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -518,6 +522,7 @@ test "state: new text buffer" {
         .contents = "hello",
         .path = null,
         .name = "name",
+        .line_ending = .unix,
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(old_text_buffer_init_params, window_pane_init_params);
@@ -525,6 +530,7 @@ test "state: new text buffer" {
         .contents = "hello2",
         .path = null,
         .name = "name2",
+        .line_ending = .unix,
     };
     const active_display_state = try workspace.newTextBuffer(
         old_active_display_state,
@@ -549,6 +555,7 @@ test "state: open existing text buffer" {
         .contents = "hello",
         .path = null,
         .name = "name",
+        .line_ending = .unix,
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -572,7 +579,12 @@ test "state: handle failing conditions" {
     var workspace = Workspace.init(failing_allocator);
     defer workspace.deinit();
     try workspace.initDefaultBuffers();
-    const text_buffer_init_params = TextBuffer.InitParams{ .contents = "hello", .path = null, .name = "name" };
+    const text_buffer_init_params = TextBuffer.InitParams{
+        .contents = "hello",
+        .path = null,
+        .name = "name",
+        .line_ending = .unix,
+    };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
     try testing.expectError(error.OutOfMemory, workspace.openTextBuffer(
@@ -591,6 +603,7 @@ test "state: new window pane" {
         .contents = "hello",
         .path = null,
         .name = "name",
+        .line_ending = .unix,
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -617,6 +630,7 @@ test "state: close window pane when there are several window panes on window tab
         .contents = "hello",
         .path = null,
         .name = "name",
+        .line_ending = .unix,
     };
     const window_pane_init_params = WindowPane.InitParams{ .text_area_rows = 1, .text_area_cols = 1 };
     const old_active_display_state = try workspace.new(text_buffer_init_params, window_pane_init_params);
@@ -650,7 +664,6 @@ pub const TextBuffer = struct {
     name: []u8,
     readonly: bool,
     metrics: kisa.TextBufferMetrics,
-    line_ending: kisa.TextBufferLineEnding,
 
     const Self = @This();
 
@@ -659,13 +672,18 @@ pub const TextBuffer = struct {
         name: []const u8,
         contents: ?[]const u8,
         readonly: bool = false,
+        line_ending: kisa.LineEnding,
     };
 
     /// Takes ownership of `path` and `contents`, they must be allocated with `workspaces` allocator.
     pub fn init(workspace: *Workspace, init_params: InitParams) !Self {
         var contents = blk: {
             if (init_params.contents) |cont| {
-                break :blk try tbi.Buffer.initWithText(workspace.ally, cont);
+                break :blk try tbi.Buffer.initWithText(
+                    workspace.ally,
+                    cont,
+                    init_params.line_ending,
+                );
             } else if (init_params.path) |p| {
                 var file = std.fs.openFileAbsolute(
                     p,
@@ -697,7 +715,11 @@ pub const TextBuffer = struct {
                 };
 
                 defer file.close();
-                break :blk try tbi.Buffer.initWithFile(workspace.ally, file);
+                break :blk try tbi.Buffer.initWithFile(
+                    workspace.ally,
+                    file,
+                    init_params.line_ending,
+                );
             } else {
                 return error.InitParamsMustHaveEitherPathOrContent;
             }
@@ -720,7 +742,6 @@ pub const TextBuffer = struct {
             .name = name,
             .readonly = init_params.readonly,
             .metrics = kisa.TextBufferMetrics{},
-            .line_ending = .unix,
         };
         return result;
     }
@@ -762,21 +783,12 @@ pub const TextBuffer = struct {
     ) void {
         switch (command_kind) {
             .cursor_move_left => {
-                self.cursorMoveLeft(&display_window_node.data.selections);
+                display_window_node.data.selections.items[0] = bapi.previousCharacter(
+                    self.contents,
+                    display_window_node.data.selections.items[0],
+                );
             },
             else => @panic("not implemented"),
-        }
-    }
-
-    pub fn cursorMoveLeft(self: *Self, selections: *kisa.Selections) void {
-        _ = self;
-        for (selections.items) |*selection| {
-            if (selection.cursor != 0) {
-                selection.cursor -= 1;
-                if (!selection.anchored and selection.anchor != 0) {
-                    selection.anchor -= 1;
-                }
-            }
         }
     }
 };
@@ -790,6 +802,7 @@ test "state: text buffer cursor commands" {
             .path = null,
             .name = "text buffer name",
             .contents = "Hello",
+            .line_ending = .unix,
         },
     );
     defer text_buffer.deinit();
@@ -800,24 +813,27 @@ test "state: text buffer cursor commands" {
     display_window_node.data.id = 1;
     {
         const selection = display_window_node.data.selections.items[0];
-        try testing.expectEqual(@as(usize, 0), selection.cursor);
-        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.cursor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.anchor);
         try testing.expectEqual(true, selection.primary);
     }
     text_buffer.command(display_window_node, .cursor_move_left);
     {
         const selection = display_window_node.data.selections.items[0];
-        try testing.expectEqual(@as(usize, 0), selection.cursor);
-        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.cursor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.anchor);
         try testing.expectEqual(true, selection.primary);
     }
 
-    display_window_node.data.selections.items[0] = kisa.Selection{ .cursor = 1, .anchor = 1 };
+    display_window_node.data.selections.items[0] = kisa.Selection{
+        .cursor = kisa.Selection.Position{ .offset = 1, .line = 1, .column = 2 },
+        .anchor = kisa.Selection.Position{ .offset = 1, .line = 1, .column = 2 },
+    };
     text_buffer.command(display_window_node, .cursor_move_left);
     {
         const selection = display_window_node.data.selections.items[0];
-        try testing.expectEqual(@as(usize, 0), selection.cursor);
-        try testing.expectEqual(@as(usize, 0), selection.anchor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.cursor);
+        try testing.expectEqual(kisa.Selection.Position{ .offset = 0, .line = 1, .column = 1 }, selection.anchor);
         try testing.expectEqual(true, selection.primary);
     }
 }
@@ -839,7 +855,10 @@ pub const DisplayWindow = struct {
     // TODO: add variables customizing the position in the text.
     pub fn init(workspace: *Workspace) !Self {
         var selections = std.ArrayList(kisa.Selection).init(workspace.ally);
-        try selections.append(kisa.Selection{ .cursor = 0, .anchor = 0 });
+        try selections.append(.{
+            .cursor = .{ .offset = 0, .line = 1, .column = 1 },
+            .anchor = .{ .offset = 0, .line = 1, .column = 1 },
+        });
         return Self{
             .workspace = workspace,
             .first_line_number = 1,

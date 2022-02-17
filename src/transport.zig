@@ -154,6 +154,7 @@ pub fn CommunicationMixin(comptime CommunicationContainer: type) type {
         }
 
         pub fn sendPacket(self: Self, packet: []const u8) !void {
+            // std.debug.print("sending: {s}\n", .{packet});
             switch (self.comms) {
                 .un_socket => |s| {
                     const bytes_sent = try os.send(s.socket, packet, 0);
