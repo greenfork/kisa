@@ -38,11 +38,7 @@ pub const MouseButton = enum {
 };
 
 pub const KeyCode = union(enum) {
-    // How to represent a null value? See discussions below
-    // https://github.com/ziglang/zig/issues/9415
-    // https://github.com/greenfork/kisa/commit/23cfb17ae335dfe044eb4f1cd798deb37b48d569#r53652535
-    // unrecognized: u0,
-    unicode_codepoint: u32,
+    unicode_codepoint: u21,
     function: u8,
     keysym: KeySym,
     mouse_button: MouseButton,
@@ -53,18 +49,18 @@ pub const Key = struct {
     code: KeyCode,
     modifiers: u8 = 0,
     // Any Unicode character can be UTF-8 encoded in no more than 6 bytes, plus terminating null
-    utf8: [7]u8 = undefined,
+    utf8: [6:0]u8 = undefined,
 
     // zig fmt: off
-        const shift_bit     = @as(u8, 1 << 0);
-        const alt_bit       = @as(u8, 1 << 1);
-        const ctrl_bit      = @as(u8, 1 << 2);
-        const super_bit     = @as(u8, 1 << 3);
-        const hyper_bit     = @as(u8, 1 << 4);
-        const meta_bit      = @as(u8, 1 << 5);
-        const caps_lock_bit = @as(u8, 1 << 6);
-        const num_lock_bit  = @as(u8, 1 << 7);
-        // zig fmt: on
+    const shift_bit     = @as(u8, 1 << 0);
+    const alt_bit       = @as(u8, 1 << 1);
+    const ctrl_bit      = @as(u8, 1 << 2);
+    const super_bit     = @as(u8, 1 << 3);
+    const hyper_bit     = @as(u8, 1 << 4);
+    const meta_bit      = @as(u8, 1 << 5);
+    const caps_lock_bit = @as(u8, 1 << 6);
+    const num_lock_bit  = @as(u8, 1 << 7);
+    // zig fmt: on
 
     pub fn hasShift(self: Key) bool {
         return (self.modifiers & shift_bit) != 0;

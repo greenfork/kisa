@@ -444,8 +444,6 @@ pub const Application = struct {
     client: Client,
     /// In threaded mode we call `join` on `deinit`. In not threaded mode this field is `null`.
     server_thread: ?std.Thread = null,
-    // This is post 0.8 version.
-    // server_thread: ?std.Thread = null,
 
     const Self = @This();
 
@@ -742,7 +740,7 @@ pub fn main() anyerror!void {
     _ = try arg_it.next(ally) orelse unreachable;
     const filename = blk: {
         if (arg_it.next(ally)) |file_name_delimited| {
-            break :blk try std.fs.cwd().realpathAlloc(ally, try file_name_delimited);
+            break :blk try file_name_delimited;
         } else {
             break :blk null;
         }
