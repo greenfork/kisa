@@ -10,9 +10,6 @@
 * Editor design
   - https://www.mattkeeter.com/projects/futureproof/
   - https://github.com/jamii/focus
-* Terminal key parsing
-  - https://github.com/janet-lang/janet/blob/master/src/mainclient/shell.c
-  - https://github.com/mawww/kakoune/blob/master/src/terminal_ui.cc
 * Diffing
   - https://github.com/Wilfred/difftastic - structural syntax-aware diffs
   - https://gitlab.com/ideasman42/emacs-diff-ansi - uses external tools and
@@ -42,5 +39,12 @@
 * GUI TUI interface
   - https://github.com/zenith391/zgt - GUI, early stage
   - https://github.com/xyaman/mibu - terminal manipulation, we don't need to implement it from scratch
+  - https://github.com/ziglibs/ansi-term - lots of interesting stuff on colors and styles
+  - https://github.com/janet-lang/janet/blob/master/src/mainclient/shell.c - key parsing example
+  - https://github.com/mawww/kakoune/blob/master/src/terminal_ui.cc - key parsing example
+  - https://github.com/neovim/libtermkey - key parsing example
+  - https://sw.kovidgoyal.net/kitty/keyboard-protocol/ - key parsing design
 * I18n
   - https://github.com/elias94/accent - accented characters
+* Searching
+  - https://github.com/ziglibs/string-searching - different algorithms
