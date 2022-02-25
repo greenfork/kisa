@@ -4,6 +4,8 @@
 ** TextMate
    - https://macromates.com/manual/en/language_grammars
    - https://www.apeth.com/nonblog/stories/textmatebundle.html
+** Modus themes
+   https://protesilaos.com/emacs/modus-themes
 * Incremental parsing
   - https://www.cs.umd.edu/~hammer/adapton/adapton-pldi2014.pdf
   - https://tree-sitter.github.io/tree-sitter/
@@ -24,9 +26,11 @@
   - https://github.com/ashok-khanna/parevil - parenthesis
   - https://github.com/meow-edit/meow - modal editing
   - https://github.com/AmaiKinono/puni - soft deletion
+  - https://andreyorst.gitlab.io/posts/2022-02-20-what-if-structural-editing-was-a-mistake/ - parenthesis
 * Indentation
   - https://github.com/sogaiu/jsf-indent
   - https://github.com/clojure-emacs/clojure-mode/blob/e1dc7caee76d117a366f8b8b1c2da7e6400636a8/clojure-mode.el#L777-L953
+  - https://github.com/semenInRussia/simple-indentation.el - generic rules for indentation
 * Filter search act
   - https://karthinks.com/software/avy-can-do-anything/
   - https://github.com/minad/vertico
@@ -48,3 +52,9 @@
   - https://github.com/elias94/accent - accented characters
 * Searching
   - https://github.com/ziglibs/string-searching - different algorithms
+* Git
+  - https://github.com/Artawower/blamer.el - git blame on the same line
+  - https://ianyepan.github.io/posts/emacs-git-gutter/ - git gutter
+* State-of-the-art
+  - https://github.com/brotzeit/rustic - Rust integration with TRAMP considerations and more
+  - https://gitlab.com/gopiandcode/gopcaml-mode - OCaml structural editing
