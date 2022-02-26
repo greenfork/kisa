@@ -21,6 +21,16 @@ comptime {
     }
 }
 
+pub fn init(in: std.fs.File, out: std.fs.File) !UI {
+    var ui = try UI.init(in, out);
+    try ui.prepare();
+    return ui;
+}
+
+pub fn deinit(self: *UI) void {
+    self.deinit();
+}
+
 fn parseColor(face_color: []const u8, default_color: kisa.Color) !kisa.Color {
     if (kisa.Color.string_map.get(face_color)) |color| {
         return color;

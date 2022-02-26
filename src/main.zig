@@ -1,67 +1,17 @@
 const std = @import("std");
 const testing = std.testing;
-const os = std.os;
-const io = std.io;
-const mem = std.mem;
-const net = std.net;
-const assert = std.debug.assert;
 const kisa = @import("kisa");
 const rpc = @import("rpc.zig");
 const state = @import("state.zig");
 const Config = @import("config.zig").Config;
 const transport = @import("transport.zig");
+const UI = @import("terminal_ui.zig");
 
 pub const MoveDirection = enum {
     up,
     down,
     left,
     right,
-};
-
-/// A high-level abstraction which accepts a frontend and provides a set of functions to operate on
-/// the frontent. Frontend itself contains all low-level functions which might not be all useful
-/// in a high-level interaction context.
-pub const UI = struct {
-    frontend: UIVT100,
-
-    pub const Error = UIVT100.Error;
-    const Self = @This();
-
-    pub fn init(frontend: UIVT100) Self {
-        return .{ .frontend = frontend };
-    }
-
-    pub fn draw(self: *Self, string: []const u8, first_line_number: u32, max_line_number: u32) !void {
-        _ = self;
-        _ = string;
-        _ = first_line_number;
-        _ = max_line_number;
-    }
-
-    pub inline fn textAreaRows(self: Self) u32 {
-        return self.frontend.textAreaRows();
-    }
-
-    pub inline fn textAreaCols(self: Self) u32 {
-        return self.frontend.textAreaCols();
-    }
-
-    pub inline fn nextKey(self: *Self) ?kisa.Key {
-        return self.frontend.nextKey();
-    }
-
-    pub fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
-        try self.frontend.moveCursor(direction, number);
-        try self.frontend.refresh();
-    }
-
-    pub inline fn setup(self: *Self) !void {
-        try self.frontend.setup();
-    }
-
-    pub inline fn teardown(self: *Self) void {
-        self.frontend.teardown();
-    }
 };
 
 /// Commands and occasionally queries is a general interface for interacting with the State
@@ -129,7 +79,7 @@ pub const Commands = struct {
 };
 
 pub const Server = struct {
-    ally: mem.Allocator,
+    ally: std.mem.Allocator,
     config: Config,
     watcher: transport.Watcher,
     workspace: state.Workspace,
@@ -148,7 +98,7 @@ pub const Server = struct {
     };
 
     /// `initDynamic` must be called right after `init`.
-    pub fn init(ally: mem.Allocator, address: *net.Address) !Self {
+    pub fn init(ally: std.mem.Allocator, address: *std.net.Address) !Self {
         defer ally.destroy(address);
         const listen_socket = try transport.bindUnixSocket(address);
         var watcher = transport.Watcher.init(ally);
@@ -199,7 +149,7 @@ pub const Server = struct {
     fn addClient(
         self: *Self,
         id: state.Workspace.Id,
-        socket: os.socket_t,
+        socket: std.os.socket_t,
         active_display_state: state.ActiveDisplayState,
     ) !ClientRepresentation {
         try self.watcher.addConnectionSocket(socket, id);
@@ -326,8 +276,8 @@ pub const Server = struct {
         }
     }
 
-    fn processNewConnection(self: *Self, polled_fd: os.socket_t) !void {
-        const accepted_socket = try os.accept(polled_fd, null, null, 0);
+    fn processNewConnection(self: *Self, polled_fd: std.os.socket_t) !void {
+        const accepted_socket = try std.os.accept(polled_fd, null, null, 0);
         const client_id = self.nextClientId();
         const client = try self.addClient(
             client_id,
@@ -423,7 +373,7 @@ pub const Server = struct {
         }
     }
 
-    fn readConfig(ally: mem.Allocator) !Config {
+    fn readConfig(ally: std.mem.Allocator) !Config {
         // var path_buf: [256]u8 = undefined;
         // const path = try std.fs.cwd().realpath("kisarc.zzz", &path_buf);
         var config = Config.init(ally);
@@ -457,7 +407,7 @@ pub const Application = struct {
     /// currently it is only relevant for `forked` concurrency model. When this function returns
     /// `Application` instance, this is client code.
     pub fn start(
-        ally: mem.Allocator,
+        ally: std.mem.Allocator,
         concurrency_model: ConcurrencyModel,
     ) !?Self {
         const unix_socket_path = try transport.pathForUnixSocket(ally);
@@ -466,13 +416,13 @@ pub const Application = struct {
 
         switch (concurrency_model) {
             .forked => {
-                const child_pid = try os.fork();
+                const child_pid = try std.os.fork();
                 if (child_pid == 0) {
                     // Server
 
                     // Close stdout and stdin on the server since we don't use them.
-                    os.close(io.getStdIn().handle);
-                    os.close(io.getStdOut().handle);
+                    std.os.close(std.io.getStdIn().handle);
+                    std.os.close(std.io.getStdOut().handle);
 
                     // This is post 0.8 version.
                     // try startServer(ally, address);
@@ -480,8 +430,7 @@ pub const Application = struct {
                     return null;
                 } else {
                     // Client
-                    var uivt100 = try UIVT100.init();
-                    var ui = UI.init(uivt100);
+                    var ui = try UI.init(std.io.getStdIn(), std.io.getStdOut());
                     var client = Client.init(ally, ui);
                     try client.register(address);
                     return Self{ .client = client };
@@ -489,10 +438,9 @@ pub const Application = struct {
             },
             .threaded => {
                 const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
-                var uivt100 = try UIVT100.init();
-                var ui = UI.init(uivt100);
+                var ui = try UI.init(std.io.getStdIn(), std.io.getStdOut());
                 var client = Client.init(ally, ui);
-                const address_for_client = try ally.create(net.Address);
+                const address_for_client = try ally.create(std.net.Address);
                 address_for_client.* = address.*;
                 try client.register(address_for_client);
                 return Self{ .client = client, .server_thread = server_thread };
@@ -501,7 +449,7 @@ pub const Application = struct {
         unreachable;
     }
 
-    fn startServer(ally: mem.Allocator, address: *net.Address) !void {
+    fn startServer(ally: std.mem.Allocator, address: *std.net.Address) !void {
         var server = try Server.init(ally, address);
         server.initDynamic();
         errdefer server.deinit();
@@ -518,7 +466,7 @@ pub const Application = struct {
 };
 
 pub const Client = struct {
-    ally: mem.Allocator,
+    ally: std.mem.Allocator,
     ui: UI,
     server: ServerForClient,
     watcher: transport.Watcher,
@@ -533,7 +481,7 @@ pub const Client = struct {
         pub usingnamespace transport.CommunicationMixin(@This());
     };
 
-    pub fn init(ally: mem.Allocator, ui: UI) Self {
+    pub fn init(ally: std.mem.Allocator, ui: UI) Self {
         return Self{
             .ally = ally,
             .ui = ui,
@@ -548,9 +496,10 @@ pub const Client = struct {
         // TEST: Check for race conditions.
         // std.time.sleep(std.time.ns_per_s * 1);
         self.watcher.deinit();
+        self.ui.deinit();
     }
 
-    pub fn register(self: *Self, address: *net.Address) !void {
+    pub fn register(self: *Self, address: *std.net.Address) !void {
         defer self.ally.destroy(address);
         self.server = ServerForClient.initWithUnixSocket(
             try transport.connectToUnixSocket(address),
@@ -559,7 +508,7 @@ pub const Client = struct {
         // Here we custom checking instead of waitForResponse because we expect `null` id which
         // is the single place where `null` in id is allowed for successful response.
         const response = (try self.server.recv(rpc.EmptyResponse, &request_buf)).?;
-        assert(response == .Success);
+        std.debug.assert(response == .Success);
         const message_id = self.nextMessageId();
         const message = rpc.commandRequest(
             .initialize,
@@ -752,214 +701,6 @@ pub fn main() anyerror!void {
     }
     std.debug.print("So far nothing in `main`, try `zig build test`\n", .{});
 }
-
-/// UI frontent. VT100 is an old hardware terminal from 1978. Although it lacks a lot of capabilities
-/// which are exposed in this implementation, such as colored output, it established a standard
-/// of ASCII escape sequences which is implemented in most terminal emulators as of today.
-/// Later this standard was extended and this implementation is a common denominator that is
-/// likely to be supported in most terminal emulators.
-pub const UIVT100 = struct {
-    in_stream: std.fs.File,
-    out_stream: std.fs.File,
-    original_termois: ?os.termios,
-    buffered_writer_ctx: RawBufferedWriterCtx,
-    rows: u32,
-    cols: u32,
-
-    pub const Error = error{
-        NotTTY,
-        NoAnsiEscapeSequences,
-        NoWindowSize,
-    } || os.TermiosSetError || std.fs.File.WriteError;
-
-    const Self = @This();
-
-    const write_buffer_size = 4096;
-    /// Control Sequence Introducer, see console_codes(4)
-    const csi = "\x1b[";
-    const status_line_width = 1;
-
-    pub fn init() Error!Self {
-        const in_stream = io.getStdIn();
-        const out_stream = io.getStdOut();
-        if (!in_stream.isTty()) return Error.NotTTY;
-        if (!out_stream.supportsAnsiEscapeCodes()) return Error.NoAnsiEscapeSequences;
-        var uivt100 = UIVT100{
-            .in_stream = in_stream,
-            .out_stream = out_stream,
-            .original_termois = try os.tcgetattr(in_stream.handle),
-            .buffered_writer_ctx = RawBufferedWriterCtx{ .unbuffered_writer = out_stream.writer() },
-            .rows = undefined,
-            .cols = undefined,
-        };
-        try uivt100.updateWindowSize();
-
-        return uivt100;
-    }
-
-    pub fn setup(self: *Self) Error!void {
-        // Black magic, see https://github.com/antirez/kilo
-        var raw_termios = self.original_termois.?;
-        raw_termios.iflag &=
-            ~(@as(os.tcflag_t, os.BRKINT) | os.ICRNL | os.INPCK | os.ISTRIP | os.IXON);
-        raw_termios.oflag &= ~(@as(os.tcflag_t, os.OPOST));
-        raw_termios.cflag |= os.CS8;
-        raw_termios.lflag &= ~(@as(os.tcflag_t, os.ECHO) | os.ICANON | os.IEXTEN | os.ISIG);
-        // Polling read, doesn't block
-        raw_termios.cc[os.VMIN] = 0;
-        raw_termios.cc[os.VTIME] = 0;
-        try os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, raw_termios);
-    }
-
-    pub fn teardown(self: *Self) void {
-        if (self.original_termois) |termios| {
-            os.tcsetattr(self.in_stream.handle, os.TCSA.FLUSH, termios) catch |err| {
-                std.debug.print("UIVT100.teardown failed with {}\n", .{err});
-            };
-            self.original_termois = null;
-        }
-    }
-
-    fn nextByte(self: *Self) ?u8 {
-        return self.in_stream.reader().readByte() catch |err| switch (err) {
-            error.EndOfStream => return null,
-            error.NotOpenForReading => return null,
-            else => {
-                std.debug.print("Unexpected error: {}\r\n", .{err});
-                return 0;
-            },
-        };
-    }
-
-    pub fn nextKey(self: *Self) ?kisa.Key {
-        if (self.nextByte()) |byte| {
-            if (byte == 3) {
-                return kisa.Key.ctrl('c');
-            }
-            return kisa.Key.ascii(byte);
-        } else {
-            return null;
-        }
-    }
-
-    // Do type magic to expose buffered writer in 2 modes:
-    // * raw_writer - we don't try to do anything smart, mostly for console codes
-    // * writer - we try to do what is expected when writing to a screen
-    const RawUnbufferedWriter = io.Writer(std.fs.File, std.fs.File.WriteError, std.fs.File.write);
-    const RawBufferedWriterCtx = io.BufferedWriter(write_buffer_size, RawUnbufferedWriter);
-    pub const RawBufferedWriter = RawBufferedWriterCtx.Writer;
-    pub const BufferedWriter = io.Writer(*UIVT100, RawBufferedWriterCtx.Error, writerfn);
-
-    fn raw_writer(self: *Self) RawBufferedWriter {
-        return self.buffered_writer_ctx.writer();
-    }
-
-    pub fn writer(self: *Self) BufferedWriter {
-        return .{ .context = self };
-    }
-
-    fn writerfn(self: *Self, string: []const u8) !usize {
-        for (string) |ch| {
-            if (ch == '\n') try self.raw_writer().writeByte('\r');
-            try self.raw_writer().writeByte(ch);
-        }
-        return string.len;
-    }
-
-    pub fn clear(self: *Self) !void {
-        try self.ccEraseDisplay();
-        try self.ccMoveCursor(1, 1);
-    }
-
-    // All our output is buffered, when we actually want to display something to the screen,
-    // this function should be called. Buffered output is better for performance and it
-    // avoids cursor flickering.
-    // This function should not be used as a part of other functions inside a frontend
-    // implementation. Instead it should be used inside `UI` for building more complex
-    // control flows.
-    pub fn refresh(self: *Self) !void {
-        try self.buffered_writer_ctx.flush();
-    }
-
-    pub fn textAreaRows(self: Self) u32 {
-        return self.rows - status_line_width;
-    }
-
-    pub fn textAreaCols(self: Self) u32 {
-        return self.cols;
-    }
-
-    pub fn moveCursor(self: *Self, direction: MoveDirection, number: u32) !void {
-        switch (direction) {
-            .up => {
-                try self.ccMoveCursorUp(number);
-            },
-            .down => {
-                try self.ccMoveCursorDown(number);
-            },
-            .right => {
-                try self.ccMoveCursorRight(number);
-            },
-            .left => {
-                try self.ccMoveCursorLeft(number);
-            },
-        }
-    }
-
-    fn getWindowSize(self: Self, rows: *u32, cols: *u32) !void {
-        while (true) {
-            var window_size: os.linux.winsize = undefined;
-            const fd = @bitCast(usize, @as(isize, self.in_stream.handle));
-            switch (os.linux.syscall3(.ioctl, fd, os.linux.T.IOCGWINSZ, @ptrToInt(&window_size))) {
-                0 => {
-                    rows.* = window_size.ws_row;
-                    cols.* = window_size.ws_col;
-                    return;
-                },
-                @enumToInt(os.E.INTR) => continue,
-                else => return Error.NoWindowSize,
-            }
-        }
-    }
-
-    fn updateWindowSize(self: *Self) !void {
-        var rows: u32 = undefined;
-        var cols: u32 = undefined;
-        try self.getWindowSize(&rows, &cols);
-        self.rows = rows;
-        self.cols = cols;
-    }
-
-    // "cc" stands for "console code", see console_codes(4).
-    // Some of the names clash with the desired names of public-facing API functions,
-    // so we use a prefix to disambiguate them. Every console code should be in a separate
-    // function so that it has a name and has an easy opportunity for parameterization.
-
-    fn ccEraseDisplay(self: *Self) !void {
-        try self.raw_writer().print("{s}2J", .{csi});
-    }
-    fn ccMoveCursor(self: *Self, row: u32, col: u32) !void {
-        try self.raw_writer().print("{s}{d};{d}H", .{ csi, row, col });
-    }
-    fn ccMoveCursorUp(self: *Self, number: u32) !void {
-        try self.raw_writer().print("{s}{d}A", .{ csi, number });
-    }
-    fn ccMoveCursorDown(self: *Self, number: u32) !void {
-        try self.raw_writer().print("{s}{d}B", .{ csi, number });
-    }
-    fn ccMoveCursorRight(self: *Self, number: u32) !void {
-        try self.raw_writer().print("{s}{d}C", .{ csi, number });
-    }
-    fn ccMoveCursorLeft(self: *Self, number: u32) !void {
-        try self.raw_writer().print("{s}{d}D", .{ csi, number });
-    }
-    fn ccHideCursor(self: *Self) !void {
-        try self.raw_writer().print("{s}?25l", .{csi});
-    }
-    fn ccShowCursor(self: *Self) !void {
-        try self.raw_writer().print("{s}?25h", .{csi});
-    }
-};
 
 const help_string =
     \\Usage: kisa file
