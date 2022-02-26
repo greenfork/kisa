@@ -5,7 +5,7 @@ const rpc = @import("rpc.zig");
 const state = @import("state.zig");
 const Config = @import("config.zig").Config;
 const transport = @import("transport.zig");
-const UI = @import("terminal_ui.zig");
+const ui_api = @import("ui_api.zig");
 
 pub const MoveDirection = enum {
     up,
@@ -430,7 +430,7 @@ pub const Application = struct {
                     return null;
                 } else {
                     // Client
-                    var ui = try UI.init(std.io.getStdIn(), std.io.getStdOut());
+                    var ui = try ui_api.init(std.io.getStdIn(), std.io.getStdOut());
                     var client = Client.init(ally, ui);
                     try client.register(address);
                     return Self{ .client = client };
@@ -438,7 +438,7 @@ pub const Application = struct {
             },
             .threaded => {
                 const server_thread = try std.Thread.spawn(.{}, startServer, .{ ally, address });
-                var ui = try UI.init(std.io.getStdIn(), std.io.getStdOut());
+                var ui = try ui_api.init(std.io.getStdIn(), std.io.getStdOut());
                 var client = Client.init(ally, ui);
                 const address_for_client = try ally.create(std.net.Address);
                 address_for_client.* = address.*;
@@ -467,7 +467,7 @@ pub const Application = struct {
 
 pub const Client = struct {
     ally: std.mem.Allocator,
-    ui: UI,
+    ui: ui_api.UI,
     server: ServerForClient,
     watcher: transport.Watcher,
     last_message_id: u32 = 0,
@@ -481,7 +481,7 @@ pub const Client = struct {
         pub usingnamespace transport.CommunicationMixin(@This());
     };
 
-    pub fn init(ally: std.mem.Allocator, ui: UI) Self {
+    pub fn init(ally: std.mem.Allocator, ui: ui_api.UI) Self {
         return Self{
             .ally = ally,
             .ui = ui,
@@ -496,7 +496,7 @@ pub const Client = struct {
         // TEST: Check for race conditions.
         // std.time.sleep(std.time.ns_per_s * 1);
         self.watcher.deinit();
-        self.ui.deinit();
+        ui_api.deinit(&self.ui);
     }
 
     pub fn register(self: *Self, address: *std.net.Address) !void {
@@ -547,21 +547,21 @@ pub const Client = struct {
                     },
                 }
             }
-            if (self.ui.nextKey()) |key| {
-                switch (key.code) {
-                    .unicode_codepoint => {
-                        if (key.isCtrl('c')) {
-                            break;
-                        }
-                        // TODO: work with multiplier.
-                        _ = try self.keypress(key, 1);
-                    },
-                    else => {
-                        std.debug.print("Unrecognized key: {}\r\n", .{key});
-                        return error.UnrecognizedKey;
-                    },
-                }
-            }
+            // if (self.ui.nextKey()) |key| {
+            //     switch (key.code) {
+            //         .unicode_codepoint => {
+            //             if (key.isCtrl('c')) {
+            //                 break;
+            //             }
+            //             // TODO: work with multiplier.
+            //             _ = try self.keypress(key, 1);
+            //         },
+            //         else => {
+            //             std.debug.print("Unrecognized key: {}\r\n", .{key});
+            //             return error.UnrecognizedKey;
+            //         },
+            //     }
+            // }
         }
     }
 

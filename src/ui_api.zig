@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 const kisa = @import("kisa");
-const UI = @import("terminal_ui.zig");
+pub const UI = @import("terminal_ui.zig");
 
 comptime {
     const interface_functions = [_][]const u8{
