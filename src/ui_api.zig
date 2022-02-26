@@ -24,6 +24,7 @@ comptime {
 pub fn init(in: std.fs.File, out: std.fs.File) !UI {
     var ui = try UI.init(in, out);
     try ui.prepare();
+    try ui.clearScreen();
     return ui;
 }
 
@@ -230,10 +231,8 @@ pub fn main() !void {
         },
     };
 
-    var ui = try UI.init(std.io.getStdIn(), std.io.getStdOut());
+    var ui = try init(std.io.getStdIn(), std.io.getStdOut());
     defer ui.deinit();
-    try ui.prepare();
-    try ui.clearScreen();
     {
         const default_style = kisa.Style{};
         try draw(&ui, draw_data, default_style);

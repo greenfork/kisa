@@ -12,6 +12,9 @@ pub const Dimensions = struct {
     width: u16,
     height: u16,
 };
+const Support = struct {
+    ansi_escape_codes: bool,
+};
 const esc = "\x1B";
 const csi = esc ++ "[";
 const style_reset = csi ++ "0m";
@@ -30,10 +33,10 @@ dimensions: Dimensions,
 in: std.fs.File,
 out: std.fs.File,
 writer_ctx: WriterCtx,
+support: Support,
 
 pub fn init(in: std.fs.File, out: std.fs.File) !TerminalUI {
     if (!in.isTty()) return error.NotTTY;
-    if (!out.supportsAnsiEscapeCodes()) return error.AnsiEscapeCodesNotSupported;
 
     var original_termios = try std.os.tcgetattr(in.handle);
     var termios = original_termios;
@@ -56,10 +59,11 @@ pub fn init(in: std.fs.File, out: std.fs.File) !TerminalUI {
     try std.os.tcsetattr(in.handle, .FLUSH, termios);
     return TerminalUI{
         .original_termios = original_termios,
-        .dimensions = try getWindowSize(out.handle),
+        .dimensions = try getWindowSize(in.handle),
         .in = in,
         .out = out,
         .writer_ctx = .{ .unbuffered_writer = out.writer() },
+        .support = .{ .ansi_escape_codes = out.supportsAnsiEscapeCodes() },
     };
 }
 
@@ -76,11 +80,15 @@ fn getWindowSize(handle: std.os.fd_t) !Dimensions {
 }
 
 pub fn prepare(self: *TerminalUI) !void {
-    try self.writer().writeAll(cursor_hide);
+    if (self.support.ansi_escape_codes) {
+        try self.writer().writeAll(cursor_hide);
+    }
 }
 
 pub fn deinit(self: *TerminalUI) void {
-    self.writer().writeAll(cursor_show) catch {};
+    if (self.support.ansi_escape_codes) {
+        self.writer().writeAll(cursor_show) catch {};
+    }
     self.flush() catch {};
     std.os.tcsetattr(self.in.handle, .FLUSH, self.original_termios) catch {};
 }
@@ -94,12 +102,18 @@ pub fn flush(self: *TerminalUI) !void {
 }
 
 pub fn clearScreen(self: *TerminalUI) !void {
-    try self.writer().writeAll(clear_all);
-    try goTo(self.writer(), 1, 1);
+    if (self.support.ansi_escape_codes) {
+        try self.writer().writeAll(clear_all);
+        try goTo(self.writer(), 1, 1);
+    }
 }
 
 pub fn writeNewline(self: *TerminalUI) !void {
-    try self.writer().writeAll("\n\r");
+    if (self.support.ansi_escape_codes) {
+        try self.writer().writeAll("\n\r");
+    } else {
+        try self.writer().writeAll("\n");
+    }
 }
 
 fn goTo(w: anytype, x: u16, y: u16) !void {
@@ -153,11 +167,17 @@ fn writeFontStyle(w: anytype, font_style: kisa.FontStyle) !void {
 
 pub fn writeFormatted(self: *TerminalUI, style: kisa.Style, string: []const u8) !void {
     var w = self.writer();
-    try writeFg(w, style.foreground);
-    try writeBg(w, style.background);
-    try writeFontStyle(w, style.font_style);
+    if (self.support.ansi_escape_codes) {
+        try writeFg(w, style.foreground);
+        try writeBg(w, style.background);
+        try writeFontStyle(w, style.font_style);
+    }
+
     try w.writeAll(string);
-    try w.writeAll(style_reset);
+
+    if (self.support.ansi_escape_codes) {
+        try w.writeAll(style_reset);
+    }
 }
 
 // Run from project root: zig build run-terminal-ui
