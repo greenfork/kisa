@@ -4,9 +4,8 @@ const std = @import("std");
 const mem = std.mem;
 const testing = std.testing;
 const kisa = @import("kisa");
-const Zigstr = @import("zigstr");
 
-pub const Contents = Zigstr;
+pub const Contents = std.ArrayList(u8);
 
 /// Implementation of the core functionality of the "text buffer" as a contiguous array buffer.
 pub const Buffer = struct {
@@ -36,14 +35,16 @@ pub const Buffer = struct {
             => |e| return e,
         };
         return Self{
-            .contents = try Contents.fromOwnedBytes(ally, contents),
+            .contents = Contents.fromOwnedSlice(ally, contents),
             .line_ending = line_ending,
         };
     }
 
     pub fn initWithText(ally: mem.Allocator, text: []const u8, line_ending: kisa.LineEnding) !Self {
+        var contents = try Contents.initCapacity(ally, text.len);
+        contents.appendSliceAssumeCapacity(text);
         return Self{
-            .contents = try Contents.fromBytes(ally, text),
+            .contents = contents,
             .line_ending = line_ending,
         };
     }
@@ -53,11 +54,15 @@ pub const Buffer = struct {
     }
 
     pub fn byteCount(self: Self) kisa.Selection.Offset {
-        return @intCast(kisa.Selection.Offset, self.contents.byteCount());
+        return @intCast(kisa.Selection.Offset, self.contents.items.len);
     }
 
     pub fn byteAt(self: Self, offset: kisa.Selection.Offset) u8 {
-        return self.contents.byteAt(offset) catch 0;
+        if (offset < self.byteCount()) {
+            return self.contents.items[offset];
+        } else {
+            return 0;
+        }
     }
 
     pub fn codepointAt(self: Self, offset: kisa.Selection.Offset) !u21 {
@@ -71,11 +76,14 @@ pub const Buffer = struct {
     }
 
     pub fn byteSlice(self: Self, start: usize, end: usize) ![]const u8 {
-        return try self.contents.byteSlice(start, end);
+        if (start > end) return error.StartIsBiggerThanEnd;
+        if (start >= self.byteCount()) return error.StartBiggerThanBufferLength;
+        if (end > self.byteCount()) return error.EndBiggerThanBufferLength;
+        return self.contents.items[start..end];
     }
 
     pub fn slice(self: Self) []const u8 {
-        return self.contents.bytes.items[0..];
+        return self.contents.items[0..];
     }
 
     pub fn nextCodepointPosition(self: Self, position: kisa.Selection.Position) kisa.Selection.Position {
@@ -291,12 +299,12 @@ pub const Buffer = struct {
         if (!std.unicode.utf8ValidateSlice(bytes)) return error.InvalidUtf8Sequence;
         if (offset > self.byteCount()) return error.OffsetTooBig;
         if (offset == self.byteCount()) {
-            try self.contents.bytes.appendSlice(bytes);
+            try self.contents.appendSlice(bytes);
         } else {
             if (utf8IsTrailing(self.byteAt(offset))) return error.MiddleOfCodepoint;
             if (self.byteAt(offset) == '\n' and self.line_ending == .dos)
                 return error.MiddleOfDosNewline;
-            try self.contents.bytes.insertSlice(offset, bytes);
+            try self.contents.insertSlice(offset, bytes);
         }
     }
 
@@ -321,16 +329,16 @@ pub const Buffer = struct {
         };
 
         if (start == end and endlen == 1) {
-            _ = self.contents.bytes.orderedRemove(start);
+            _ = self.contents.orderedRemove(start);
         } else {
             const newlen = self.byteCount() + start - (end + endlen - 1) - 1;
             std.mem.copy(
                 u8,
-                self.contents.bytes.items[start..newlen],
-                self.contents.bytes.items[end + endlen ..],
+                self.contents.items[start..newlen],
+                self.contents.items[end + endlen ..],
             );
-            std.mem.set(u8, self.contents.bytes.items[newlen..], undefined);
-            self.contents.bytes.items.len = newlen;
+            std.mem.set(u8, self.contents.items[newlen..], undefined);
+            self.contents.items.len = newlen;
         }
     }
 
@@ -413,7 +421,7 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "Dobrý deň", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 11), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 11), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 1, .line = 1, .column = 2 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 3 }, b.nextCodepointPosition(.{ .offset = 1, .line = 1, .column = 2 }));
         try testing.expectEqual(SP{ .offset = 3, .line = 1, .column = 4 }, b.nextCodepointPosition(.{ .offset = 2, .line = 1, .column = 3 }));
@@ -430,7 +438,7 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
@@ -438,7 +446,7 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ýý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 4), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 4), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.nextCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.nextCodepointPosition(.{ .offset = 2, .line = 1, .column = 2 }));
@@ -449,21 +457,21 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.nextCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.nextCodepointPosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 3, .line = 3, .column = 1 }, b.nextCodepointPosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -474,7 +482,7 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 })); // \r
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 1 }, b.nextCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 })); // \n
         try testing.expectEqual(SP{ .offset = 3, .line = 2, .column = 2 }, b.nextCodepointPosition(.{ .offset = 2, .line = 2, .column = 1 })); // 1
@@ -489,7 +497,7 @@ test "buffer: nextCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.nextCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.nextCodepointPosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 3, .line = 3, .column = 1 }, b.nextCodepointPosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -503,7 +511,7 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "Dobrý deň", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 11), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 11), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 9, .line = 1, .column = 9 }, b.previousCodepointPosition(.{ .offset = 11, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 9, .line = 1, .column = 9 }, b.previousCodepointPosition(.{ .offset = 10, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 8, .line = 1, .column = 8 }, b.previousCodepointPosition(.{ .offset = 9, .line = 1, .column = 9 })); // ň
@@ -520,7 +528,7 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 2, .line = 0, .column = 0 }));
@@ -528,7 +536,7 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ýý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 4), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 4), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 2, .line = 1, .column = 2 }));
@@ -539,21 +547,21 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 1, .column = 1 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.previousCodepointPosition(.{ .offset = 2, .line = 2, .column = 2 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.previousCodepointPosition(.{ .offset = 3, .line = 3, .column = 1 }));
@@ -563,7 +571,7 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 0, .line = 1, .column = 1 })); // \r
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 0, .column = 0 })); // \n
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 2, .line = 2, .column = 1 })); // 1
@@ -579,7 +587,7 @@ test "buffer: previousCodepointPosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.previousCodepointPosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.previousCodepointPosition(.{ .offset = 2, .line = 2, .column = 2 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.previousCodepointPosition(.{ .offset = 3, .line = 3, .column = 1 }));
@@ -596,7 +604,7 @@ test "buffer: beginningOfLinePosition" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 5), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 5), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 1, .column = 2 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 1, .column = 3 }));
@@ -613,7 +621,7 @@ test "buffer: beginningOfLinePosition" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 3, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 3, .column = 1 }));
@@ -624,7 +632,7 @@ test "buffer: beginningOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 0, .column = 0 }));
@@ -633,7 +641,7 @@ test "buffer: beginningOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ýý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 4), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 4), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 1, .column = 2 }));
@@ -644,21 +652,21 @@ test "buffer: beginningOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -669,7 +677,7 @@ test "buffer: beginningOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 })); // \r
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 })); // \n
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 2, .column = 1 })); // 1
@@ -685,7 +693,7 @@ test "buffer: beginningOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.beginningOfLinePosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -703,7 +711,7 @@ test "buffer: endOfLinePosition" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 5), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 5), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 3 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 3 }, b.endOfLinePosition(.{ .offset = 1, .line = 1, .column = 2 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 3 }, b.endOfLinePosition(.{ .offset = 2, .line = 1, .column = 3 }));
@@ -720,7 +728,7 @@ test "buffer: endOfLinePosition" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 1, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 1, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 4, .line = 1, .column = 3 }, b.endOfLinePosition(.{ .offset = 2, .line = 1, .column = 1 }));
@@ -731,7 +739,7 @@ test "buffer: endOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 2, .line = 0, .column = 0 }));
@@ -740,7 +748,7 @@ test "buffer: endOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "ýý", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 4), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 4), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.endOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.endOfLinePosition(.{ .offset = 2, .line = 1, .column = 2 }));
@@ -751,21 +759,21 @@ test "buffer: endOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 1, .line = 1, .column = 1 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 1, .line = 1, .column = 1 }));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -776,7 +784,7 @@ test "buffer: endOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 })); // \r
         try testing.expectEqual(SP{ .offset = 3, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 1, .line = 0, .column = 0 })); // \n
         try testing.expectEqual(SP{ .offset = 3, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 2, .line = 2, .column = 1 })); // 1
@@ -792,7 +800,7 @@ test "buffer: endOfLinePosition" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.endOfLinePosition(.{ .offset = 0, .line = 1, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 1, .line = 2, .column = 1 }));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.endOfLinePosition(.{ .offset = 2, .line = 2, .column = 2 }));
@@ -813,7 +821,7 @@ test "buffer: positionFromOffset" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromOffset(1));
         try testing.expectEqual(SP{ .offset = 2, .line = 3, .column = 1 }, b.positionFromOffset(2));
@@ -831,7 +839,7 @@ test "buffer: positionFromOffset" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 9), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 9), b.contents.items.len);
 
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromOffset(1));
@@ -847,7 +855,7 @@ test "buffer: positionFromOffset" {
         const text = "ý";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(1));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(2));
@@ -856,7 +864,7 @@ test "buffer: positionFromOffset" {
         const text = "ýý";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 4), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 4), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.positionFromOffset(1));
         try testing.expectEqual(SP{ .offset = 2, .line = 1, .column = 2 }, b.positionFromOffset(2));
@@ -867,21 +875,21 @@ test "buffer: positionFromOffset" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(1));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(1));
     }
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromOffset(1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.positionFromOffset(2));
@@ -892,7 +900,7 @@ test "buffer: positionFromOffset" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0)); // \r
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(1)); // \n
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 1 }, b.positionFromOffset(2)); // 1
@@ -908,7 +916,7 @@ test "buffer: positionFromOffset" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromOffset(0));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromOffset(1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.positionFromOffset(2));
@@ -929,7 +937,7 @@ test "buffer: positionFromLineAndColumn" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromLineAndColumn(2, 1));
         try testing.expectEqual(SP{ .offset = 2, .line = 3, .column = 1 }, b.positionFromLineAndColumn(3, 1));
@@ -954,7 +962,7 @@ test "buffer: positionFromLineAndColumn" {
         ;
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 9), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 9), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromLineAndColumn(2, 1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.positionFromLineAndColumn(2, 2));
@@ -968,7 +976,7 @@ test "buffer: positionFromLineAndColumn" {
         const text = "ý";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 2), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 2), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 2));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(2, 1));
@@ -976,7 +984,7 @@ test "buffer: positionFromLineAndColumn" {
     {
         var b = try Buffer.initWithText(testing.allocator, "", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 2));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(2, 1));
@@ -984,7 +992,7 @@ test "buffer: positionFromLineAndColumn" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 1), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 1), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 2));
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(2, 1));
@@ -992,7 +1000,7 @@ test "buffer: positionFromLineAndColumn" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\n1\n\n2\n", .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromLineAndColumn(2, 1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.positionFromLineAndColumn(2, 2));
@@ -1003,7 +1011,7 @@ test "buffer: positionFromLineAndColumn" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r\n1\r\n\r\n2\r\n", .dos);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 1 }, b.positionFromLineAndColumn(2, 1));
         try testing.expectEqual(SP{ .offset = 3, .line = 2, .column = 2 }, b.positionFromLineAndColumn(2, 2));
@@ -1014,7 +1022,7 @@ test "buffer: positionFromLineAndColumn" {
     {
         var b = try Buffer.initWithText(testing.allocator, "\r1\r\r2\r", .old_mac);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 6), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 6), b.contents.items.len);
         try testing.expectEqual(SP{ .offset = 0, .line = 1, .column = 1 }, b.positionFromLineAndColumn(1, 1));
         try testing.expectEqual(SP{ .offset = 1, .line = 2, .column = 1 }, b.positionFromLineAndColumn(2, 1));
         try testing.expectEqual(SP{ .offset = 2, .line = 2, .column = 2 }, b.positionFromLineAndColumn(2, 2));
@@ -1061,7 +1069,7 @@ test "buffer: removeBytes" {
         const text = "ý01234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try testing.expectError(error.StartIsBiggerThanEnd, b.removeBytes(2, 0));
         try testing.expectError(error.StartBiggerThanBufferLength, b.removeBytes(10, 10));
         try testing.expectError(error.EndBiggerThanBufferLength, b.removeBytes(0, 10));
@@ -1082,7 +1090,7 @@ test "buffer: removeBytes" {
         const text = "";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 0), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 0), b.contents.items.len);
         try testing.expectError(error.StartBiggerThanBufferLength, b.removeBytes(0, 0));
     }
     {
@@ -1103,7 +1111,7 @@ test "buffer: removeBytes" {
         const text = "0123456789";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(0, 9);
         try testing.expectEqualStrings("", b.slice());
     }
@@ -1111,7 +1119,7 @@ test "buffer: removeBytes" {
         const text = "0123456789";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(0, 5);
         try testing.expectEqualStrings("6789", b.slice());
     }
@@ -1119,7 +1127,7 @@ test "buffer: removeBytes" {
         const text = "0123456789";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(5, 9);
         try testing.expectEqualStrings("01234", b.slice());
     }
@@ -1127,7 +1135,7 @@ test "buffer: removeBytes" {
         const text = "0123456789";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(2, 7);
         try testing.expectEqualStrings("0189", b.slice());
     }
@@ -1135,7 +1143,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(0, 3);
         try testing.expectEqualStrings("234567", b.slice());
     }
@@ -1143,7 +1151,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(0, 1);
         try testing.expectEqualStrings("1234567", b.slice());
     }
@@ -1151,7 +1159,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(0, 0);
         try testing.expectEqualStrings("ý1234567", b.slice());
     }
@@ -1159,7 +1167,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(1, 1);
         try testing.expectEqualStrings("01234567", b.slice());
     }
@@ -1167,7 +1175,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(1, 3);
         try testing.expectEqualStrings("0234567", b.slice());
     }
@@ -1175,7 +1183,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(3, 3);
         try testing.expectEqualStrings("0ý234567", b.slice());
     }
@@ -1183,7 +1191,7 @@ test "buffer: removeBytes" {
         const text = "0ý1234567";
         var b = try Buffer.initWithText(testing.allocator, text, .unix);
         defer b.deinit();
-        try testing.expectEqual(@as(usize, 10), b.contents.bytes.items.len);
+        try testing.expectEqual(@as(usize, 10), b.contents.items.len);
         try b.removeBytes(3, 4);
         try testing.expectEqualStrings("0ý34567", b.slice());
     }
