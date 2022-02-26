@@ -701,13 +701,13 @@ test "main: start application threaded via socket" {
             const draw_data = try client.edit("/home/grfork/reps/kisa/kisarc.zzz");
             try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
             try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
-            try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
+            try testing.expectEqualStrings("hello", draw_data.lines[0].segments[0].contents);
         }
         {
             const draw_data = try client.keypress(kisa.Key.ascii('j'), 1);
             try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
             try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
-            try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
+            try testing.expectEqualStrings("hello", draw_data.lines[0].segments[0].contents);
         }
     }
 }
@@ -721,13 +721,13 @@ test "fork/socket: start application forked via socket" {
             const draw_data = try client.edit("/home/grfork/reps/kisa/kisarc.zzz");
             try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
             try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
-            try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
+            try testing.expectEqualStrings("hello", draw_data.lines[0].segments[0].contents);
         }
         {
             const draw_data = try client.keypress(kisa.Key.ascii('j'), 1);
             try testing.expectEqual(@as(usize, 1), draw_data.lines.len);
             try testing.expectEqual(@as(u32, 1), draw_data.lines[0].number);
-            try testing.expectEqualStrings("hello", draw_data.lines[0].contents);
+            try testing.expectEqualStrings("hello", draw_data.lines[0].segments[0].contents);
         }
     }
 }

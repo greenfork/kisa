@@ -33,7 +33,9 @@ On the Client advantages:
 Conclusion: on the **Server**. Even though Clients have more freedom otherwise,
 it is not the most particularly interesting thing to implement in my opinion. We
 would win more from uniform data, Clients can handle different display options
-still.
+still. Later we can optionally provide the data in 2 separate streams: line
+numbers and text buffer, - so that clients have full control over it, but for
+the start we should minimize our efforts.
 
 ### Line wrapping
 

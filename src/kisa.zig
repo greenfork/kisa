@@ -8,39 +8,104 @@ pub const Key = keys.Key;
 
 /// Data sent to Client which represents the data to draw on the screen.
 pub const DrawData = struct {
+    /// Can be used to reserve space and beautifully align displayed line numbers.
+    max_line_number_length: u8,
+    /// Main data to draw on the screen.
     lines: []const Line,
 
     pub const Line = struct {
         number: u32,
-        contents: []const u8,
-        face: Face = Face.default,
+        segments: []const Segment,
+
+        pub const Segment = struct {
+            contents: []const u8,
+            face: Face = .{},
+        };
     };
 
     pub const Face = struct {
-        fg: []const u8,
-        bg: []const u8,
-        attributes: []const Attribute = &[0]Attribute{},
+        fg: []const u8 = "default",
+        bg: []const u8 = "default",
+        attributes: []const Attribute = &[_]Attribute{},
 
-        pub const default = Face{ .fg = "default", .bg = "default" };
+        pub const Attribute = enum {
+            bold,
+            dim,
+            italic,
+            underline,
+            reverse,
+            strikethrough,
+
+            pub fn jsonStringify(
+                value: Attribute,
+                options: std.json.StringifyOptions,
+                out_stream: anytype,
+            ) @TypeOf(out_stream).Error!void {
+                _ = options;
+                try out_stream.writeAll(std.meta.tagName(value));
+            }
+        };
     };
+};
 
-    pub const Attribute = enum {
-        underline,
-        reverse,
-        bold,
-        blink,
-        dim,
-        italic,
+pub const Color = union(enum) {
+    black,
+    red,
+    green,
+    yellow,
+    blue,
+    magenta,
+    cyan,
+    white,
+    black_bright,
+    red_bright,
+    green_bright,
+    yellow_bright,
+    blue_bright,
+    magenta_bright,
+    cyan_bright,
+    white_bright,
+    rgb: RGB,
 
-        pub fn jsonStringify(
-            value: Attribute,
-            options: std.json.StringifyOptions,
-            out_stream: anytype,
-        ) @TypeOf(out_stream).Error!void {
-            _ = options;
-            try out_stream.writeAll(std.meta.tagName(value));
-        }
+    pub const string_map = std.ComptimeStringMap(Color, .{
+        .{ "black", .black },
+        .{ "red", .red },
+        .{ "green", .green },
+        .{ "yellow", .yellow },
+        .{ "blue", .blue },
+        .{ "magenta", .magenta },
+        .{ "cyan", .cyan },
+        .{ "white", .white },
+        .{ "black_bright", .black_bright },
+        .{ "red_bright", .red_bright },
+        .{ "green_bright", .green_bright },
+        .{ "yellow_bright", .yellow_bright },
+        .{ "blue_bright", .blue_bright },
+        .{ "magenta_bright", .magenta_bright },
+        .{ "cyan_bright", .cyan_bright },
+        .{ "white_bright", .white_bright },
+    });
+
+    pub const RGB = struct {
+        r: u8,
+        g: u8,
+        b: u8,
     };
+};
+
+pub const FontStyle = struct {
+    bold: bool = false,
+    dim: bool = false,
+    italic: bool = false,
+    underline: bool = false,
+    reverse: bool = false,
+    strikethrough: bool = false,
+};
+
+pub const Style = struct {
+    foreground: Color = .white,
+    background: Color = .black,
+    font_style: FontStyle = .{},
 };
 
 pub const CommandKind = enum {
