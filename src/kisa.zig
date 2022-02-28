@@ -24,8 +24,8 @@ pub const DrawData = struct {
     };
 
     pub const Face = struct {
-        fg: []const u8 = "default",
-        bg: []const u8 = "default",
+        foreground: Color = .{ .special = .default },
+        background: Color = .{ .special = .default },
         attributes: []const Attribute = &[_]Attribute{},
 
         pub const Attribute = enum {
@@ -41,50 +41,55 @@ pub const DrawData = struct {
                 options: std.json.StringifyOptions,
                 out_stream: anytype,
             ) @TypeOf(out_stream).Error!void {
-                _ = options;
-                try out_stream.writeAll(std.meta.tagName(value));
+                try std.json.stringify(std.meta.tagName(value), options, out_stream);
             }
         };
     };
 };
 
 pub const Color = union(enum) {
-    black,
-    red,
-    green,
-    yellow,
-    blue,
-    magenta,
-    cyan,
-    white,
-    black_bright,
-    red_bright,
-    green_bright,
-    yellow_bright,
-    blue_bright,
-    magenta_bright,
-    cyan_bright,
-    white_bright,
+    special: Special,
+    base16: Base16,
     rgb: RGB,
 
-    pub const string_map = std.ComptimeStringMap(Color, .{
-        .{ "black", .black },
-        .{ "red", .red },
-        .{ "green", .green },
-        .{ "yellow", .yellow },
-        .{ "blue", .blue },
-        .{ "magenta", .magenta },
-        .{ "cyan", .cyan },
-        .{ "white", .white },
-        .{ "black_bright", .black_bright },
-        .{ "red_bright", .red_bright },
-        .{ "green_bright", .green_bright },
-        .{ "yellow_bright", .yellow_bright },
-        .{ "blue_bright", .blue_bright },
-        .{ "magenta_bright", .magenta_bright },
-        .{ "cyan_bright", .cyan_bright },
-        .{ "white_bright", .white_bright },
-    });
+    pub const Special = enum {
+        default,
+
+        pub fn jsonStringify(
+            value: Special,
+            options: std.json.StringifyOptions,
+            out_stream: anytype,
+        ) @TypeOf(out_stream).Error!void {
+            try std.json.stringify(std.meta.tagName(value), options, out_stream);
+        }
+    };
+
+    pub const Base16 = enum {
+        black,
+        red,
+        green,
+        yellow,
+        blue,
+        magenta,
+        cyan,
+        white,
+        black_bright,
+        red_bright,
+        green_bright,
+        yellow_bright,
+        blue_bright,
+        magenta_bright,
+        cyan_bright,
+        white_bright,
+
+        pub fn jsonStringify(
+            value: Base16,
+            options: std.json.StringifyOptions,
+            out_stream: anytype,
+        ) @TypeOf(out_stream).Error!void {
+            try std.json.stringify(std.meta.tagName(value), options, out_stream);
+        }
+    };
 
     pub const RGB = struct {
         r: u8,
@@ -103,8 +108,8 @@ pub const FontStyle = struct {
 };
 
 pub const Style = struct {
-    foreground: Color = .white,
-    background: Color = .black,
+    foreground: Color = .{ .special = .default },
+    background: Color = .{ .special = .default },
     font_style: FontStyle = .{},
 };
 

@@ -120,8 +120,8 @@ fn goTo(w: anytype, x: u16, y: u16) !void {
     try std.fmt.format(w, csi ++ "{d};{d}H", .{ y, x });
 }
 
-fn colorLinuxConsoleNumber(color: kisa.Color) u8 {
-    return switch (color) {
+fn base16LinuxConsoleNumber(base16_color: kisa.Color.Base16) u8 {
+    return switch (base16_color) {
         .black => 0,
         .red => 1,
         .green => 2,
@@ -138,21 +138,22 @@ fn colorLinuxConsoleNumber(color: kisa.Color) u8 {
         .magenta_bright => 13,
         .cyan_bright => 14,
         .white_bright => 15,
-        .rgb => unreachable,
     };
 }
 
 fn writeFg(w: anytype, color: kisa.Color) !void {
     switch (color) {
         .rgb => |c| try std.fmt.format(w, csi ++ "38;2;{d};{d};{d}m", .{ c.r, c.g, c.b }),
-        else => try std.fmt.format(w, csi ++ "38;5;{d}m", .{colorLinuxConsoleNumber(color)}),
+        .base16 => |c| try std.fmt.format(w, csi ++ "38;5;{d}m", .{base16LinuxConsoleNumber(c)}),
+        .special => return error.SpecialIsNotAColor,
     }
 }
 
 fn writeBg(w: anytype, color: kisa.Color) !void {
     switch (color) {
         .rgb => |c| try std.fmt.format(w, csi ++ "48;2;{d};{d};{d}m", .{ c.r, c.g, c.b }),
-        else => try std.fmt.format(w, csi ++ "48;5;{d}m", .{colorLinuxConsoleNumber(color)}),
+        .base16 => |c| try std.fmt.format(w, csi ++ "48;5;{d}m", .{base16LinuxConsoleNumber(c)}),
+        .special => return error.SpecialIsNotAColor,
     }
 }
 
@@ -191,17 +192,13 @@ pub fn main() !void {
     try ui.clearScreen();
     var text_it = std.mem.split(u8, text, "\n");
     const style = kisa.Style{
-        .foreground = .yellow,
-        .background = .{
-            .rgb = .{ .r = 33, .g = 33, .b = 33 },
-        },
+        .foreground = .{ .base16 = .yellow },
+        .background = .{ .rgb = .{ .r = 33, .g = 33, .b = 33 } },
         .font_style = .{ .italic = true },
     };
     const style2 = kisa.Style{
-        .foreground = .red,
-        .background = .{
-            .rgb = .{ .r = 33, .g = 33, .b = 33 },
-        },
+        .foreground = .{ .base16 = .red },
+        .background = .{ .rgb = .{ .r = 33, .g = 33, .b = 33 } },
     };
     var i: u32 = 0;
     while (text_it.next()) |line| {

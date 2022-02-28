@@ -32,23 +32,12 @@ pub fn deinit(self: *UI) void {
     self.deinit();
 }
 
-fn parseColor(face_color: []const u8, default_color: kisa.Color) !kisa.Color {
-    if (kisa.Color.string_map.get(face_color)) |color| {
-        return color;
-    } else if (std.mem.eql(u8, "default", face_color)) {
-        return default_color;
-    } else if (std.mem.startsWith(u8, face_color, "rgb(") and std.mem.endsWith(u8, face_color, ")")) {
-        var rgb_it = std.mem.tokenize(u8, face_color[4 .. face_color.len - 1], ", ");
-        const r_str = rgb_it.next() orelse return error.InvalidRGBFormat;
-        const g_str = rgb_it.next() orelse return error.InvalidRGBFormat;
-        const b_str = rgb_it.next() orelse return error.InvalidRGBFormat;
-        if (rgb_it.next() != null) return error.InvalidRGBFormat;
-        const r = try std.fmt.parseInt(u8, r_str, 10);
-        const g = try std.fmt.parseInt(u8, g_str, 10);
-        const b = try std.fmt.parseInt(u8, b_str, 10);
-        return kisa.Color{ .rgb = .{ .r = r, .g = g, .b = b } };
-    } else {
-        return error.InvalidFormat;
+fn parseColor(face_color: kisa.Color, default_color: kisa.Color) kisa.Color {
+    switch (face_color) {
+        .special => |special| return switch (special) {
+            .default => default_color,
+        },
+        else => return face_color,
     }
 }
 
@@ -71,13 +60,21 @@ fn parseFontStyle(
 
 fn parseSegmentStyle(face: kisa.DrawData.Face, default_style: kisa.Style) !kisa.Style {
     return kisa.Style{
-        .foreground = try parseColor(face.fg, default_style.foreground),
-        .background = try parseColor(face.bg, default_style.background),
+        .foreground = parseColor(face.foreground, default_style.foreground),
+        .background = parseColor(face.background, default_style.background),
         .font_style = parseFontStyle(face.attributes, default_style.font_style),
     };
 }
 
 pub fn draw(ui: *UI, draw_data: kisa.DrawData, default_style: kisa.Style) !void {
+    switch (default_style.foreground) {
+        .special => return error.DefaultStyleMustHaveConcreteColor,
+        else => {},
+    }
+    switch (default_style.background) {
+        .special => return error.DefaultStyleMustHaveConcreteColor,
+        else => {},
+    }
     var line_buf: [10]u8 = undefined;
     for (draw_data.lines) |line| {
         const line_str = try std.fmt.bufPrint(&line_buf, "{d}", .{line.number});
@@ -107,7 +104,7 @@ pub fn main() !void {
                 .segments = &[_]kisa.DrawData.Line.Segment{
                     .{
                         .contents = "def ",
-                        .face = .{ .fg = "red" },
+                        .face = .{ .foreground = .{ .base16 = .red } },
                     },
                     .{
                         .contents = "max",
@@ -118,14 +115,20 @@ pub fn main() !void {
                     },
                     .{
                         .contents = "x",
-                        .face = .{ .fg = "green", .attributes = &[_]kisa.DrawData.Face.Attribute{.bold} },
+                        .face = .{
+                            .foreground = .{ .base16 = .green },
+                            .attributes = &[_]kisa.DrawData.Face.Attribute{.bold},
+                        },
                     },
                     .{
                         .contents = ", ",
                     },
                     .{
                         .contents = "y",
-                        .face = .{ .fg = "green", .attributes = &[_]kisa.DrawData.Face.Attribute{.bold} },
+                        .face = .{
+                            .foreground = .{ .base16 = .green },
+                            .attributes = &[_]kisa.DrawData.Face.Attribute{.bold},
+                        },
                     },
                     .{
                         .contents = ")",
@@ -140,28 +143,34 @@ pub fn main() !void {
                     },
                     .{
                         .contents = "if",
-                        .face = .{ .fg = "blue" },
+                        .face = .{ .foreground = .{ .base16 = .blue } },
                     },
                     .{
                         .contents = " ",
                     },
                     .{
                         .contents = "x",
-                        .face = .{ .fg = "green", .attributes = &[_]kisa.DrawData.Face.Attribute{ .bold, .underline } },
+                        .face = .{
+                            .foreground = .{ .base16 = .green },
+                            .attributes = &[_]kisa.DrawData.Face.Attribute{ .bold, .underline },
+                        },
                     },
                     .{
                         .contents = " ",
                     },
                     .{
                         .contents = ">",
-                        .face = .{ .fg = "yellow" },
+                        .face = .{ .foreground = .{ .base16 = .yellow } },
                     },
                     .{
                         .contents = " ",
                     },
                     .{
                         .contents = "y",
-                        .face = .{ .fg = "green", .attributes = &[_]kisa.DrawData.Face.Attribute{ .bold, .underline } },
+                        .face = .{
+                            .foreground = .{ .base16 = .green },
+                            .attributes = &[_]kisa.DrawData.Face.Attribute{ .bold, .underline },
+                        },
                     },
                 },
             },
@@ -174,7 +183,7 @@ pub fn main() !void {
                     .{
                         .contents = "x",
                         .face = .{
-                            .bg = "rgb(63, 63, 63)",
+                            .background = .{ .rgb = .{ .r = 63, .g = 63, .b = 63 } },
                             .attributes = &[_]kisa.DrawData.Face.Attribute{.underline},
                         },
                     },
@@ -188,7 +197,7 @@ pub fn main() !void {
                     },
                     .{
                         .contents = "else",
-                        .face = .{ .fg = "blue" },
+                        .face = .{ .foreground = .{ .base16 = .blue } },
                     },
                 },
             },
@@ -201,7 +210,7 @@ pub fn main() !void {
                     .{
                         .contents = "y",
                         .face = .{
-                            .bg = "rgb(63, 63, 63)",
+                            .background = .{ .rgb = .{ .r = 63, .g = 63, .b = 63 } },
                             .attributes = &[_]kisa.DrawData.Face.Attribute{.underline},
                         },
                     },
@@ -215,7 +224,7 @@ pub fn main() !void {
                     },
                     .{
                         .contents = "end",
-                        .face = .{ .fg = "blue" },
+                        .face = .{ .foreground = .{ .base16 = .blue } },
                     },
                 },
             },
@@ -224,7 +233,7 @@ pub fn main() !void {
                 .segments = &[_]kisa.DrawData.Line.Segment{
                     .{
                         .contents = "end",
-                        .face = .{ .fg = "red" },
+                        .face = .{ .foreground = .{ .base16 = .red } },
                     },
                 },
             },
@@ -234,12 +243,15 @@ pub fn main() !void {
     var ui = try init(std.io.getStdIn(), std.io.getStdOut());
     defer ui.deinit();
     {
-        const default_style = kisa.Style{};
+        const default_style = kisa.Style{
+            .foreground = .{ .base16 = .white },
+            .background = .{ .base16 = .black },
+        };
         try draw(&ui, draw_data, default_style);
     }
     {
         const default_style = kisa.Style{
-            .foreground = .magenta_bright,
+            .foreground = .{ .base16 = .magenta_bright },
             .background = .{ .rgb = .{ .r = 55, .g = 55, .b = 55 } },
             .font_style = kisa.FontStyle{ .italic = true },
         };
