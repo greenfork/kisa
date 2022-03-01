@@ -218,9 +218,9 @@ pub fn main() !void {
         if (i % 5 == 0) {
             try ui.writer().writeAll(line);
         } else if (i % 2 == 0) {
-            try ui.writeFormatted(style, line);
+            try ui.writeAllFormatted(style, line);
         } else {
-            try ui.writeFormatted(style2, line);
+            try ui.writeAllFormatted(style2, line);
         }
         try ui.writeNewline();
     }
