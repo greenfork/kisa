@@ -19,30 +19,7 @@ pub const DrawData = struct {
 
         pub const Segment = struct {
             contents: []const u8,
-            face: Face = .{},
-        };
-    };
-
-    pub const Face = struct {
-        foreground: Color = .{ .special = .default },
-        background: Color = .{ .special = .default },
-        attributes: []const Attribute = &[_]Attribute{},
-
-        pub const Attribute = enum {
-            bold,
-            dim,
-            italic,
-            underline,
-            reverse,
-            strikethrough,
-
-            pub fn jsonStringify(
-                value: Attribute,
-                options: std.json.StringifyOptions,
-                out_stream: anytype,
-            ) @TypeOf(out_stream).Error!void {
-                try std.json.stringify(std.meta.tagName(value), options, out_stream);
-            }
+            style: Style.Data = .{},
         };
     };
 };
@@ -105,12 +82,35 @@ pub const FontStyle = struct {
     underline: bool = false,
     reverse: bool = false,
     strikethrough: bool = false,
+
+    pub const Attribute = enum {
+        bold,
+        dim,
+        italic,
+        underline,
+        reverse,
+        strikethrough,
+
+        pub fn jsonStringify(
+            value: Attribute,
+            options: std.json.StringifyOptions,
+            out_stream: anytype,
+        ) @TypeOf(out_stream).Error!void {
+            try std.json.stringify(std.meta.tagName(value), options, out_stream);
+        }
+    };
 };
 
 pub const Style = struct {
-    foreground: Color = .{ .special = .default },
-    background: Color = .{ .special = .default },
+    foreground: Color = .{ .base16 = .white },
+    background: Color = .{ .base16 = .black },
     font_style: FontStyle = .{},
+
+    pub const Data = struct {
+        fg: Color = .{ .special = .default },
+        bg: Color = .{ .special = .default },
+        attrs: []const FontStyle.Attribute = &[_]FontStyle.Attribute{},
+    };
 };
 
 pub const CommandKind = enum {
