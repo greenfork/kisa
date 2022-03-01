@@ -22,6 +22,15 @@ comptime {
     }
 }
 
+pub const Config = struct {
+    default_text_style: kisa.Style = .{},
+    line_number_style: kisa.Style = .{},
+    active_line_number_style: kisa.Style = .{},
+    active_line_number: u16 = 0,
+    line_number_separator: []const u8 = " ",
+    line_number_separator_style: kisa.Style = .{},
+};
+
 pub fn init(in: std.fs.File, out: std.fs.File) !UI {
     var ui = try UI.init(in, out);
     try ui.prepare();
@@ -67,30 +76,42 @@ fn parseSegmentStyle(style_data: kisa.Style.Data, default_style: kisa.Style) !ki
     };
 }
 
-pub fn draw(ui: *UI, draw_data: kisa.DrawData, default_style: kisa.Style) !void {
-    switch (default_style.foreground) {
+pub fn draw(ui: *UI, draw_data: kisa.DrawData, config: Config) !void {
+    switch (config.default_text_style.foreground) {
         .special => return error.DefaultStyleMustHaveConcreteColor,
         else => {},
     }
-    switch (default_style.background) {
+    switch (config.default_text_style.background) {
         .special => return error.DefaultStyleMustHaveConcreteColor,
         else => {},
     }
     var line_buf: [10]u8 = undefined;
     for (draw_data.lines) |line| {
-        var current_line_length: u16 = 0;
+        var current_line_length: usize = 0;
         const line_str = try std.fmt.bufPrint(&line_buf, "{d}", .{line.number});
+        const line_number_style = if (config.active_line_number == line.number)
+            config.active_line_number_style
+        else
+            config.line_number_style;
         if (line_str.len < draw_data.max_line_number_length)
-            try ui.writer().writeByteNTimes(' ', draw_data.max_line_number_length - line_str.len);
-        try ui.writer().writeAll(line_str);
-        try ui.writer().writeByte(' ');
-        current_line_length += draw_data.max_line_number_length + 1;
+            try ui.writeByteNTimesFormatted(
+                line_number_style,
+                ' ',
+                draw_data.max_line_number_length - line_str.len,
+            );
+        try ui.writeAllFormatted(line_number_style, line_str);
+        try ui.writeAllFormatted(config.line_number_separator_style, config.line_number_separator);
+        current_line_length += draw_data.max_line_number_length + config.line_number_separator.len;
         for (line.segments) |segment| {
-            const segment_style = try parseSegmentStyle(segment.style, default_style);
+            const segment_style = try parseSegmentStyle(segment.style, config.default_text_style);
             try ui.writeAllFormatted(segment_style, segment.contents);
-            current_line_length += @intCast(u16, segment.contents.len);
+            current_line_length += segment.contents.len;
         }
-        try ui.writeByteNTimesFormatted(default_style, ' ', ui.dimensions.width - current_line_length);
+        try ui.writeByteNTimesFormatted(
+            config.default_text_style,
+            ' ',
+            ui.dimensions.width - current_line_length,
+        );
         try ui.writeNewline();
     }
 }
@@ -252,7 +273,7 @@ pub fn main() !void {
             .foreground = .{ .base16 = .white },
             .background = .{ .base16 = .black },
         };
-        try draw(&ui, draw_data_sample, default_style);
+        try draw(&ui, draw_data_sample, .{ .default_text_style = default_style });
     }
     {
         const default_style = kisa.Style{
@@ -260,7 +281,14 @@ pub fn main() !void {
             .background = .{ .rgb = .{ .r = 55, .g = 55, .b = 55 } },
             .font_style = kisa.FontStyle{ .italic = true },
         };
-        try draw(&ui, draw_data_sample, default_style);
+        try draw(&ui, draw_data_sample, .{
+            .default_text_style = default_style,
+            .line_number_separator = "| ",
+            .line_number_style = .{ .font_style = .{ .underline = true } },
+            .line_number_separator_style = .{ .foreground = .{ .base16 = .magenta } },
+            .active_line_number_style = .{ .font_style = .{ .reverse = true } },
+            .active_line_number = 7,
+        });
     }
 }
 
