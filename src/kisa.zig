@@ -10,6 +10,8 @@ pub const Key = keys.Key;
 pub const DrawData = struct {
     /// Can be used to reserve space and beautifully align displayed line numbers.
     max_line_number_length: u8,
+    /// Where the primary selection is. Can be used to accent the style of the active line.
+    active_line_number: u16,
     /// Main data to draw on the screen.
     lines: []const Line,
 

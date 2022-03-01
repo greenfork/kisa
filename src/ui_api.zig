@@ -26,7 +26,6 @@ pub const Config = struct {
     default_text_style: kisa.Style = .{},
     line_number_style: kisa.Style = .{},
     active_line_number_style: kisa.Style = .{},
-    active_line_number: u16 = 0,
     line_number_separator: []const u8 = " ",
     line_number_separator_style: kisa.Style = .{},
 };
@@ -89,7 +88,7 @@ pub fn draw(ui: *UI, draw_data: kisa.DrawData, config: Config) !void {
     for (draw_data.lines) |line| {
         var current_line_length: usize = 0;
         const line_str = try std.fmt.bufPrint(&line_buf, "{d}", .{line.number});
-        const line_number_style = if (config.active_line_number == line.number)
+        const line_number_style = if (draw_data.active_line_number == line.number)
             config.active_line_number_style
         else
             config.line_number_style;
@@ -118,6 +117,7 @@ pub fn draw(ui: *UI, draw_data: kisa.DrawData, config: Config) !void {
 
 const draw_data_sample = kisa.DrawData{
     .max_line_number_length = 3,
+    .active_line_number = 7,
     .lines = &[_]kisa.DrawData.Line{
         .{
             .number = 1,
@@ -287,7 +287,6 @@ pub fn main() !void {
             .line_number_style = .{ .font_style = .{ .underline = true } },
             .line_number_separator_style = .{ .foreground = .{ .base16 = .magenta } },
             .active_line_number_style = .{ .font_style = .{ .reverse = true } },
-            .active_line_number = 7,
         });
     }
 }

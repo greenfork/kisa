@@ -241,6 +241,7 @@ pub const Workspace = struct {
         _ = active_display_state;
         return kisa.DrawData{
             .max_line_number_length = 2,
+            .active_line_number = 0,
             .lines = &[_]kisa.DrawData.Line{.{
                 .number = 1,
                 .segments = &[_]kisa.DrawData.Line.Segment{.{
