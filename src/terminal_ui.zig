@@ -166,19 +166,31 @@ fn writeFontStyle(w: anytype, font_style: kisa.FontStyle) !void {
     if (font_style.strikethrough) try w.writeAll(style_strikethrough);
 }
 
-pub fn writeFormatted(self: *TerminalUI, style: kisa.Style, string: []const u8) !void {
+fn writeStyleStart(self: *TerminalUI, style: kisa.Style) !void {
     var w = self.writer();
     if (self.support.ansi_escape_codes) {
         try writeFg(w, style.foreground);
         try writeBg(w, style.background);
         try writeFontStyle(w, style.font_style);
     }
+}
 
-    try w.writeAll(string);
-
+fn writeStyleEnd(self: *TerminalUI) !void {
     if (self.support.ansi_escape_codes) {
-        try w.writeAll(style_reset);
+        try self.writer().writeAll(style_reset);
     }
+}
+
+pub fn writeAllFormatted(self: *TerminalUI, style: kisa.Style, string: []const u8) !void {
+    try self.writeStyleStart(style);
+    try self.writer().writeAll(string);
+    try self.writeStyleEnd();
+}
+
+pub fn writeByteNTimesFormatted(self: *TerminalUI, style: kisa.Style, byte: u8, n: usize) !void {
+    try self.writeStyleStart(style);
+    try self.writer().writeByteNTimes(byte, n);
+    try self.writeStyleEnd();
 }
 
 // Run from project root: zig build run-terminal-ui

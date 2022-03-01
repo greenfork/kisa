@@ -12,7 +12,8 @@ comptime {
         "flush",
         "clearScreen",
         "writeNewline",
-        "writeFormatted",
+        "writeAllFormatted",
+        "writeByteNTimesFormatted",
     };
     for (interface_functions) |f| {
         if (!std.meta.trait.hasFn(f)(UI)) {
@@ -77,15 +78,19 @@ pub fn draw(ui: *UI, draw_data: kisa.DrawData, default_style: kisa.Style) !void 
     }
     var line_buf: [10]u8 = undefined;
     for (draw_data.lines) |line| {
+        var current_line_length: u16 = 0;
         const line_str = try std.fmt.bufPrint(&line_buf, "{d}", .{line.number});
         if (line_str.len < draw_data.max_line_number_length)
             try ui.writer().writeByteNTimes(' ', draw_data.max_line_number_length - line_str.len);
         try ui.writer().writeAll(line_str);
         try ui.writer().writeByte(' ');
+        current_line_length += draw_data.max_line_number_length + 1;
         for (line.segments) |segment| {
             const segment_style = try parseSegmentStyle(segment.style, default_style);
-            try ui.writeFormatted(segment_style, segment.contents);
+            try ui.writeAllFormatted(segment_style, segment.contents);
+            current_line_length += @intCast(u16, segment.contents.len);
         }
+        try ui.writeByteNTimesFormatted(default_style, ' ', ui.dimensions.width - current_line_length);
         try ui.writeNewline();
     }
 }
