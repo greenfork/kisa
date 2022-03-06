@@ -85,22 +85,23 @@ pub const FontStyle = struct {
     reverse: bool = false,
     strikethrough: bool = false,
 
-    pub const Attribute = enum {
-        bold,
-        dim,
-        italic,
-        underline,
-        reverse,
-        strikethrough,
+    pub fn toData(self: FontStyle) u8 {
+        var result: u8 = 0;
+        if (self.bold) result += 1;
+        if (self.dim) result += 2;
+        if (self.italic) result += 4;
+        if (self.underline) result += 8;
+        if (self.reverse) result += 16;
+        if (self.strikethrough) result += 32;
+        return result;
+    }
 
-        pub fn jsonStringify(
-            value: Attribute,
-            options: std.json.StringifyOptions,
-            out_stream: anytype,
-        ) @TypeOf(out_stream).Error!void {
-            try std.json.stringify(std.meta.tagName(value), options, out_stream);
-        }
-    };
+    pub fn fromData(data: u8) FontStyle {
+        var result = FontStyle{};
+        if (data & 1 != 0) result.bold = true;
+        if (data & 2 != 0) result.dim = true;
+        return result;
+    }
 };
 
 pub const Style = struct {
@@ -111,8 +112,16 @@ pub const Style = struct {
     pub const Data = struct {
         fg: Color = .{ .special = .default },
         bg: Color = .{ .special = .default },
-        attrs: []const FontStyle.Attribute = &[_]FontStyle.Attribute{},
+        attrs: u8 = 0,
     };
+
+    pub fn toData(self: Style) Data {
+        return .{
+            .fg = self.foreground,
+            .bg = self.background,
+            .attrs = self.font_style.toData(),
+        };
+    }
 };
 
 pub const CommandKind = enum {

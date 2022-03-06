@@ -51,20 +51,11 @@ fn parseColor(color: kisa.Color, default_color: kisa.Color) kisa.Color {
 }
 
 fn parseFontStyle(
-    font_style_attributes: []const kisa.FontStyle.Attribute,
+    font_style_attributes: u8,
     default_font_style: kisa.FontStyle,
 ) kisa.FontStyle {
-    if (font_style_attributes.len == 0) return default_font_style;
-    var font_style = kisa.FontStyle{};
-    for (font_style_attributes) |attribute| {
-        if (attribute == .bold) font_style.bold = true;
-        if (attribute == .dim) font_style.dim = true;
-        if (attribute == .italic) font_style.italic = true;
-        if (attribute == .underline) font_style.underline = true;
-        if (attribute == .reverse) font_style.reverse = true;
-        if (attribute == .strikethrough) font_style.strikethrough = true;
-    }
-    return font_style;
+    if (font_style_attributes == 0) return default_font_style;
+    return kisa.FontStyle.fromData(font_style_attributes);
 }
 
 fn parseSegmentStyle(style_data: kisa.Style.Data, default_style: kisa.Style) !kisa.Style {
@@ -132,7 +123,7 @@ const draw_data_sample = kisa.DrawData{
                 },
                 .{
                     .contents = "max",
-                    .style = .{ .attrs = &[_]kisa.FontStyle.Attribute{.underline} },
+                    .style = .{ .attrs = (kisa.FontStyle{ .underline = true }).toData() },
                 },
                 .{
                     .contents = "(",
@@ -141,7 +132,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "x",
                     .style = .{
                         .fg = .{ .base16 = .green },
-                        .attrs = &[_]kisa.FontStyle.Attribute{.bold},
+                        .attrs = (kisa.FontStyle{ .bold = true }).toData(),
                     },
                 },
                 .{
@@ -151,7 +142,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "y",
                     .style = .{
                         .fg = .{ .base16 = .green },
-                        .attrs = &[_]kisa.FontStyle.Attribute{.bold},
+                        .attrs = (kisa.FontStyle{ .bold = true }).toData(),
                     },
                 },
                 .{
@@ -176,7 +167,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "x",
                     .style = .{
                         .fg = .{ .base16 = .green },
-                        .attrs = &[_]kisa.FontStyle.Attribute{ .bold, .underline },
+                        .attrs = (kisa.FontStyle{ .bold = true, .underline = true }).toData(),
                     },
                 },
                 .{
@@ -193,7 +184,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "y",
                     .style = .{
                         .fg = .{ .base16 = .green },
-                        .attrs = &[_]kisa.FontStyle.Attribute{ .bold, .underline },
+                        .attrs = (kisa.FontStyle{ .bold = true, .underline = true }).toData(),
                     },
                 },
             },
@@ -208,7 +199,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "x",
                     .style = .{
                         .bg = .{ .rgb = .{ .r = 63, .g = 63, .b = 63 } },
-                        .attrs = &[_]kisa.FontStyle.Attribute{.underline},
+                        .attrs = (kisa.FontStyle{ .underline = true }).toData(),
                     },
                 },
             },
@@ -235,7 +226,7 @@ const draw_data_sample = kisa.DrawData{
                     .contents = "y",
                     .style = .{
                         .bg = .{ .rgb = .{ .r = 63, .g = 63, .b = 63 } },
-                        .attrs = &[_]kisa.FontStyle.Attribute{.underline},
+                        .attrs = (kisa.FontStyle{ .underline = true }).toData(),
                     },
                 },
             },

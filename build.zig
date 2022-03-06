@@ -38,6 +38,14 @@ pub fn build(b: *std.build.Builder) void {
     const run_ui_cmd = ui.run();
     run_ui.dependOn(&run_ui_cmd.step);
 
+    const run_highlight = b.step("run-highlight", "Run demonstration of highlight");
+    const highlight = b.addExecutable("highlight", "src/highlight.zig");
+    highlight.addPackagePath("kisa", "src/kisa.zig");
+    highlight.setTarget(target);
+    highlight.setBuildMode(mode);
+    const run_highlight_cmd = highlight.run();
+    run_highlight.dependOn(&run_highlight_cmd.step);
+
     const test_all = b.step("test", "Run tests");
     const test_main = b.step("test-main", "Run tests in main");
     const test_main_nofork = b.step("test-main-nofork", "Run tests in main without forking");
@@ -49,6 +57,7 @@ pub fn build(b: *std.build.Builder) void {
     const test_rpc = b.step("test-rpc", "Run tests in rpc");
     const test_keys = b.step("test-keys", "Run tests in keys");
     const test_ui = b.step("test-ui", "Run tests in UI");
+    const test_highlight = b.step("test-highlight", "Run tests in highlight");
 
     {
         var test_cases = b.addTest("src/main.zig");
@@ -190,5 +199,14 @@ pub fn build(b: *std.build.Builder) void {
         test_cases.setBuildMode(mode);
         test_all.dependOn(&test_cases.step);
         test_ui.dependOn(&test_cases.step);
+    }
+    {
+        const test_cases = b.addTest("src/highlight.zig");
+        test_cases.setFilter("highlight:");
+        test_cases.addPackagePath("kisa", "src/kisa.zig");
+        test_cases.setTarget(target);
+        test_cases.setBuildMode(mode);
+        test_all.dependOn(&test_cases.step);
+        test_highlight.dependOn(&test_cases.step);
     }
 }
