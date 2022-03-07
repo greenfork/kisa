@@ -19,6 +19,7 @@ const selection_style = kisa.Style{
 segments: std.ArrayList(Segment),
 
 // TODO: include here some Options from kisa.DrawData such as active_line_number.
+active_line_number: u32 = 0,
 
 pub fn init(ally: std.mem.Allocator) Highlight {
     return .{ .segments = std.ArrayList(Segment).init(ally) };
@@ -40,6 +41,7 @@ pub fn addSegment(self: *Highlight, segment: Segment) !void {
 }
 
 pub fn addSelection(highlight: *Highlight, s: kisa.Selection) !void {
+    if (s.primary) highlight.active_line_number = s.cursor.line;
     if (s.cursor.offset > s.anchor.offset) {
         try highlight.addSegment(.{
             .start = s.anchor.offset,
@@ -70,23 +72,35 @@ pub fn decorateLine(
 ) ![]const kisa.DrawData.Line.Segment {
     var segments = std.ArrayList(kisa.DrawData.Line.Segment).init(ally);
     var processed_index = line_start;
+    var last_highlight_segment: ?Highlight.Segment = null;
     for (highlight.segments.items) |highlight_segment| {
         if (highlight_segment.start > line_end) break;
         if (highlight_segment.end < line_start) continue;
-        if (processed_index < highlight_segment.start) {
+        const start = std.math.max(highlight_segment.start, line_start);
+        const end = std.math.min(highlight_segment.end, line_end);
+        if (processed_index < start) {
             try segments.append(kisa.DrawData.Line.Segment{
-                .contents = slice[processed_index..highlight_segment.start],
+                .contents = slice[processed_index..start],
             });
         }
         try segments.append(kisa.DrawData.Line.Segment{
-            .contents = slice[highlight_segment.start..highlight_segment.end],
+            .contents = slice[start..end],
             .style = highlight_segment.style.toData(),
         });
-        processed_index = highlight_segment.end;
+        processed_index = end;
+        last_highlight_segment = highlight_segment;
     }
-    try segments.append(kisa.DrawData.Line.Segment{
-        .contents = slice[processed_index..line_end],
-    });
+    if (processed_index < line_end) {
+        try segments.append(kisa.DrawData.Line.Segment{
+            .contents = slice[processed_index..line_end],
+        });
+    } else if (last_highlight_segment != null and last_highlight_segment.?.end > line_end) {
+        // Hihglight the newline at the end of line in case higlight segment spans several lines.
+        try segments.append(kisa.DrawData.Line.Segment{
+            .contents = " ",
+            .style = last_highlight_segment.?.style.toData(),
+        });
+    }
     return segments.items;
 }
 
@@ -101,8 +115,9 @@ pub fn synthesize(
     var line_it = std.mem.split(u8, slice, newline);
     var line_number: u32 = 0;
     while (line_it.next()) |line| {
-        line_number += 1;
         const line_offset = @ptrToInt(line.ptr) - @ptrToInt(slice.ptr);
+        if (line_offset == slice.len) break; // if this is a line past the final newline
+        line_number += 1;
         const segments = try highlight.decorateLine(
             ally,
             slice,
@@ -116,14 +131,15 @@ pub fn synthesize(
     }
 
     var max_line_number_length: u8 = 0;
-    var max_line_number = std.mem.count(u8, slice, newline);
+    // +1 in case the file doesn't have a final newline.
+    var max_line_number = std.mem.count(u8, slice, newline) + 1;
     while (max_line_number != 0) : (max_line_number = max_line_number / 10) {
         max_line_number_length += 1;
     }
 
     return kisa.DrawData{
         .max_line_number_length = max_line_number_length,
-        .active_line_number = 0,
+        .active_line_number = highlight.active_line_number,
         .lines = lines.items,
     };
 }
@@ -140,23 +156,31 @@ pub fn main() !void {
         \\  end
         \\end
         \\
+        \\
     ;
-    var hd = Highlight.init(testing.allocator);
-    defer hd.deinit();
-    try hd.addSelection(kisa.Selection{
-        .cursor = .{ .offset = 2, .line = 1, .column = 1 },
+    var hl = Highlight.init(testing.allocator);
+    defer hl.deinit();
+    try hl.addSelection(kisa.Selection{
+        .cursor = .{ .offset = 2, .line = 1, .column = 3 },
         .anchor = .{ .offset = 0, .line = 1, .column = 1 },
+        .primary = false,
     });
-    try hd.addSelection(kisa.Selection{
-        .cursor = .{ .offset = 6, .line = 1, .column = 1 },
-        .anchor = .{ .offset = 8, .line = 1, .column = 1 },
+    try hl.addSelection(kisa.Selection{
+        .cursor = .{ .offset = 4, .line = 1, .column = 5 },
+        .anchor = .{ .offset = 6, .line = 1, .column = 7 },
+        .primary = false,
     });
-    try hd.addSelection(kisa.Selection{
-        .cursor = .{ .offset = 10, .line = 1, .column = 1 },
-        .anchor = .{ .offset = 10, .line = 1, .column = 1 },
+    try hl.addSelection(kisa.Selection{
+        .cursor = .{ .offset = 8, .line = 1, .column = 9 },
+        .anchor = .{ .offset = 8, .line = 1, .column = 9 },
+        .primary = false,
+    });
+    try hl.addSelection(kisa.Selection{
+        .cursor = .{ .offset = 16, .line = 2, .column = 3 },
+        .anchor = .{ .offset = 11, .line = 1, .column = 12 },
     });
     var synthesize_arena = std.heap.ArenaAllocator.init(testing.allocator);
-    const draw_data = try synthesize(synthesize_arena.allocator(), hd, text, "\n");
+    const draw_data = try synthesize(synthesize_arena.allocator(), hl, text, "\n");
     defer synthesize_arena.deinit();
 
     const ui_api = @import("ui_api.zig");
@@ -174,9 +198,4 @@ pub fn main() !void {
 
 test "highlight: reference all" {
     testing.refAllDecls(@This());
-}
-
-test "highlight: selection" {
-    var hd = Highlight.init(testing.allocator);
-    defer hd.deinit();
 }
