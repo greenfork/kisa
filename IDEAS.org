@@ -5,8 +5,15 @@
    - https://macromates.com/manual/en/language_grammars
    - https://www.apeth.com/nonblog/stories/textmatebundle.html
 ** Themes
-   - https://protesilaos.com/emacs/modus-themes
-   - https://github.com/ogdenwebb/emacs-kaolin-themes
+   - https://protesilaos.com/emacs/modus-themes - example
+   - https://github.com/ogdenwebb/emacs-kaolin-themes - example
+   - https://github.com/super3ggo/kuronami - example
+   - https://lists.gnu.org/archive/html/emacs-devel/2022-03/msg00099.html -
+     considerations regarding defining colors which are specific to different
+     extensions
+** Code structure
+   - https://github.com/tonyaldon/posts - Have you ever wondered how org-mode
+     toggles the visibility of headings?
 * Incremental parsing
   - https://www.cs.umd.edu/~hammer/adapton/adapton-pldi2014.pdf
   - https://tree-sitter.github.io/tree-sitter/
@@ -52,7 +59,7 @@
 * I18n
   - https://github.com/elias94/accent - accented characters
 * Searching
-  - https://github.com/ziglibs/string-searching - different algorithms
+  - https://github.com/ziglibs/string-searching - different algorithms for searching in Zig
 * Git
   - https://github.com/Artawower/blamer.el - git blame on the same line
   - https://ianyepan.github.io/posts/emacs-git-gutter/ - git gutter
