@@ -14,8 +14,6 @@ const selection_style = kisa.Style{
     .background = .{ .base16 = .blue },
 };
 
-// OPTIMIZE: use red-black tree?
-/// Each segment does not overlap and they are always ordered.
 segments: std.ArrayList(Segment),
 
 // TODO: include here some Options from kisa.DrawData such as active_line_number.
@@ -63,6 +61,24 @@ pub fn addSelection(highlight: *Highlight, s: kisa.Selection) !void {
     }
 }
 
+pub fn addPattern(
+    highlight: *Highlight,
+    slice: []const u8,
+    pattern: []const u8,
+    style: kisa.Style,
+) !void {
+    var start_index: usize = 0;
+    while (std.mem.indexOfPos(u8, slice, start_index, pattern)) |idx| {
+        try highlight.addSegment(.{
+            .start = idx,
+            .end = idx + pattern.len,
+            .style = style,
+        });
+        start_index = idx + pattern.len;
+        if (start_index >= slice.len) break;
+    }
+}
+
 pub fn decorateLine(
     highlight: Highlight,
     ally: std.mem.Allocator,
@@ -74,7 +90,7 @@ pub fn decorateLine(
     var processed_index = line_start;
     var last_highlight_segment: ?Highlight.Segment = null;
     for (highlight.segments.items) |highlight_segment| {
-        if (highlight_segment.start > line_end) break;
+        if (highlight_segment.start > line_end) continue;
         if (highlight_segment.end < line_start) continue;
         const start = std.math.max(highlight_segment.start, line_start);
         const end = std.math.min(highlight_segment.end, line_end);
@@ -160,6 +176,7 @@ pub fn main() !void {
     ;
     var hl = Highlight.init(testing.allocator);
     defer hl.deinit();
+    try hl.addPattern(text, "end", kisa.Style{ .foreground = .{ .base16 = .blue } });
     try hl.addSelection(kisa.Selection{
         .cursor = .{ .offset = 2, .line = 1, .column = 3 },
         .anchor = .{ .offset = 0, .line = 1, .column = 1 },
