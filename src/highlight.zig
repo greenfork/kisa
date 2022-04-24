@@ -3,6 +3,8 @@
 const std = @import("std");
 const testing = std.testing;
 const kisa = @import("kisa");
+const rb = @import("rb.zig");
+const assert = std.debug.assert;
 
 const Highlight = @This();
 const cursor_style = kisa.Style{
@@ -14,28 +16,107 @@ const selection_style = kisa.Style{
     .background = .{ .base16 = .blue },
 };
 
-segments: std.ArrayList(Segment),
+ally: std.mem.Allocator,
+
+/// A red-black tree of non-intersecting segments which are basically ranges with start and end.
+segments: rb.Tree,
 
 // TODO: include here some Options from kisa.DrawData such as active_line_number.
 active_line_number: u32 = 0,
 
-pub fn init(ally: std.mem.Allocator) Highlight {
-    return .{ .segments = std.ArrayList(Segment).init(ally) };
-}
-
-pub fn deinit(self: Highlight) void {
-    self.segments.deinit();
-}
-
 pub const Segment = struct {
+    /// Part of a red-black tree.
+    node: rb.Node = undefined,
+    /// Inclusive.
     start: usize,
+    /// Exclusive.
     end: usize,
+    /// Color and style for the specified range in the text buffer.
     style: kisa.Style,
 };
 
-// FIXME: segments must be always ordered on insertion and divided as needed.
-pub fn addSegment(self: *Highlight, segment: Segment) !void {
-    try self.segments.append(segment);
+fn segmentsCompare(l: *rb.Node, r: *rb.Node, _: *rb.Tree) std.math.Order {
+    const left = @fieldParentPtr(Segment, "node", l);
+    const right = @fieldParentPtr(Segment, "node", r);
+    assert(left.start < left.end);
+    assert(right.start < right.end);
+
+    // Intersecting segments are considered "equal". Current implementation of a red-black tree
+    // does not allow duplicates, this insures that our tree will never have any intersecting
+    // segments.
+    if (left.end <= right.start) {
+        return .lt;
+    } else if (left.start >= right.end) {
+        return .gt;
+    } else {
+        return .eq;
+    }
+}
+
+pub fn init(ally: std.mem.Allocator) Highlight {
+    return .{ .segments = rb.Tree.init(segmentsCompare), .ally = ally };
+}
+
+pub fn deinit(self: Highlight) void {
+    var node = self.segments.first();
+    while (node) |n| {
+        node = n.next();
+        self.ally.destroy(n);
+    }
+}
+
+// Examples of common cases of segment overlapping:
+// Let A be a segment: start=3, end=7 - base segment.
+// Let B be a segment: start=8, end=10 - not overlapping.
+// Let C be a segment: start=1, end=4 - overlapping from the start.
+// Let D be a segment: start=6, end=10 - overlapping from the end.
+// Let E be a segment: start=3, end=7 - complete overlapping.
+// Let F be a segment: start=4, end=6 - overlapping in the middle.
+pub fn addSegment(self: *Highlight, s: Segment) !void {
+    if (s.start >= s.end) return error.StartMustBeLessThanEnd;
+
+    var segment = try self.ally.create(Segment);
+    errdefer self.ally.destroy(segment);
+    segment.* = s;
+
+    // insert returns a duplicated node if there's one, inserts the value otherwise.
+    while (self.segments.insert(&segment.node)) |duplicated_node| {
+        var duplicated_segment = @fieldParentPtr(Segment, "node", duplicated_node);
+
+        if (segment.start <= duplicated_segment.start and segment.end >= duplicated_segment.end) {
+            std.debug.print("A-E\n", .{});
+            std.debug.print("segment: {d} - {d}, dup: {d} - {d}\n", .{ segment.start, segment.end, duplicated_segment.start, duplicated_segment.end });
+            // A and E - complete overlapping.
+            self.segments.remove(&duplicated_segment.node);
+            self.ally.destroy(duplicated_segment);
+        } else if (segment.start <= duplicated_segment.start and segment.end > duplicated_segment.start) {
+            std.debug.print("A-C\n", .{});
+            std.debug.print("segment: {d} - {d}, dup: {d} - {d}\n", .{ segment.start, segment.end, duplicated_segment.start, duplicated_segment.end });
+            // A and C - overlapping from the start.
+            duplicated_segment.start = segment.end;
+        } else if (segment.start < duplicated_segment.end and segment.end >= duplicated_segment.end) {
+            std.debug.print("A-D\n", .{});
+            // A and D - overlapping from the end.
+            duplicated_segment.end = segment.start;
+        } else if (segment.start > duplicated_segment.start and segment.end < duplicated_segment.end) {
+            std.debug.print("A-F\n", .{});
+            // A and F - overlapping in the middle.
+
+            // First half is the modified duplicated segment.
+            duplicated_segment.end = segment.start;
+
+            var second_half_segment = try self.ally.create(Segment);
+            errdefer self.ally.destroy(second_half_segment);
+            second_half_segment.* = .{
+                .start = segment.end,
+                .end = duplicated_segment.end,
+                .style = duplicated_segment.style,
+            };
+            assert(self.segments.insert(&second_half_segment.node) != null);
+        }
+    }
+    // At this point we should have resolved all possible overlapping scenarios.
+    assert(self.segments.insert(&segment.node) != null);
 }
 
 pub fn addSelection(highlight: *Highlight, s: kisa.Selection) !void {
@@ -88,12 +169,21 @@ pub fn decorateLine(
 ) ![]const kisa.DrawData.Line.Segment {
     var segments = std.ArrayList(kisa.DrawData.Line.Segment).init(ally);
     var processed_index = line_start;
-    var last_highlight_segment: ?Highlight.Segment = null;
-    for (highlight.segments.items) |highlight_segment| {
+    var last_highlight_segment: ?*Highlight.Segment = null;
+
+    var node = highlight.segments.first();
+    while (node) |n| : (node = n.next()) {
+        const highlight_segment = @fieldParentPtr(Segment, "node", n);
+        std.debug.print("hs: {d} - {d}\n", .{ highlight_segment.start, highlight_segment.end });
+    }
+    while (node) |n| : (node = n.next()) {
+        const highlight_segment = @fieldParentPtr(Segment, "node", n);
         if (highlight_segment.start > line_end) continue;
-        if (highlight_segment.end < line_start) continue;
+        if (highlight_segment.end < line_start) break;
+
         const start = std.math.max(highlight_segment.start, line_start);
         const end = std.math.min(highlight_segment.end, line_end);
+        std.debug.print("start: {d}, end: {d}\n", .{ start, end });
         if (processed_index < start) {
             try segments.append(kisa.DrawData.Line.Segment{
                 .contents = slice[processed_index..start],
@@ -177,6 +267,7 @@ pub fn main() !void {
     var hl = Highlight.init(testing.allocator);
     defer hl.deinit();
     try hl.addPattern(text, "end", kisa.Style{ .foreground = .{ .base16 = .blue } });
+    try hl.addPattern(text, "e", kisa.Style{ .foreground = .{ .base16 = .red } });
     try hl.addSelection(kisa.Selection{
         .cursor = .{ .offset = 2, .line = 1, .column = 3 },
         .anchor = .{ .offset = 0, .line = 1, .column = 1 },
@@ -197,12 +288,12 @@ pub fn main() !void {
         .anchor = .{ .offset = 11, .line = 1, .column = 12 },
     });
     var synthesize_arena = std.heap.ArenaAllocator.init(testing.allocator);
-    const draw_data = try synthesize(synthesize_arena.allocator(), hl, text, "\n");
     defer synthesize_arena.deinit();
+    const draw_data = try synthesize(synthesize_arena.allocator(), hl, text, "\n");
 
     const ui_api = @import("ui_api.zig");
     var ui = try ui_api.init(std.io.getStdIn(), std.io.getStdOut());
-    defer ui.deinit();
+    // defer ui.deinit();
     const default_style = kisa.Style{};
     try ui_api.draw(&ui, draw_data, .{
         .default_text_style = default_style,
@@ -211,6 +302,18 @@ pub fn main() !void {
         .line_number_separator_style = .{ .foreground = .{ .base16 = .magenta } },
         .active_line_number_style = .{ .font_style = .{ .reverse = true } },
     });
+    ui.deinit();
+
+    // for (hl.segments.items) |s| {
+    //     std.debug.print("start: {d}, end: {d}\n", .{ s.start, s.end });
+    // }
+    for (draw_data.lines) |line| {
+        std.debug.print("{d}: ", .{line.number});
+        for (line.segments) |s| {
+            std.debug.print("{s}, ", .{s.contents});
+        }
+        std.debug.print("\n", .{});
+    }
 }
 
 test "highlight: reference all" {
