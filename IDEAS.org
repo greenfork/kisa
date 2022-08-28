@@ -56,6 +56,7 @@
   - https://github.com/mawww/kakoune/blob/master/src/terminal_ui.cc - key parsing example
   - https://github.com/neovim/libtermkey - key parsing example
   - https://sw.kovidgoyal.net/kitty/keyboard-protocol/ - key parsing design
+  - https://git.sr.ht/~leon_plickat/zig-spoon - TUI in Zig
 * I18n
   - https://github.com/elias94/accent - accented characters
 * Searching
@@ -66,3 +67,4 @@
 * State-of-the-art
   - https://github.com/brotzeit/rustic - Rust integration with TRAMP considerations and more
   - https://gitlab.com/gopiandcode/gopcaml-mode - OCaml structural editing
+  - https://github.com/caerwynj/acme-sac - ACME Plan9 editor
