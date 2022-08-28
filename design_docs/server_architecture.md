@@ -102,11 +102,3 @@ Another idea is to remove the while-true loop for the Client altogether so the
 Server is the only while-true loop and in the end of this loop it gives control
 to the Client so it does its drawing things. Though this significantly impairs
 the available functionality.
-
-## Event-based system
-
-Event-based system is a mechanism for integration with internal and
-external plugins, generally with everything that is not in the "core" of
-the editor. The editor core emits events at the strategic points of
-execution and the editor allows to "hook up" into these events and do
-different actions based on event types and any metadata they carry.

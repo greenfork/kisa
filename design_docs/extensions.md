@@ -1,10 +1,5 @@
 # Extensions design
 
-This document is very incomplete.
-
-See initial considerations of configuration in
-[Configuration design](CONFIGURATION_DESIGN.md).
-
 Configuration with a full API exposure can be considered as a plugin/script
 extension. My idea is that we should have these things separate for a
 number of reasons:

@@ -1,0 +1,84 @@
+* Formats
+
+The editor is an event machine which produces events and consumes different
+inputs to produce a final output - what you see on the screen. Actions are just
+modifications of inputs from one stage to another. In this paradigm it is
+paramount to agree on the format of input, how different steps will process
+their inputs and produce output that validates as the input to the next step.
+
+** Displaying text on the screen
+
+A data structure to display the text on the screen. Work in progress, we will
+start simple and progress from there.
+
+*** Just text
+
+Some form of structured text that is divided by lines.
+
+#+begin_src js
+  {
+      lines: [
+          {
+              number: 1,
+              contents: "Hello"
+          },
+          {
+              number: 2,
+              contents: "world!"
+          }
+      ]
+  }
+#+end_src
+
+*** Text with style
+
+This time text can have styles.
+
+#+begin_src js
+  {
+      lines: [
+          {
+              number: 1,
+              segments: [
+                  {
+                      contents: "Hello",
+                      style: {
+                          foreground: "default",
+                          background: "default",
+                          font_style: 0, // int-encoded styles: BOLD | ITALIC
+                      }
+                  }
+              ]
+          },
+          {
+              number: 2,
+              segments: [
+                  {
+                      contents: "w",
+                      style: {
+                          foreground: "red",
+                          background: "default",
+                          font_style: 0
+                      }
+                  },
+                  {
+                      contents: "o",
+                      style: {
+                          foreground: "green",
+                          background: "default",
+                          font_style: 0
+                      }
+                  },
+                  {
+                      contents: "rld!",
+                      style: {
+                          foreground: "blue",
+                          background: "default",
+                          font_style: 0
+                      }
+                  }
+              ]
+          }
+      ]
+  }
+#+end_src
