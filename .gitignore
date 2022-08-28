@@ -2,7 +2,6 @@ zig-cache/
 /zig-out/
 
 /tests/manylines.txt
-/todo/
 
-/docs/app.html
-/docs/app.js
+/not_good_enough/docs/app.html
+/not_good_enough/docs/app.js
