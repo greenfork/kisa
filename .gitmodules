@@ -1,0 +1,3 @@
+[submodule "deps/zig-sqlite"]
+	path = deps/zig-sqlite
+	url = https://github.com/greenfork/zig-sqlite.git
