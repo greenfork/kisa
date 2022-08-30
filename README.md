@@ -84,10 +84,10 @@ versus patches.
 Ideas are very welcome. At this stage of the project the main task is to
 shape its design and provide proof-of-concept implementations of these ideas.
 Code contributions without previous discussions are unlikely to be accepted
-so please discuss the design first. Ideas should be in-line with current
+so please discuss the design first. Ideas should be in-line with the current
 goals and values of this editor. Many ideas will likely be rejected since not
 all goals and values are identified, but nevertheless they will help us to
-improve this situation.
+shape the editor.
 
 For structured discussions please use <~greenfork/kisa-devel@lists.sr.ht> mailing list.
 
@@ -97,7 +97,7 @@ Currently it is only relevant for the development, there's no usable
 text editor (just yet).
 
 Requirements:
-- Zig pre-self-hosting, <https://ziglang.org/builds/zig-linux-x86_64-0.10.0-dev.1860+7b090df66.tar.xz>
+- Zig master, currently <https://ziglang.org/builds/zig-linux-x86_64-0.10.0-dev.3685+dae7aeb33.tar.xz>
 - git
 
 ```
@@ -106,10 +106,6 @@ $ cd kisa
 $ zig build test
 $ zig build run
 ```
-
-You can also run individual tests for files, for example for `main.zig` I often
-only run `zig build test-main-nofork`, similar commands can be found in
-[build.zig](build.zig).
 
 ## Is this a task for a mere mortal?
 
